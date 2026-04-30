@@ -8,7 +8,7 @@ const API_UPLOAD_URL = resolveApiUrl("/api/upload");
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
 const BROWSER_STATE_STORAGE_KEY = "salesrep-published-state-v1";
-const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Handover"];
+const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"];
 const ALL_STAGES = [...STAGE_ORDER];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DEFAULT_DASHBOARD_YEARS = ["2024", "2025", "2026"];
@@ -47,6 +47,7 @@ const STAGE_FORECAST_WEIGHTS = {
   Integration: 0.82,
   "Legal Approval": 0.93,
   "Go Live": 0.98,
+  Live: 1,
   Handover: 1,
 };
 const STAGE_CADENCE_MILESTONES = [
@@ -1769,18 +1770,19 @@ function normalizeDeal(input) {
     integrationStatus,
     goLiveStatus,
   });
-  const signedFlag = Boolean(input.signedFlag) || agreement === "Signed" || ["Legal Approval", "Go Live", "Handover"].includes(stage);
+  const signedFlag = Boolean(input.signedFlag) || agreement === "Signed" || ["Legal Approval", "Go Live", "Live", "Handover"].includes(stage);
   const ddStartedFlag =
-    Boolean(input.ddStartedFlag) || ["Started", "In Progress", "Completed"].includes(ddStatus) || ["DD", "Integration", "Legal Approval", "Go Live", "Handover"].includes(stage);
+    Boolean(input.ddStartedFlag) || ["Started", "In Progress", "Completed"].includes(ddStatus) || ["DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(stage);
   const ddCompletedFlag =
-    Boolean(input.ddCompletedFlag) || ddStatus === "Completed" || ["Integration", "Legal Approval", "Go Live", "Handover"].includes(stage);
+    Boolean(input.ddCompletedFlag) || ddStatus === "Completed" || ["Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(stage);
   const integrationStartedFlag =
     Boolean(input.integrationStartedFlag) ||
     ["Started", "In Progress", "Completed"].includes(integrationStatus) ||
-    ["Integration", "Legal Approval", "Go Live", "Handover"].includes(stage);
+    ["Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(stage);
   const integrationCompletedFlag =
-    Boolean(input.integrationCompletedFlag) || integrationStatus === "Completed" || ["Legal Approval", "Go Live", "Handover"].includes(stage);
-  const goLiveFlag = Boolean(input.goLiveFlag) || ["Go Live", "Handover"].includes(stage) || goLiveStatus === "Live" || Boolean(cleanText(input.liveSince));
+    Boolean(input.integrationCompletedFlag) || integrationStatus === "Completed" || ["Legal Approval", "Go Live", "Live", "Handover"].includes(stage);
+  const goLiveFlag =
+    Boolean(input.goLiveFlag) || ["Go Live", "Live", "Handover"].includes(stage) || goLiveStatus === "Live" || Boolean(cleanText(input.liveSince));
   const scoring = computeOpportunityScoring({
     ...input,
     stage,
@@ -2524,7 +2526,7 @@ function renderCrmView() {
               ${renderForecastMetric("Accounts", `${row.accountCount}`)}
               ${renderForecastMetric("Forecast", formatCompactCurrency(row.forecastValue), formatCurrency(row.forecastValue))}
               ${renderForecastMetric("Open Tasks", `${row.openTasks}`)}
-              ${renderForecastMetric("Handover", `${row.liveAccounts}`)}
+              ${renderForecastMetric("Live Accounts", `${row.liveAccounts}`)}
             </div>
             <p>${escapeHtml(row.note)}</p>
           </article>
@@ -2694,7 +2696,7 @@ function renderHeroMetrics() {
   const scopedDeals = getScopedDeals();
   const snapshot = buildForecastSnapshot(scopedDeals);
   const signedCount = snapshot.commitCount;
-  const liveCount = scopedDeals.filter((deal) => deal.stage === "Handover").length;
+  const liveCount = scopedDeals.filter((deal) => isLiveAccountStage(deal.stage)).length;
   const atRisk = getRiskDeals(scopedDeals).length;
 
   elements.heroPipelineValue.textContent = formatForecastUnits(snapshot.weightedCount);
@@ -2748,7 +2750,7 @@ function renderDashboard() {
   elements.signalLegal.textContent = String(scopedDeals.filter((deal) => deal.stage === "Legal").length);
   elements.signalDd.textContent = String(scopedDeals.filter((deal) => deal.stage === "DD").length);
   elements.signalIntegration.textContent = String(scopedDeals.filter((deal) => deal.stage === "Integration").length);
-  elements.signalNewTraffic.textContent = String(scopedDeals.filter((deal) => deal.stage === "Go Live").length);
+  elements.signalNewTraffic.textContent = String(scopedDeals.filter((deal) => deal.stage === "Live").length);
 
   renderForecastSummary(scopedDeals);
   renderExecutiveKpiReadout(scopedDeals);
@@ -3037,7 +3039,7 @@ function buildExecutiveKpiReadoutCards(deals) {
   }
 
   const snapshot = buildForecastSnapshot(deals);
-  const staleCount = deals.filter((deal) => !["Go Live", "Handover"].includes(deal.stage) && !isInactiveDeal(deal) && daysSince(deal.lastFollowUp) > 30).length;
+  const staleCount = deals.filter((deal) => hasStaleFollowUp(deal)).length;
   const noActionCount = deals.filter((deal) => !isInactiveDeal(deal) && !cleanText(deal.actionItems)).length;
   const executionLoad = deals.filter((deal) => ["Legal", "DD", "Integration", "Legal Approval"].includes(deal.stage)).length;
   const blockedCount = deals.filter((deal) => isBlockedDeal(deal)).length;
@@ -3057,7 +3059,7 @@ function buildExecutiveKpiReadoutCards(deals) {
       tone: snapshot.targetCount > 0 ? (snapshot.coverageRatio >= 1 ? "is-good" : snapshot.coverageRatio >= 0.75 ? "is-neutral" : "is-warn") : "is-neutral",
       summary:
         snapshot.targetCount > 0
-          ? `${formatForecastUnits(snapshot.commitEquivalent)} of ${snapshot.targetCount} target accounts are currently covered by weighted pipeline plus live handovers.`
+          ? `${formatForecastUnits(snapshot.commitEquivalent)} of ${snapshot.targetCount} target accounts are currently covered by weighted pipeline plus live accounts.`
           : `${formatForecastUnits(snapshot.commitEquivalent)} accounts are currently covered, but no annual target is loaded for the active year.`,
       action:
         snapshot.targetCount > 0
@@ -4159,7 +4161,7 @@ function renderTargetProgress(year) {
     integrations: annualDeals.filter((deal) => deal.stage === "Integration" || deal.integrationStartedFlag).length,
     ddPipeline: annualDeals.filter((deal) => deal.stage === "DD").length,
     newGoLive: state.deals.filter((deal) => yearFromDate(deal.liveSince) === year || (deal.goLiveFlag && deal.stage === "Go Live" && resolveDealYear(deal) === year)).length,
-    totalGoLive: annualDeals.filter((deal) => ["Go Live", "Handover"].includes(deal.stage)).length,
+    totalGoLive: annualDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(deal.stage)).length,
   };
 
   const cards = [
@@ -5234,7 +5236,7 @@ function openOperatingSignalDrilldown(signalKey) {
     legal: "Legal",
     dd: "DD",
     integration: "Integration",
-    "handover-pending": "Go Live",
+    "handover-pending": "Live",
   };
 
   const stage = stageMap[cleanText(signalKey)];
@@ -5422,15 +5424,15 @@ function getExecutiveKpiDrilldownDeals(kpiKey, deals = getScopedDeals(), options
   }
 
   if (kpiKey === "weighted-forecast") {
-    return activeDeals.filter((deal) => deal.stage !== "Handover");
+    return activeDeals.filter((deal) => !isLiveAccountStage(deal.stage));
   }
 
   if (kpiKey === "commit-forecast") {
-    return activeDeals.filter((deal) => deal.stage !== "Handover" && getForecastProbability(deal) >= COMMIT_PROBABILITY);
+    return activeDeals.filter((deal) => !isLiveAccountStage(deal.stage) && getForecastProbability(deal) >= COMMIT_PROBABILITY);
   }
 
   if (kpiKey === "active-accounts") {
-    return activeDeals.filter((deal) => deal.stage === "Handover");
+    return activeDeals.filter((deal) => isLiveAccountStage(deal.stage));
   }
 
   if (kpiKey === "at-risk") {
@@ -5453,7 +5455,7 @@ function getExecutiveKpiDrilldownDeals(kpiKey, deals = getScopedDeals(), options
   }
 
   if (kpiKey === "commit-confidence") {
-    return activeDeals.filter((deal) => deal.stage !== "Handover" && getForecastProbability(deal) >= COMMIT_PROBABILITY);
+    return activeDeals.filter((deal) => !isLiveAccountStage(deal.stage) && getForecastProbability(deal) >= COMMIT_PROBABILITY);
   }
 
   if (kpiKey === "execution-load") {
@@ -5519,7 +5521,7 @@ function getTargetProgressPipelineDeals(drilldownKey, year, deals = getScopedDea
   }
 
   if (drilldownKey === "total-go-live") {
-    return annualDeals.filter((deal) => ["Go Live", "Handover"].includes(deal.stage));
+    return annualDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(deal.stage));
   }
 
   if (drilldownKey === "avg-stage-duration" || drilldownKey === "stage-cadence") {
@@ -6568,9 +6570,18 @@ function getRiskDeals(deals = getScopedDeals()) {
         tone = "is-danger";
       }
 
-      if (deal.stage === "DD" && followUpGap > 30) {
-        reasons.push(`DD has gone ${followUpGap} days without follow-up.`);
-        severity += 2;
+      if (hasStaleFollowUp(deal)) {
+        if (deal.stage === "DD") {
+          reasons.push(`DD has gone ${followUpGap} days without follow-up.`);
+        } else if (isLiveAccountStage(deal.stage)) {
+          reasons.push(`Active client in ${deal.stage} has gone ${followUpGap} days without follow-up.`);
+        } else {
+          reasons.push(`${deal.stage || "Account"} has gone ${followUpGap} days without follow-up.`);
+        }
+        severity += isLiveAccountStage(deal.stage) ? 3 : 2;
+        if (isLiveAccountStage(deal.stage)) {
+          tone = "is-danger";
+        }
       }
 
       if (!deal.signedFlag && etaGap >= 0 && etaGap <= 14) {
@@ -6610,6 +6621,14 @@ function isInactiveDealStatus(value) {
 
 function isInactiveDeal(deal) {
   return isInactiveDealStatus(deal?.status);
+}
+
+function isLiveAccountStage(stage) {
+  return ["Live", "Handover"].includes(cleanText(stage));
+}
+
+function hasStaleFollowUp(deal, thresholdDays = 30) {
+  return !isInactiveDeal(deal) && Boolean(cleanText(deal?.lastFollowUp)) && daysSince(deal.lastFollowUp) > thresholdDays;
 }
 
 function getDealTimeParts(deal) {
@@ -6741,6 +6760,9 @@ function getDealHealth(deal) {
   }
   if (deal.stage === "Handover") {
     return { label: "Handover", pillClass: "success", cardClass: "health-live" };
+  }
+  if (deal.stage === "Live") {
+    return { label: "Live", pillClass: "success", cardClass: "health-live" };
   }
   if (deal.stage === "Go Live") {
     return { label: "Go Live", pillClass: "success", cardClass: "health-live" };
@@ -6931,8 +6953,8 @@ function getCampaignsForYear(year) {
 
 function buildForecastSnapshot(deals) {
   const activeDeals = getForecastEligibleDeals(deals);
-  const liveDeals = activeDeals.filter((deal) => deal.stage === "Handover");
-  const pipelineDeals = activeDeals.filter((deal) => deal.stage !== "Handover");
+  const liveDeals = activeDeals.filter((deal) => isLiveAccountStage(deal.stage));
+  const pipelineDeals = activeDeals.filter((deal) => !isLiveAccountStage(deal.stage));
   const weightedCount = sumValues(pipelineDeals.map((deal) => getForecastProbability(deal)));
   const commitCount = pipelineDeals.filter((deal) => getForecastProbability(deal) >= COMMIT_PROBABILITY).length;
   const targetCount = sumValues(
@@ -6975,7 +6997,7 @@ function buildForecastMarketRows(deals) {
     entry.totalCount += 1;
     entry.dealValueTotal += dealValue;
     entry.operatorSet.add(getPrimaryOperatorName(deal));
-    if (deal.stage === "Handover") {
+    if (isLiveAccountStage(deal.stage)) {
       entry.liveCount += 1;
     } else {
       entry.weightedCount += probability;
@@ -7030,7 +7052,7 @@ function buildForecastOperatorRows(deals) {
     const dealValue = getDealValueAmount(deal);
     entry.totalCount += 1;
     entry.dealValueTotal += dealValue;
-    if (deal.stage !== "Handover") {
+    if (!isLiveAccountStage(deal.stage)) {
       entry.weightedCount += probability;
       entry.forecastValue += getForecastValue(deal);
       if (probability >= COMMIT_PROBABILITY) {
@@ -7068,7 +7090,7 @@ function buildDecisionInsights(deals) {
   const marketRows = buildForecastMarketRows(deals).filter((row) => row.targetCount > 0);
   const operatorRows = buildForecastOperatorRows(deals);
   const risks = getRiskDeals(deals);
-  const staleCount = deals.filter((deal) => !["Go Live", "Handover"].includes(deal.stage) && !isInactiveDeal(deal) && daysSince(deal.lastFollowUp) > 30).length;
+  const staleCount = deals.filter((deal) => hasStaleFollowUp(deal)).length;
   const missingOwner = deals.filter((deal) => !getDealOwner(deal)).length;
   const missingLegal = deals.filter((deal) => !cleanText(deal.legalEntity || deal.entityInfo)).length;
   const missingWebsite = deals.filter((deal) => !cleanText(deal.url)).length;
@@ -7137,7 +7159,7 @@ function getForecastProbability(deal) {
     probability = Math.max(probability, deal.stage === "Integration" ? 0.91 : 0.84);
   }
   if (deal.goLiveFlag || ["legal sign-off", "completed", "live"].includes(goLiveStatus)) {
-    probability = Math.max(probability, deal.stage === "Handover" ? 1 : 0.97);
+    probability = Math.max(probability, isLiveAccountStage(deal.stage) ? 1 : 0.97);
   }
   if (isBlockedDeal(deal)) {
     probability -= 0.32;
@@ -7201,7 +7223,7 @@ function buildCrmOwnerRows(deals) {
     };
     entry.accountCount += 1;
     entry.forecastValue += getForecastValue(deal);
-    if (deal.stage === "Handover") {
+    if (isLiveAccountStage(deal.stage)) {
       entry.liveAccounts += 1;
     }
     groups.set(owner, entry);
@@ -7606,7 +7628,7 @@ function getDealValueAmount(deal) {
 }
 
 function getForecastValue(deal) {
-  if (!deal || deal.stage === "Handover" || isInactiveDeal(deal)) {
+  if (!deal || isLiveAccountStage(deal.stage) || isInactiveDeal(deal)) {
     return 0;
   }
   return getDealValueAmount(deal) * getForecastProbability(deal);
@@ -8055,7 +8077,7 @@ function buildModuleFlowItems() {
   const mappedMarkets = state.marketIntel.length;
   const activeUsers = state.users.filter((user) => user.status === "Active").length;
   const unassignedAccounts = scopedDeals.filter((deal) => !getDealOwner(deal)).length;
-  const staleAccounts = scopedDeals.filter((deal) => !["Go Live", "Handover"].includes(deal.stage) && !isInactiveDeal(deal) && daysSince(deal.lastFollowUp) > 30).length;
+  const staleAccounts = scopedDeals.filter((deal) => hasStaleFollowUp(deal)).length;
   const liveCampaigns = state.campaigns.filter((campaign) => ["Ready", "Live"].includes(campaign.status)).length;
   const activeTargets = state.targets.filter((target) => Number(target.year || 0) === getActiveTargetYear()).length;
 
@@ -8095,7 +8117,7 @@ function buildModuleFlowItems() {
     {
       view: "pipeline",
       title: "Opportunity Scoring & Funnel",
-      description: "Advance accounts through Lead, Qualified, Proposal, Legal, DD, Integration, Legal Approval, Go Live, and Handover.",
+      description: "Advance accounts through Lead, Qualified, Proposal, Legal, DD, Integration, Legal Approval, Go Live, Live, and Handover.",
       metricLabel: "Active stages",
       metricValue: `${uniqueValues(scopedDeals.map((deal) => deal.stage)).length}`,
       nextAction:
@@ -8124,7 +8146,7 @@ function buildModuleFlowItems() {
     },
     {
       view: "campaigns",
-      title: "Growth, Go Live & Handover",
+      title: "Growth, Live & Handover",
       description: "Track launch readiness, handover discipline, and growth initiatives for active and expanding client accounts.",
       metricLabel: "Ready / live",
       metricValue: `${liveCampaigns}`,
@@ -8721,7 +8743,7 @@ function normalizeDealStage(value) {
     signoff: "Legal Approval",
     "sign off": "Legal Approval",
     "go live": "Go Live",
-    live: "Handover",
+    live: "Live",
     handover: "Handover",
   };
   return aliases[text.toLowerCase().replace(/-/g, " ")] || text;
@@ -8736,10 +8758,13 @@ function inferDealStage(input = {}) {
   const integrationStatus = normalizeProgressStatus(input.integrationStatus);
   const goLiveStatus = normalizeGoLiveStatus(input.goLiveStatus);
 
-  if (normalizedStage === "Handover" || rawStatus === "live" || cleanText(input.liveSince) || cleanText(input.handover)) {
+  if (normalizedStage === "Handover" || cleanText(input.handover)) {
     return "Handover";
   }
-  if (normalizedStage === "Go Live" || goLiveStatus === "Live") {
+  if (normalizedStage === "Live" || rawStatus === "live" || cleanText(input.liveSince) || goLiveStatus === "Live") {
+    return "Live";
+  }
+  if (normalizedStage === "Go Live") {
     return "Go Live";
   }
   if (
