@@ -9456,6 +9456,82 @@ function buildDealBriefFilename(deal, kind) {
   return `${safeDeal}-${suffixMap[kind] || `${kind}-brief`}.txt`;
 }
 
+function buildWordCompatibleFilename(deal, kind) {
+  return buildDealBriefFilename(deal, kind).replace(/\.txt$/i, ".rtf");
+}
+
+function escapeRtfText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/{/g, "\\{")
+    .replace(/}/g, "\\}")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .replace(/[^\x00-\x7F]/g, (char) => {
+      const code = char.charCodeAt(0);
+      return `\\u${code > 32767 ? code - 65536 : code}?`;
+    });
+}
+
+function isRtfHeadingLine(line, index) {
+  const text = cleanText(line);
+  if (!text) {
+    return false;
+  }
+  if (index === 0) {
+    return true;
+  }
+  if (text.length > 48 || text.includes(":") || text.includes(".")) {
+    return false;
+  }
+  return /^[A-Z][A-Za-z0-9/&\- ]+$/.test(text);
+}
+
+function buildWordCompatibleRtf(kind, deal, template) {
+  const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "SalesRep Request");
+  const client = cleanText(buildDocumentClientName(deal));
+  const lines = String(template?.content || "").split("\n");
+  const body = lines
+    .map((line, index) => {
+      const trimmed = cleanText(line);
+      if (!trimmed) {
+        return "\\pard\\sa90\\par";
+      }
+
+      const escaped = escapeRtfText(trimmed);
+      if (index === 0) {
+        return `\\pard\\qc\\sa180\\b\\fs34 ${escaped}\\b0\\par`;
+      }
+      if (isRtfHeadingLine(trimmed, index)) {
+        return `\\pard\\sa120\\b\\fs24 ${escaped}\\b0\\par`;
+      }
+      return `\\pard\\sa80\\fs22 ${escaped}\\par`;
+    })
+    .join("\n");
+
+  const subtitle = escapeRtfText([client, cleanText(deal.market), new Date().toLocaleDateString("en-US")].filter(Boolean).join(" · "));
+  const docTitle = escapeRtfText(title);
+
+  return [
+    "{\\rtf1\\ansi\\deff0",
+    "{\\fonttbl{\\f0 Calibri;}}",
+    "{\\colortbl;\\red22\\green26\\blue31;\\red68\\green114\\blue196;\\red93\\green102\\blue115;}",
+    "\\viewkind4\\uc1",
+    `\\pard\\qc\\sa180\\b\\cf1\\fs36 ${docTitle}\\b0\\par`,
+    subtitle ? `\\pard\\qc\\sa140\\b\\cf2\\fs22 ${subtitle}\\b0\\par` : "",
+    "\\pard\\qc\\sa160\\i\\cf3\\fs20 Word-compatible export generated from SalesRep\\i0\\par",
+    body,
+    "}",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function downloadWordCompatibleRequest(kind, deal, template) {
+  const rtf = buildWordCompatibleRtf(kind, deal, template);
+  downloadBlob(buildWordCompatibleFilename(deal, kind), rtf, "application/rtf;charset=utf-8");
+}
+
 function getDealBriefTemplate(kind, deal) {
   const templates = {
     legal: {
@@ -9631,8 +9707,8 @@ async function exportDealDocx(kind, sourceDeal = null) {
   }
 
   if (!serverMeta.ready) {
-    downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
-    setBanner("Stage saved and request exported as TXT. Word export requires the local SalesRep server; start `./start-server.sh` when you need DOCX output.", "warn");
+    downloadWordCompatibleRequest(kind, deal, template);
+    setBanner("Stage saved and a Word-compatible request file was exported. Full DOCX with your template still requires the local SalesRep server.", "success");
     return;
   }
 
@@ -9656,9 +9732,9 @@ async function exportDealDocx(kind, sourceDeal = null) {
     triggerBlobDownload(blob, filename);
     setBanner(`${template.exportLabel} exported in Word for ${deal.deal || deal.client || "draft client"}.`, "success");
   } catch (error) {
-    downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
+    downloadWordCompatibleRequest(kind, deal, template);
     setBanner(
-      `No pude exportar el Word. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."} Se exportó un TXT como fallback.`,
+      `No pude exportar el DOCX. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."} Se exportó un archivo Word-compatible como fallback.`,
       "warn"
     );
   }
