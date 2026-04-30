@@ -57,6 +57,7 @@ const STAGE_CADENCE_MILESTONES = [
   ["Legal", "signedEta"],
   ["DD", "ddDate"],
   ["Integration", "integrationDate"],
+  ["Legal Approval", "legalApprovalDate"],
   ["Go Live", "liveDate"],
   ["Handover", "handover"],
 ];
@@ -90,41 +91,49 @@ const DOCUMENT_STAGE_ACTIONS = {
     flagField: "integrationStartedFlag",
     actionLabel: "Integration Request",
   },
+  signoff: {
+    targetStage: "Legal Approval",
+    dateField: "legalApprovalDate",
+    statusField: "goLiveStatus",
+    statusValue: "Legal Sign-Off",
+    preserveValues: ["Legal Sign-Off", "Completed", "Live", "Blocked"],
+    actionLabel: "Legal Signoff",
+  },
 };
 
 const REQUEST_HUB_DEFINITIONS = [
   {
     key: "proposal",
-    title: "Commercial Proposal",
-    description: "Control pricing, scope, validity, and negotiated terms before contract kickoff.",
+    title: "Proposal Request",
+    description: "Client-facing commercial proposal with pricing, scope, validity, and negotiated terms.",
     stageHint: "Lead · Qualified · Proposal",
     emptyLabel: "No visible accounts are currently sitting in the commercial proposal lane.",
   },
   {
     key: "legal",
     title: "Legal Request",
-    description: "Start the new service agreement with full client information and commercials already aligned.",
+    description: "Internal request to start contract work with full client profile and agreed commercials.",
     stageHint: "Proposal · Legal",
     emptyLabel: "No visible accounts currently require a legal request handoff.",
   },
   {
     key: "dd",
     title: "DD Request",
-    description: "Launch due diligence with compliance contacts, documents, and DD ownership clearly identified.",
+    description: "Internal due diligence request with compliance contacts, documents, and ownership aligned.",
     stageHint: "Legal · DD",
     emptyLabel: "No visible accounts are currently waiting for DD initiation or follow-up.",
   },
   {
     key: "integration",
     title: "Integration Request",
-    description: "Send the technical kickoff with Jira, products, channels, launch scope, and delivery owners.",
+    description: "Internal technical kickoff with Jira, products, channels, launch scope, and delivery owners.",
     stageHint: "DD · Integration",
     emptyLabel: "No visible accounts are currently inside the integration request lane.",
   },
   {
-    key: "approval",
-    title: "Legal Approval",
-    description: "Control final sign-off before launch and highlight the accounts closest to Go Live readiness.",
+    key: "signoff",
+    title: "Legal Signoff",
+    description: "Internal final signoff request before launch readiness and Go Live authorization.",
     stageHint: "Legal Approval · Go Live",
     emptyLabel: "No visible accounts are currently in final legal approval.",
   },
@@ -171,7 +180,7 @@ const STAGE_OPERATION_BLUEPRINT = {
     objective: "Confirm contract, DD, and integration are closed before authorizing launch readiness.",
     nextStage: "Go Live",
     ownerHint: "Legal / Ops / Sales",
-    primaryActionKind: null,
+    primaryActionKind: "signoff",
   },
   "Go Live": {
     objective: "Confirm sign-off, launch timing, and operating readiness before the client is treated as active.",
@@ -407,6 +416,7 @@ const PIPELINE_CSV_COLUMNS = [
   ["Offer Date", "offerDate"],
   ["DD Date", "ddDate"],
   ["Integration Date", "integrationDate"],
+  ["Legal Approval Date", "legalApprovalDate"],
   ["Live Date", "liveDate"],
   ["Platform", "platform"],
   ["Casino Name", "casinoName"],
@@ -457,6 +467,7 @@ const PIPELINE_CSV_COLUMNS = [
   ["Integration Team", "integrationTeam"],
   ["Teams Group", "teamsGroup"],
   ["Integration Request", "integrationRequest"],
+  ["Legal Signoff Request", "legalSignoffRequest"],
   ["Other Info", "otherInfo"],
   ["Document Client Name", "documentClientName"],
   ["Proposal Validity Days", "proposalValidityDays"],
@@ -880,6 +891,9 @@ function bindEvents() {
   document.getElementById("copy-integration-brief-button").addEventListener("click", () => {
     void copyDealBrief("integration");
   });
+  document.getElementById("copy-legal-signoff-brief-button").addEventListener("click", () => {
+    void copyDealBrief("signoff");
+  });
   document.getElementById("copy-negotiation-brief-button").addEventListener("click", () => {
     void copyDealBrief("negotiation");
   });
@@ -899,6 +913,9 @@ function bindEvents() {
   });
   document.getElementById("export-integration-request-button").addEventListener("click", () => {
     void exportDealDocx("integration");
+  });
+  document.getElementById("export-legal-signoff-request-button").addEventListener("click", () => {
+    void exportDealDocx("signoff");
   });
 
   marketIntelForm.addEventListener("submit", handleMarketIntelSubmit);
@@ -1832,6 +1849,7 @@ function createEmptyDeal() {
     integrationTeam: "",
     teamsGroup: "",
     integrationRequest: "",
+    legalSignoffRequest: "",
     otherInfo: "",
     documentClientName: "",
     proposalValidityDays: 30,
@@ -2129,6 +2147,7 @@ function normalizeDeal(input) {
     integrationTeam: cleanText(input.integrationTeam),
     teamsGroup: cleanText(input.teamsGroup),
     integrationRequest: cleanText(input.integrationRequest),
+    legalSignoffRequest: cleanText(input.legalSignoffRequest),
     otherInfo: cleanText(input.otherInfo),
     documentClientName: cleanText(input.documentClientName),
     proposalValidityDays: Math.max(1, toNullableNumber(input.proposalValidityDays) || base.proposalValidityDays),
@@ -2157,6 +2176,7 @@ function normalizeDeal(input) {
     offerDate: normalizeDateInput(input.offerDate),
     ddDate: normalizeDateInput(input.ddDate),
     integrationDate: normalizeDateInput(input.integrationDate),
+    legalApprovalDate: normalizeDateInput(input.legalApprovalDate),
     liveDate: normalizeDateInput(input.liveDate),
     casinoName: cleanText(input.casinoName),
     ezugiId: cleanText(input.ezugiId),
@@ -2549,6 +2569,7 @@ function createDealShape() {
     offerDate: "",
     ddDate: "",
     integrationDate: "",
+    legalApprovalDate: "",
     liveDate: "",
     casinoName: "",
     ezugiId: "",
@@ -4569,7 +4590,7 @@ function renderRequestsView() {
         <div class="row-actions">
           ${renderDealWorkflowDocumentButtons(activeDeal, {
             className: "button button-secondary button-small",
-            kinds: ["legal", "proposal", "dd", "integration"],
+            kinds: ["proposal", "legal", "dd", "integration", "signoff"],
             includeTask: true,
             includeEdit: true,
             editLabel: "Open Deal",
@@ -4583,7 +4604,7 @@ function renderRequestsView() {
     <button type="button" class="request-focus-card ${focus === "all" ? "is-active" : ""}" data-request-focus="all">
       <span>All Requests</span>
       <strong>${escapeHtml(String(sumValues(buckets.map((bucket) => bucket.deals.length))))}</strong>
-      <small>See the full request worklist across legal, commercial, DD, integration, and approval.</small>
+      <small>See the full request worklist across proposal, legal, DD, integration, and legal signoff.</small>
     </button>
     ${buckets
       .map((bucket) => {
@@ -4635,21 +4656,13 @@ function renderRequestHubDealCard(deal, key) {
   const guide = buildDealOperationalGuide(deal);
   const health = getDealHealth(deal);
   const buttons =
-    key === "approval"
-      ? renderDealWorkflowDocumentButtons(deal, {
-          className: "button button-secondary button-small",
-          kinds: [],
-          includeTask: true,
-          includeEdit: true,
-          editLabel: "Open Deal",
-        })
-      : renderDealWorkflowDocumentButtons(deal, {
-          className: "button button-secondary button-small",
-          kinds: [key],
-          includeTask: true,
-          includeEdit: true,
-          editLabel: "Open Deal",
-        });
+    renderDealWorkflowDocumentButtons(deal, {
+      className: "button button-secondary button-small",
+      kinds: [key],
+      includeTask: true,
+      includeEdit: true,
+      editLabel: "Open Deal",
+    });
 
   return `
     <article class="request-hub-card ${health.cardClass}">
@@ -4705,8 +4718,8 @@ function matchesRequestHubLane(deal, key) {
     return ["DD", "Integration"].includes(stage) || (integrationStatus && integrationStatus !== "Not Started") || hasAnyText(deal.integrationRequest, deal.integrationEmail, deal.jira);
   }
 
-  if (key === "approval") {
-    return stage === "Legal Approval" || goLiveStatus === "Legal Sign-Off";
+  if (key === "signoff") {
+    return stage === "Legal Approval" || goLiveStatus === "Legal Sign-Off" || hasAnyText(deal.legalSignoffRequest, deal.legalApprovalDate);
   }
 
   return false;
@@ -4725,8 +4738,10 @@ function getRequestHubStatusText(deal, key) {
   if (key === "integration") {
     return deal.integrationStatus || "Integration pending";
   }
-  if (key === "approval") {
-    return deal.goLiveStatus || deal.legalStatus || "Approval pending";
+  if (key === "signoff") {
+    return deal.legalApprovalDate
+      ? `Signoff date ${formatDate(deal.legalApprovalDate)}`
+      : deal.goLiveStatus || deal.legalStatus || "Legal signoff pending";
   }
   return deal.status || "Pending";
 }
@@ -6175,6 +6190,13 @@ async function handleDealAction(event) {
     }
     return;
   }
+  if (action === "create-signoff-request-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      void exportDealDocx("signoff", sourceDeal);
+    }
+    return;
+  }
 
   const deal = state.deals.find((item) => item.id === id);
   if (!deal) {
@@ -6628,6 +6650,7 @@ function fillDealForm(deal) {
     "offerDate",
     "ddDate",
     "integrationDate",
+    "legalApprovalDate",
     "liveDate",
     "brands",
     "entityInfo",
@@ -6660,6 +6683,7 @@ function fillDealForm(deal) {
     "integrationTeam",
     "teamsGroup",
     "integrationRequest",
+    "legalSignoffRequest",
     "otherInfo",
     "documentClientName",
     "proposalValidityDays",
@@ -8375,7 +8399,7 @@ function renderRequestPackStatusBlock(deal, density = "default") {
 
 function getRequestPackStatusItems(deal) {
   return [
-    buildRequestPackStatusItem("Legal Pack", [
+    buildRequestPackStatusItem("Legal Request", [
       { label: "Company", value: deal.companyName || deal.client || deal.legalEntity },
       { label: "Registration", value: deal.companyRegistrationNumber },
       { label: "Registered Address", value: deal.companyRegisteredAddress },
@@ -8387,7 +8411,7 @@ function getRequestPackStatusItems(deal) {
       { label: "Setup Fee", value: [deal.setupFeeStatus, deal.setupFeeAmount ? `EUR ${deal.setupFeeAmount}` : ""].filter(Boolean).join(" · ") },
       { label: "Deductions Allowed", value: deal.deductionsAllowed },
     ]),
-    buildRequestPackStatusItem("Proposal Brief", [
+    buildRequestPackStatusItem("Commercial Proposal", [
       { label: "Proposal Request", value: deal.proposalRequest },
       { label: "Products", value: deal.negotiatedProducts || deal.productsPotential || deal.productsCurrent },
       { label: "Commercial Terms", value: deal.commercialTerms },
@@ -8397,7 +8421,7 @@ function getRequestPackStatusItems(deal) {
       { label: "Validity", value: buildProposalValidityText(deal) },
       { label: "Activation Requirements", value: deal.activationRequirements },
     ]),
-    buildRequestPackStatusItem("DD Brief", [
+    buildRequestPackStatusItem("DD Request", [
       { label: "DD Date", value: deal.ddDate },
       { label: "DD Status", value: deal.ddStatus },
       { label: "DD Contact", value: deal.ddContactName && deal.ddContactEmail ? `${deal.ddContactName} ${deal.ddContactEmail}` : deal.ddContactName || deal.ddContactEmail },
@@ -8405,13 +8429,21 @@ function getRequestPackStatusItems(deal) {
       { label: "License", value: deal.companyLicense || deal.licenseStatus },
       { label: "Deductions Allowed", value: deal.deductionsAllowed || deal.deductionTerms },
     ]),
-    buildRequestPackStatusItem("Integration Brief", [
+    buildRequestPackStatusItem("Integration Request", [
       { label: "Client Based", value: deal.clientBased || deal.jurisdiction },
       { label: "URL", value: deal.url || deal.siteStatus },
       { label: "Live Suppliers", value: deal.otherLiveSuppliers },
       { label: "Integration Team", value: deal.integrationTeam },
       { label: "Products", value: deal.productsPotential || deal.productsCurrent },
       { label: "Integration Request", value: deal.integrationRequest },
+    ]),
+    buildRequestPackStatusItem("Legal Signoff", [
+      { label: "Legal Approval Date", value: deal.legalApprovalDate },
+      { label: "Signoff Request", value: deal.legalSignoffRequest },
+      { label: "Legal Status", value: deal.legalStatus },
+      { label: "DD Status", value: deal.ddStatus },
+      { label: "Integration Status", value: deal.integrationStatus },
+      { label: "Go Live Status", value: deal.goLiveStatus },
     ]),
   ];
 }
@@ -8434,16 +8466,29 @@ function getStageOperationBlueprint(stage) {
 function getStageDocumentActionLabel(kind) {
   return (
     {
-      legal: "Start Legal Request",
-      proposal: "Create Business Proposal",
-      dd: "Create DD Request",
-      integration: "Create Integration Request",
+      legal: "Legal Request (Internal)",
+      proposal: "Proposal Request (To Client)",
+      dd: "DD Request (Internal)",
+      integration: "Integration Request (Internal)",
+      signoff: "Legal Signoff (Internal)",
     }[cleanText(kind)] || "Create Workflow Document"
   );
 }
 
+function getStageDocumentActionShortLabel(kind) {
+  return (
+    {
+      legal: "Legal",
+      proposal: "Proposal",
+      dd: "DD",
+      integration: "Integration",
+      signoff: "Signoff",
+    }[cleanText(kind)] || "Request"
+  );
+}
+
 function getStageDocumentActionKinds() {
-  return ["legal", "proposal", "dd", "integration"];
+  return ["proposal", "legal", "dd", "integration", "signoff"];
 }
 
 function renderDealWorkflowDocumentButtons(deal, options = {}) {
@@ -8452,6 +8497,7 @@ function renderDealWorkflowDocumentButtons(deal, options = {}) {
   const editLabel = cleanText(options.editLabel) || "Edit";
   const includeTask = Boolean(options.includeTask);
   const includeCampaign = Boolean(options.includeCampaign);
+  const useCompactLabels = options.compactLabels !== undefined ? Boolean(options.compactLabels) : className.includes("icon-button");
   const kinds = Array.isArray(options.kinds)
     ? options.kinds.map((kind) => cleanText(kind)).filter(Boolean)
     : getStageDocumentActionKinds();
@@ -8459,7 +8505,7 @@ function renderDealWorkflowDocumentButtons(deal, options = {}) {
   const buttons = kinds.map((kind) => {
     return `<button class="${escapeAttribute(className)}" data-action="create-${escapeAttribute(kind)}-request-from-deal" data-id="${escapeAttribute(
       deal.id
-    )}">${escapeHtml(getStageDocumentActionLabel(kind))}</button>`;
+    )}">${escapeHtml(useCompactLabels ? getStageDocumentActionShortLabel(kind) : getStageDocumentActionLabel(kind))}</button>`;
   });
 
   if (includeTask) {
@@ -8603,6 +8649,7 @@ function buildStageOperationalChecklist(stage, deal) {
       ];
     case "Legal Approval":
       return [
+        buildOperationalRequirement("Legal signoff request created", hasAnyText(deal.legalSignoffRequest, deal.legalApprovalDate), "Use the legal signoff action to stamp the request and summarize launch approval needs."),
         buildOperationalRequirement("Agreement signed", isSignedAgreement(deal), "Commercial agreement should be signed."),
         buildOperationalRequirement("Legal approved", cleanText(deal.legalStatus) === "Approved", "Legal status should be approved."),
         buildOperationalRequirement("DD completed", cleanText(deal.ddStatus) === "Completed", "DD should be marked completed."),
@@ -8665,7 +8712,7 @@ function buildStageOperationalChecklist(stage, deal) {
 function buildStageOperationalRecommendation(stage, deal, checklist, blueprint) {
   const missing = checklist.filter((item) => !item.ready);
   if (cleanText(stage) === "Proposal" && !cleanText(deal.offerDate)) {
-    return "Issue the business proposal to stamp the proposal start date and activate the validity window.";
+    return "Issue the client commercial proposal to stamp the proposal start date and activate the validity window.";
   }
   if (cleanText(stage) === "Legal" && cleanText(deal.legalStatus) === "Not Started") {
     return "Start the legal request so contract review begins with the agreed commercials and client profile already attached.";
@@ -8675,6 +8722,9 @@ function buildStageOperationalRecommendation(stage, deal, checklist, blueprint) 
   }
   if (cleanText(stage) === "Integration" && !cleanText(deal.integrationDate)) {
     return "Create the integration request to start delivery, stamp the date, and align Jira ownership.";
+  }
+  if (cleanText(stage) === "Legal Approval" && !hasAnyText(deal.legalSignoffRequest, deal.legalApprovalDate)) {
+    return "Create the legal signoff request to start final internal approval before Go Live.";
   }
   if (cleanText(stage) === "Live" && hasStaleFollowUp(deal)) {
     return "Refresh live-account follow-up now so the active client does not drift without growth control.";
@@ -9201,6 +9251,7 @@ function buildCommercialScheduleBriefLines(deal) {
 function buildLegalRequestBrief(deal) {
   const scheduleLines = buildCommercialScheduleBriefLines(deal);
   return [
+    "Legal Request",
     "New Service Agreement Request",
     "",
     `Deal: ${buildBriefValue(deal.deal)}`,
@@ -9283,6 +9334,38 @@ function buildIntegrationRequestBrief(deal) {
   ].join("\n");
 }
 
+function buildLegalSignoffBrief(deal) {
+  return [
+    "Legal Signoff Request",
+    "",
+    `Deal: ${buildBriefValue(deal.deal)}`,
+    `Client / Operator: ${buildDocumentClientName(deal)}`,
+    `Market: ${buildBriefValue(deal.market)}`,
+    `Stage: ${buildBriefValue(deal.stage, "Legal Approval")}`,
+    `Legal Signoff Initiated: ${buildBriefValue(deal.legalApprovalDate || new Date().toISOString().slice(0, 10))}`,
+    "",
+    "Launch Readiness Check",
+    `Legal Status: ${buildBriefValue(deal.legalStatus)}`,
+    `DD Status: ${buildBriefValue(deal.ddStatus)}`,
+    `Integration Status: ${buildBriefValue(deal.integrationStatus)}`,
+    `Go Live Status: ${buildBriefValue(deal.goLiveStatus, "Legal Sign-Off")}`,
+    `Live Date: ${buildBriefValue(deal.liveDate, deal.liveSince)}`,
+    "",
+    "Commercial and Product Scope",
+    `Products in scope: ${buildNegotiatedProductsValue(deal)}`,
+    `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Proposal request: ${buildBriefValue(deal.proposalRequest)}`,
+    `Integration request: ${buildBriefValue(deal.integrationRequest)}`,
+    "",
+    "Approval Summary",
+    `Legal signoff request: ${buildBriefValue(deal.legalSignoffRequest, deal.statusText, deal.comments)}`,
+    `Action items: ${buildBriefValue(deal.actionItems)}`,
+    `Updates: ${buildBriefValue(deal.updates)}`,
+    `Jira ticket: ${buildBriefValue(deal.jira)}`,
+    `DD ticket: ${buildBriefValue(deal.ddTicket)}`,
+  ].join("\n");
+}
+
 function buildDdRequestBrief(deal) {
   return [
     "Due Diligence Request",
@@ -9316,7 +9399,7 @@ function buildDdRequestBrief(deal) {
 function buildProposalRequestBrief(deal) {
   const scheduleLines = buildCommercialScheduleBriefLines(deal);
   return [
-    "Proposal Request",
+    "Commercial Proposal",
     "",
     `Deal: ${buildBriefValue(deal.deal)}`,
     `Client: ${buildDocumentClientName(deal)}`,
@@ -9367,6 +9450,7 @@ function buildDealBriefFilename(deal, kind) {
     proposal: "commercial-proposal",
     dd: "dd-request",
     integration: "integration-request",
+    signoff: "legal-signoff-request",
     negotiation: "negotiation-brief",
   };
   return `${safeDeal}-${suffixMap[kind] || `${kind}-brief`}.txt`;
@@ -9375,24 +9459,29 @@ function buildDealBriefFilename(deal, kind) {
 function getDealBriefTemplate(kind, deal) {
   const templates = {
     legal: {
-      label: "Legal brief",
-      exportLabel: "New Service Agreement Request",
+      label: "Legal request brief",
+      exportLabel: "Legal Request",
       content: buildLegalRequestBrief(deal),
     },
     proposal: {
-      label: "Proposal brief",
-      exportLabel: "Business Proposal",
+      label: "Proposal request brief",
+      exportLabel: "Commercial Proposal",
       content: buildProposalRequestBrief(deal),
     },
     dd: {
-      label: "DD brief",
+      label: "DD request brief",
       exportLabel: "DD Request",
       content: buildDdRequestBrief(deal),
     },
     integration: {
-      label: "Integration brief",
+      label: "Integration request brief",
       exportLabel: "Integration Request",
       content: buildIntegrationRequestBrief(deal),
+    },
+    signoff: {
+      label: "Legal signoff brief",
+      exportLabel: "Legal Signoff Request",
+      content: buildLegalSignoffBrief(deal),
     },
     negotiation: {
       label: "Negotiation brief",
@@ -9542,7 +9631,8 @@ async function exportDealDocx(kind, sourceDeal = null) {
   }
 
   if (!serverMeta.ready) {
-    setBanner("Stage saved, but Word export requires the local SalesRep server because it uses your local proposal template. Start `./start-server.sh` and retry.", "warn");
+    downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
+    setBanner("Stage saved and request exported as TXT. Word export requires the local SalesRep server; start `./start-server.sh` when you need DOCX output.", "warn");
     return;
   }
 
@@ -9566,7 +9656,11 @@ async function exportDealDocx(kind, sourceDeal = null) {
     triggerBlobDownload(blob, filename);
     setBanner(`${template.exportLabel} exported in Word for ${deal.deal || deal.client || "draft client"}.`, "success");
   } catch (error) {
-    setBanner(`No pude exportar el Word. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."}`, "danger");
+    downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
+    setBanner(
+      `No pude exportar el Word. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."} Se exportó un TXT como fallback.`,
+      "warn"
+    );
   }
 }
 
@@ -9860,7 +9954,7 @@ function buildModuleFlowItems() {
     {
       view: "requests",
       title: "Proposals & Requests",
-      description: "Issue commercial proposals, legal requests, DD packages, integration requests, and final legal approval from one operating hub.",
+      description: "Issue commercial proposals plus legal, DD, integration, and final legal signoff requests from one operating hub.",
       metricLabel: "Active request lanes",
       metricValue: `${REQUEST_HUB_DEFINITIONS.filter((item) => getRequestHubDeals(scopedDeals, item.key).length > 0).length}`,
       nextAction:

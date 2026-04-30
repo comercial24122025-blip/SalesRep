@@ -730,6 +730,10 @@
                       <input name="integrationDate" type="date" />
                     </label>
                     <label>
+                      Legal Approval Date
+                      <input name="legalApprovalDate" type="date" />
+                    </label>
+                    <label>
                       Live Date
                       <input name="liveDate" type="date" />
                     </label>
@@ -1058,16 +1062,28 @@
                     </div>
                   </div>
 
+                  <div class="form-subsection">
+                    <h4>Legal signoff brief</h4>
+                    <div class="form-grid form-grid-2">
+                      <label class="full-span">
+                        Legal Signoff Request
+                        <textarea name="legalSignoffRequest" rows="4" placeholder="Internal signoff summary before Go Live: launch blockers, approvals, pending validations, and final release request"></textarea>
+                      </label>
+                    </div>
+                  </div>
+
                   <div class="form-actions request-brief-actions">
                     <button type="button" id="open-requests-module-button" class="button button-ghost">Open Requests Hub</button>
-                    <button type="button" id="copy-legal-brief-button" class="button button-ghost">Copy Legal Brief</button>
-                    <button type="button" id="copy-proposal-brief-button" class="button button-ghost">Copy Proposal Brief</button>
-                    <button type="button" id="copy-integration-brief-button" class="button button-ghost">Copy Integration Brief</button>
+                    <button type="button" id="copy-legal-brief-button" class="button button-ghost">Copy Legal Request</button>
+                    <button type="button" id="copy-proposal-brief-button" class="button button-ghost">Copy Proposal Request</button>
+                    <button type="button" id="copy-integration-brief-button" class="button button-ghost">Copy Integration Request</button>
+                    <button type="button" id="copy-legal-signoff-brief-button" class="button button-ghost">Copy Legal Signoff</button>
                     <button type="button" id="copy-negotiation-brief-button" class="button button-ghost">Copy Negotiation Brief</button>
-                    <button type="button" id="export-contract-request-button" class="button button-secondary">Start Legal Request</button>
-                    <button type="button" id="export-commercial-proposal-button" class="button button-secondary">Create Business Proposal</button>
-                    <button type="button" id="export-dd-request-button" class="button button-secondary">Create DD Request</button>
-                    <button type="button" id="export-integration-request-button" class="button button-secondary">Create Integration Request</button>
+                    <button type="button" id="export-contract-request-button" class="button button-secondary">Legal Request (Internal)</button>
+                    <button type="button" id="export-commercial-proposal-button" class="button button-secondary">Proposal Request (To Client)</button>
+                    <button type="button" id="export-dd-request-button" class="button button-secondary">DD Request (Internal)</button>
+                    <button type="button" id="export-integration-request-button" class="button button-secondary">Integration Request (Internal)</button>
+                    <button type="button" id="export-legal-signoff-request-button" class="button button-secondary">Legal Signoff (Internal)</button>
                   </div>
                 </div>
 
