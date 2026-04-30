@@ -105,6 +105,34 @@
         </p>
       </header>
 
+      <section class="company-command-bar" aria-label="Company finder">
+        <div class="company-command-copy">
+          <p class="panel-kicker">Instant lookup</p>
+          <h2>Company Finder</h2>
+          <p>Search any company, client, operator, contact, or email and open the company profile in one step.</p>
+        </div>
+        <label class="company-search-field">
+          Find Company
+          <div class="finder-shell">
+            <input
+              id="company-search"
+              type="search"
+              placeholder="Search company, operator, contact, or email..."
+              autocomplete="off"
+              spellcheck="false"
+              aria-autocomplete="list"
+              aria-controls="company-search-suggestions"
+              aria-expanded="false"
+            />
+            <div id="company-search-suggestions" class="finder-suggestions" hidden></div>
+          </div>
+          <div class="finder-foot">
+            <small id="company-search-status" class="finder-helper">Search the full workspace by company name, operator, contact, website, or email.</small>
+            <button id="clear-company-search" type="button" class="button button-ghost button-small">Clear</button>
+          </div>
+        </label>
+      </section>
+
       <section class="view-nav-shell" aria-label="Primary navigation">
         <div class="view-nav-meta">
           <p class="panel-kicker">Operating flow</p>
@@ -517,8 +545,40 @@
               </div>
 
               <form id="deal-form" class="entity-form">
-                <div class="form-section">
+                <div class="deal-form-toolbar">
+                  <div class="deal-form-segments">
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-core">Core</button>
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-scoring">Scoring</button>
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-timeline">Timeline</button>
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-status">Status</button>
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-requests">Requests</button>
+                    <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-context">Context</button>
+                  </div>
+                  <div class="quick-fill-strip">
+                    <span>Quick fill</span>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="B2C">B2C</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="B2B">B2B</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="Retail">Retail</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Qualified">Qualified</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Proposal">Proposal</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Legal">Legal</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="market" data-fill-value="Peru">Peru</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="market" data-fill-value="Mexico">Mexico</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="platform" data-fill-value="BetConstruct">BetConstruct</button>
+                  </div>
+                </div>
+
+                <div id="deal-section-core" class="form-section">
                   <h3>Core deal</h3>
+                  <div class="quick-fill-strip quick-fill-strip-subtle">
+                    <span>Fast stage set</span>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Lead">Lead</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Qualified">Qualified</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Proposal">Proposal</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Legal">Legal</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="DD">DD</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Integration">Integration</button>
+                  </div>
                   <div class="form-grid form-grid-3">
                     <label>
                       Deal
@@ -542,7 +602,7 @@
                     </label>
                     <label>
                       Type
-                      <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" />
+                      <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" list="deal-type-options" />
                     </label>
                     <label>
                       Stage
@@ -561,7 +621,7 @@
                     </label>
                     <label>
                       Market
-                      <input name="market" type="text" placeholder="Ex. Peru" />
+                      <input name="market" type="text" placeholder="Ex. Peru" list="deal-market-options" />
                     </label>
                     <label>
                       Jurisdiction
@@ -581,7 +641,7 @@
                     </label>
                     <label>
                       Platform
-                      <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" />
+                      <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" list="deal-platform-options" />
                     </label>
                     <label>
                       Deal Value (EUR)
@@ -618,12 +678,21 @@
                   <div id="deal-workflow-guide" class="deal-workflow-guide"></div>
                 </div>
 
-                <div class="form-section">
+                <div id="deal-section-scoring" class="form-section">
                   <h3>Target Mapping & Opportunity Scoring</h3>
+                  <div class="quick-fill-strip quick-fill-strip-subtle">
+                    <span>Quick segment</span>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="segment" data-fill-value="Online">Online</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="segment" data-fill-value="Casino">Casino</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="segment" data-fill-value="Sportsbook">Sportsbook</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="segment" data-fill-value="Lottery">Lottery</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="licenseStatus" data-fill-value="Approved">License Approved</button>
+                    <button type="button" class="button button-ghost button-small" data-fill-field="licenseStatus" data-fill-value="In Progress">License In Progress</button>
+                  </div>
                   <div class="form-grid form-grid-3">
                     <label>
                       Segment
-                      <input name="segment" type="text" placeholder="Online, retail, casino, sportsbook, lottery..." />
+                      <input name="segment" type="text" placeholder="Online, retail, casino, sportsbook, lottery..." list="deal-segment-options" />
                     </label>
                     <label>
                       Primary Contact
@@ -635,7 +704,7 @@
                     </label>
                     <label>
                       License Status
-                      <input name="licenseStatus" type="text" placeholder="Approved, pending, restricted..." />
+                      <input name="licenseStatus" type="text" placeholder="Approved, pending, restricted..." list="deal-license-options" />
                     </label>
                     <label>
                       Current Competitors
@@ -710,7 +779,7 @@
                   </div>
                 </div>
 
-                <div class="form-section">
+                <div id="deal-section-timeline" class="form-section">
                   <h3>Timeline and execution</h3>
                   <div class="form-grid form-grid-3">
                     <label>
@@ -776,7 +845,7 @@
                   </div>
                 </div>
 
-                <div class="form-section">
+                <div id="deal-section-status" class="form-section">
                   <h3>Operating status</h3>
                   <div class="form-grid form-grid-2">
                     <label>
@@ -859,7 +928,7 @@
                   </div>
                 </div>
 
-                <div class="form-section">
+                <div id="deal-section-requests" class="form-section">
                   <h3>Client Requests &amp; Negotiation Pack</h3>
                   <p class="form-note">Use this block to prepare structured internal handoffs for Legal, Proposal, Integration, and commercial negotiation. Core client type, market, platform, KAM, license status, and product scope are inherited from the deal header above.</p>
 
@@ -927,6 +996,70 @@
 
                   <div class="form-subsection">
                     <h4>Proposal &amp; negotiation scope</h4>
+                    <div class="commercial-builder">
+                      <div class="form-section-head">
+                        <div>
+                          <h5>Commercial Builder</h5>
+                          <p class="form-note">Use quick presets for 12%, 11%, fixed fee, or tiered structures, then append the result into Commercial Terms or Commercial Schedule.</p>
+                        </div>
+                        <div class="quick-fill-strip">
+                          <span>Presets</span>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="ggr-12">12% GGR</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="ngr-11">11% NGR</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="fixed-fee">Fixed Fee</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered">Tiered</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="premium-addon">Premium Add-on</button>
+                        </div>
+                      </div>
+                      <div class="form-grid form-grid-3">
+                        <label>
+                          Product
+                          <input id="commercial-builder-product" type="text" placeholder="Evolution Generic" list="commercial-product-options" />
+                        </label>
+                        <label>
+                          Model
+                          <select id="commercial-builder-model">
+                            <option>Revenue Share %</option>
+                            <option>Fixed Fee</option>
+                            <option>Tiered</option>
+                            <option>Premium Add-On</option>
+                            <option>Hybrid</option>
+                          </select>
+                        </label>
+                        <label>
+                          Base
+                          <select id="commercial-builder-base">
+                            <option>GGR</option>
+                            <option>NGR</option>
+                            <option>Monthly Fee</option>
+                            <option>Per Table</option>
+                            <option>Flat Fee</option>
+                          </select>
+                        </label>
+                        <label>
+                          Rate / %
+                          <input id="commercial-builder-rate" type="text" placeholder="12%" />
+                        </label>
+                        <label>
+                          Fixed Fee (EUR)
+                          <input id="commercial-builder-fixed-fee" type="number" min="0" step="0.01" placeholder="0.00" />
+                        </label>
+                        <label>
+                          Tier / Volume
+                          <input id="commercial-builder-tier" type="text" placeholder="EUR 0-2M / month 1-6 / L1" />
+                        </label>
+                        <label class="full-span">
+                          Builder Notes
+                          <input id="commercial-builder-notes" type="text" placeholder="Premium tables, branded content, high stake tables..." />
+                        </label>
+                      </div>
+                      <div class="quick-fill-strip quick-fill-strip-subtle">
+                        <span>Apply</span>
+                        <button type="button" class="button button-secondary button-small" data-commercial-action="append-terms">Add to Commercial Terms</button>
+                        <button type="button" class="button button-secondary button-small" data-commercial-action="append-schedule">Add Schedule Row</button>
+                        <button type="button" class="button button-ghost button-small" data-commercial-action="clear-builder">Clear Builder</button>
+                      </div>
+                    </div>
                     <div class="form-grid form-grid-2">
                       <label>
                         Document Client / Operator Name
@@ -962,12 +1095,12 @@
                       </label>
                       <label class="full-span">
                         Commercial Terms
-                        <textarea name="commercialTerms" rows="4" placeholder="Tiered %, premium %, growth table fee, high-stake fee, first-person % ..."></textarea>
+                        <textarea name="commercialTerms" rows="4" placeholder="12% of GGR, 11% of NGR, premium add-on, fixed fee, high-stake fee..."></textarea>
                       </label>
                       <label class="full-span">
                         Commercial Schedule
-                        <textarea name="commercialSchedule" rows="6" placeholder="One row per line using | separators&#10;Evolution Generic | EUR 0-2M | 12% of GGR | B2C&#10;Evolution Premium | As per premium schedule | 1%-5% | Premium tables"></textarea>
-                        <span class="field-help">Flexible per client and proposal. Use columns like Product | Tier / Volume | Commercial | Notes.</span>
+                        <textarea name="commercialSchedule" rows="6" placeholder="One row per line using | separators&#10;Evolution Generic | EUR 0-2M | 12% of GGR | B2C&#10;Evolution Premium | EUR 2M+ | 11% of NGR | Premium tables"></textarea>
+                        <span class="field-help">Recommended format: Product | Tier / Volume | Commercial | Notes. The Commercial Builder above can append rows for you.</span>
                       </label>
                       <label class="full-span">
                         Negotiation Scope
@@ -1087,7 +1220,7 @@
                   </div>
                 </div>
 
-                <div class="form-section">
+                <div id="deal-section-context" class="form-section">
                   <h3>Context</h3>
                   <div class="form-grid form-grid-2">
                     <label>
@@ -1170,6 +1303,53 @@
                   <button type="submit" id="deal-submit-button" class="button button-primary">Save Deal</button>
                   <button type="button" id="deal-cancel-button" class="button button-ghost">Clear</button>
                 </div>
+
+                <datalist id="deal-type-options">
+                  <option value="B2C"></option>
+                  <option value="B2B"></option>
+                  <option value="Retail"></option>
+                  <option value="Social"></option>
+                  <option value="B2C + Retail"></option>
+                </datalist>
+                <datalist id="deal-market-options">
+                  <option value="Peru"></option>
+                  <option value="Mexico"></option>
+                  <option value="Colombia"></option>
+                  <option value="Brazil"></option>
+                  <option value="Chile"></option>
+                  <option value="Argentina"></option>
+                  <option value="Panama"></option>
+                  <option value="LATAM"></option>
+                </datalist>
+                <datalist id="deal-platform-options">
+                  <option value="BetConstruct"></option>
+                  <option value="Direct"></option>
+                  <option value="Aggregator"></option>
+                  <option value="NGX"></option>
+                  <option value="TBC"></option>
+                </datalist>
+                <datalist id="deal-segment-options">
+                  <option value="Online"></option>
+                  <option value="Casino"></option>
+                  <option value="Sportsbook"></option>
+                  <option value="Lottery"></option>
+                  <option value="Retail"></option>
+                </datalist>
+                <datalist id="deal-license-options">
+                  <option value="Approved"></option>
+                  <option value="In Progress"></option>
+                  <option value="Pending"></option>
+                  <option value="Restricted"></option>
+                </datalist>
+                <datalist id="commercial-product-options">
+                  <option value="Evolution Generic"></option>
+                  <option value="Evolution Premium"></option>
+                  <option value="Native Tables"></option>
+                  <option value="Growth Tables"></option>
+                  <option value="High Stake Tables"></option>
+                  <option value="Ezugi Generic"></option>
+                  <option value="Slots"></option>
+                </datalist>
               </form>
             </section>
 
@@ -1298,7 +1478,7 @@
                   <p class="panel-kicker">Request coverage</p>
                   <h2>Request Lanes</h2>
                 </div>
-                <span class="chip">Legal, Commercial, DD, Integration, Legal Approval</span>
+                <span class="chip">Commercial, Legal, DD, Integration, Legal Approval, Go Live, Live</span>
               </div>
               <div id="requests-focus-grid" class="request-focus-grid"></div>
             </section>
@@ -1309,7 +1489,7 @@
                   <p class="panel-kicker">Client worklist</p>
                   <h2>Accounts Ready for Action</h2>
                 </div>
-                <span class="chip">Use each lane to create or continue the right request</span>
+                <span class="chip">Open a lane, review the company, then create or continue the right request</span>
               </div>
               <div id="requests-board" class="requests-board"></div>
             </section>
@@ -1950,6 +2130,20 @@
           </section>
         </section>
       </main>
+    </div>
+
+    <div id="company-profile-modal" class="company-profile-modal" hidden aria-hidden="true">
+      <button type="button" class="company-profile-backdrop" data-company-profile-close aria-label="Close company profile"></button>
+      <aside class="company-profile-panel" role="dialog" aria-modal="true" aria-labelledby="company-profile-title">
+        <div class="company-profile-head">
+          <div>
+            <p class="panel-kicker">Company profile</p>
+            <h2 id="company-profile-title">Company Profile</h2>
+          </div>
+          <button id="company-profile-close" type="button" class="button button-ghost button-small">Close</button>
+        </div>
+        <div id="company-profile-body" class="company-profile-body"></div>
+      </aside>
     </div>
 
     <script src="script.js"></script>

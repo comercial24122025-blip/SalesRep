@@ -137,6 +137,20 @@ const REQUEST_HUB_DEFINITIONS = [
     stageHint: "Legal Approval · Go Live",
     emptyLabel: "No visible accounts are currently in final legal approval.",
   },
+  {
+    key: "go-live",
+    title: "Go Live",
+    description: "Accounts cleared for launch tracking, go-live readiness, and final execution control.",
+    stageHint: "Legal Approval · Go Live",
+    emptyLabel: "No visible accounts are currently queued for Go Live tracking.",
+  },
+  {
+    key: "live",
+    title: "Live",
+    description: "Active accounts already live and needing follow-up, growth control, or handover discipline.",
+    stageHint: "Go Live · Live · Handover",
+    emptyLabel: "No visible live accounts are currently in the post-launch control lane.",
+  },
 ];
 
 const STAGE_OPERATION_BLUEPRINT = {
@@ -610,6 +624,10 @@ const elements = {
   heroSignedCount: document.getElementById("hero-signed-count"),
   heroLiveCount: document.getElementById("hero-live-count"),
   heroDdAging: document.getElementById("hero-dd-aging"),
+  companySearch: document.getElementById("company-search"),
+  companySearchStatus: document.getElementById("company-search-status"),
+  companySearchSuggestions: document.getElementById("company-search-suggestions"),
+  clearCompanySearch: document.getElementById("clear-company-search"),
   stageOverview: document.getElementById("stage-overview"),
   dashboardStageSummary: document.getElementById("dashboard-stage-summary"),
   forecastSummary: document.getElementById("forecast-summary"),
@@ -699,6 +717,9 @@ const elements = {
   loadingOverlay: document.getElementById("app-loading-overlay"),
   loadingOverlayTitle: document.getElementById("loading-overlay-title"),
   loadingOverlayCopy: document.getElementById("loading-overlay-copy"),
+  companyProfileModal: document.getElementById("company-profile-modal"),
+  companyProfileBody: document.getElementById("company-profile-body"),
+  companyProfileClose: document.getElementById("company-profile-close"),
   openRequestsModuleButton: document.getElementById("open-requests-module-button"),
   requestsOpenPipeline: document.getElementById("requests-open-pipeline"),
 };
@@ -729,6 +750,13 @@ const ui = {
     suggestions: [],
     selectedDealId: null,
   },
+  companyFinder: {
+    isOpen: false,
+    activeIndex: -1,
+    suggestions: [],
+    selectedDealId: null,
+  },
+  companyProfileDealId: null,
   pipelinePreset: null,
   taskPreset: null,
   campaignPreset: null,
@@ -927,6 +955,7 @@ function bindEvents() {
 
   dealForm.addEventListener("input", handleDealScoringInput);
   dealForm.addEventListener("change", handleDealScoringInput);
+  dealForm.addEventListener("click", handleDealAssistAction);
 
   targetForm.addEventListener("submit", handleTargetSubmit);
   document.getElementById("target-cancel-button").addEventListener("click", () => {
@@ -960,6 +989,53 @@ function bindEvents() {
     ui.editingUserId = null;
     resetUserForm();
     setBanner("User form cleared.", "default");
+  });
+
+  elements.companySearch.addEventListener("input", (event) => {
+    ui.companyFinder.selectedDealId = null;
+    ui.companyFinder.isOpen = true;
+    ui.companyFinder.activeIndex = -1;
+    renderCompanyFinder(event.target.value.trim());
+  });
+
+  elements.companySearch.addEventListener("focus", () => {
+    ui.companyFinder.isOpen = true;
+    renderCompanyFinder(elements.companySearch.value.trim());
+  });
+
+  elements.companySearch.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      ui.companyFinder.isOpen = false;
+      ui.companyFinder.activeIndex = -1;
+      renderCompanyFinder(elements.companySearch.value.trim());
+    }, 120);
+  });
+
+  elements.companySearch.addEventListener("keydown", (event) => {
+    handleCompanyFinderKeydown(event);
+  });
+
+  elements.clearCompanySearch.addEventListener("click", () => {
+    ui.companyFinder.isOpen = false;
+    ui.companyFinder.activeIndex = -1;
+    ui.companyFinder.selectedDealId = null;
+    elements.companySearch.value = "";
+    renderCompanyFinder("");
+    closeCompanyProfile();
+    elements.companySearch.focus();
+  });
+
+  elements.companySearchSuggestions.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+  });
+
+  elements.companySearchSuggestions.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-company-finder-index]");
+    if (!button) {
+      return;
+    }
+
+    selectCompanyFinderSuggestion(Number(button.dataset.companyFinderIndex));
   });
 
   elements.pipelineSearch.addEventListener("input", (event) => {
@@ -1075,6 +1151,16 @@ function bindEvents() {
     renderViewState();
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
+  elements.companyProfileModal?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-company-profile-close]")) {
+      closeCompanyProfile();
+      return;
+    }
+    if (event.target.closest("[data-action]")) {
+      void handleDealAction(event);
+    }
+  });
+  elements.companyProfileClose?.addEventListener("click", closeCompanyProfile);
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
     openWorkflowModule(getWorkflowCurrentAndNext().current.view);
@@ -1091,6 +1177,12 @@ function bindEvents() {
   elements.campaignTableBody.addEventListener("click", handleCampaignAction);
   elements.userBoard.addEventListener("click", handleUserAction);
   elements.userTableBody.addEventListener("click", handleUserAction);
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && ui.companyProfileDealId) {
+      closeCompanyProfile();
+    }
+  });
 
   document.getElementById("export-pipeline-csv").addEventListener("click", () => {
     const rows = getFilteredDeals();
@@ -2695,6 +2787,7 @@ function renderAll() {
   renderGlobalFilters();
   renderViewState();
   renderWorkspaceChrome();
+  renderCompanyFinder();
   renderModuleFlow();
   renderWorkflowCommandBar();
   renderHeroMetrics();
@@ -2707,6 +2800,7 @@ function renderAll() {
   renderCampaigns();
   renderAdminView();
   renderKpiCatalogue();
+  renderCompanyProfileDrawer();
 }
 
 function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing SalesRep from the local Excel workspace.") {
@@ -2935,8 +3029,11 @@ function renderCrmView() {
         <tr>
           <td>
             <div class="entity-title">
-              <strong>${escapeHtml(getPrimaryOperatorName(deal))}</strong>
-              <small>${escapeHtml(deal.client || deal.deal || "No client name")}</small>
+              ${renderCompanyProfileTrigger(
+                deal,
+                getPrimaryOperatorName(deal),
+                deal.client || deal.deal || "No client name"
+              )}
             </div>
           </td>
           <td>${escapeHtml(deal.market || "N/A")}</td>
@@ -3271,8 +3368,12 @@ function renderDashboardSpotlight(deals) {
         <article class="spotlight-card">
           <div class="spotlight-main">
             <div>
-              <strong>${escapeHtml(deal.deal)}</strong>
-              <small>${escapeHtml(deal.client || deal.market || "No client assigned")}</small>
+              ${renderCompanyProfileTrigger(
+                deal,
+                deal.deal || getCompanyProfileLabel(deal),
+                deal.client || deal.market || "No client assigned",
+                "entity-trigger entity-trigger-block entity-trigger-compact"
+              )}
             </div>
             <span class="pill ${health.pillClass}">${escapeHtml(health.label)}</span>
           </div>
@@ -4069,8 +4170,12 @@ function renderLeadTrackerCard(deal) {
     <article class="lead-tracker-card ${followUp.cardClass}">
       <div class="lead-tracker-head">
         <div class="latest-lead-main">
-          <strong>${escapeHtml(deal.deal || "Unnamed deal")}</strong>
-          <small>${escapeHtml(buildDealContextLine(deal) || deal.client || "No additional context")}</small>
+          ${renderCompanyProfileTrigger(
+            deal,
+            deal.deal || "Unnamed deal",
+            buildDealContextLine(deal) || deal.client || "No additional context",
+            "entity-trigger entity-trigger-block entity-trigger-compact"
+          )}
         </div>
         <div class="pill-row">
           <span class="pill stage">${escapeHtml(deal.stage)}</span>
@@ -4175,7 +4280,12 @@ function renderRiskList(deals) {
       return `
         <article class="risk-item ${item.tone}">
           <header>
-            <strong>${escapeHtml(item.deal.deal)}</strong>
+            ${renderCompanyProfileTrigger(
+              item.deal,
+              item.deal.deal || getCompanyProfileLabel(item.deal),
+              item.deal.client || item.deal.market || "No client assigned",
+              "entity-trigger entity-trigger-inline"
+            )}
             <span>${escapeHtml(item.deal.stage)}</span>
           </header>
           <p>${escapeHtml(item.reason)}</p>
@@ -4274,6 +4384,441 @@ function renderPipeline() {
   renderPipelineOperatingGuide(deals);
   renderPipelineBoard(deals);
   renderDealTable(deals);
+}
+
+function renderCompanyFinder(query = elements.companySearch?.value || "") {
+  const normalizedQuery = cleanText(query);
+  ui.companyFinder.suggestions = ui.companyFinder.isOpen ? buildCompanyFinderSuggestions(normalizedQuery) : [];
+  elements.companySearch.value = normalizedQuery;
+  renderCompanySearchStatus(normalizedQuery);
+
+  const showList = ui.companyFinder.isOpen && Boolean(normalizedQuery);
+  elements.companySearch.setAttribute("aria-expanded", showList ? "true" : "false");
+
+  if (!showList) {
+    elements.companySearchSuggestions.hidden = true;
+    elements.companySearchSuggestions.innerHTML = "";
+    return;
+  }
+
+  if (ui.companyFinder.suggestions.length === 0) {
+    elements.companySearchSuggestions.hidden = false;
+    elements.companySearchSuggestions.innerHTML = '<div class="finder-empty">No company or contact matched that search.</div>';
+    return;
+  }
+
+  elements.companySearchSuggestions.hidden = false;
+  elements.companySearchSuggestions.innerHTML = ui.companyFinder.suggestions
+    .map((suggestion, index) => {
+      const isActive = index === ui.companyFinder.activeIndex;
+      return `
+        <button
+          type="button"
+          class="finder-suggestion ${isActive ? "is-active" : ""}"
+          data-company-finder-index="${index}"
+        >
+          <div class="finder-suggestion-top">
+            <strong>${escapeHtml(suggestion.title)}</strong>
+            <span>${escapeHtml(suggestion.matchLabel)}</span>
+          </div>
+          <small>${escapeHtml(suggestion.subtitle)}</small>
+          <div class="finder-suggestion-meta">${escapeHtml(suggestion.meta)}</div>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderCompanySearchStatus(query) {
+  const normalizedQuery = cleanText(query);
+  if (!normalizedQuery) {
+    elements.companySearchStatus.textContent = "Search the full workspace by company name, operator, contact, website, or email.";
+    return;
+  }
+
+  if (ui.companyFinder.selectedDealId) {
+    const selectedDeal = state.deals.find((deal) => deal.id === ui.companyFinder.selectedDealId);
+    if (selectedDeal) {
+      const relatedDeals = getCompanyProfileDeals(selectedDeal);
+      elements.companySearchStatus.textContent = `Company profile ready: ${getCompanyProfileLabel(selectedDeal)}. ${relatedDeals.length} related account${relatedDeals.length === 1 ? "" : "s"} found across the workspace.`;
+      return;
+    }
+  }
+
+  const suggestionCount = ui.companyFinder.suggestions.length;
+  elements.companySearchStatus.textContent = suggestionCount
+    ? `${suggestionCount} matching company profile${suggestionCount === 1 ? "" : "s"} found. Press Enter to open the best match.`
+    : "No company matched that search yet. Try operator name, contact name, website, or email.";
+}
+
+function buildCompanyFinderSuggestions(query) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const suggestionsByCompany = new Map();
+  state.deals.forEach((deal) => {
+    const suggestion = buildCompanyFinderSuggestion(deal, normalizedQuery);
+    if (!suggestion) {
+      return;
+    }
+    const key = getCompanyProfileKey(deal);
+    const existing = suggestionsByCompany.get(key);
+    if (!existing || suggestion.score > existing.score) {
+      suggestionsByCompany.set(key, suggestion);
+    }
+  });
+
+  return Array.from(suggestionsByCompany.values())
+    .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
+    .slice(0, 8);
+}
+
+function buildCompanyFinderSuggestion(deal, normalizedQuery) {
+  const matches = [
+    scorePipelineFinderField("Company", getCompanyProfileLabel(deal), normalizedQuery, 6),
+    scorePipelineFinderField("Client", deal.client, normalizedQuery, 5),
+    scorePipelineFinderField("Operator", deal.operator, normalizedQuery, 5),
+    scorePipelineFinderField("Deal", deal.deal, normalizedQuery, 4),
+    scorePipelineFinderField("Primary Contact", deal.primaryContact, normalizedQuery, 4),
+    scorePipelineFinderField("Decision Maker", deal.decisionMaker, normalizedQuery, 4),
+    scorePipelineFinderField("DD Contact", deal.ddContactName, normalizedQuery, 4),
+    scorePipelineFinderField("Legal Representative", deal.legalRepresentativeName || deal.companyLegalRepresentative, normalizedQuery, 4),
+    scorePipelineFinderField("Invoice Email", deal.invoiceEmail, normalizedQuery, 4),
+    scorePipelineFinderField("Support Email", deal.supportEmail, normalizedQuery, 4),
+    scorePipelineFinderField("Management Email", deal.managementEmail, normalizedQuery, 4),
+    scorePipelineFinderField("DD Email", deal.ddContactEmail, normalizedQuery, 4),
+    scorePipelineFinderField("Integration Email", deal.integrationEmail, normalizedQuery, 4),
+    scorePipelineFinderField("Website", deal.url, normalizedQuery, 3),
+    scorePipelineFinderField("Market", deal.market, normalizedQuery, 2),
+  ].filter(Boolean);
+
+  if (!matches.length) {
+    return null;
+  }
+
+  const bestMatch = matches.sort((left, right) => right.score - left.score)[0];
+  const relatedDeals = getCompanyProfileDeals(deal);
+  const markets = uniqueValues(relatedDeals.map((item) => item.market));
+  const stages = uniqueValues(relatedDeals.map((item) => item.stage));
+  return {
+    dealId: deal.id,
+    title: getCompanyProfileLabel(deal),
+    matchLabel: bestMatch.label,
+    subtitle: buildPipelineFinderSubtitle(deal, bestMatch.value),
+    meta: [markets.slice(0, 2).join(" · ") || "No market", `${relatedDeals.length} account${relatedDeals.length === 1 ? "" : "s"}`, stages.slice(0, 2).join(" · ") || "No stage"].join(" · "),
+    searchValue: getCompanyProfileLabel(deal),
+    score: bestMatch.score,
+  };
+}
+
+function handleCompanyFinderKeydown(event) {
+  const { suggestions } = ui.companyFinder;
+  if (!suggestions.length) {
+    if (event.key === "Escape") {
+      ui.companyFinder.isOpen = false;
+      renderCompanyFinder(elements.companySearch.value.trim());
+    }
+    return;
+  }
+
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    ui.companyFinder.isOpen = true;
+    ui.companyFinder.activeIndex = (ui.companyFinder.activeIndex + 1 + suggestions.length) % suggestions.length;
+    renderCompanyFinder(elements.companySearch.value.trim());
+    return;
+  }
+
+  if (event.key === "ArrowUp") {
+    event.preventDefault();
+    ui.companyFinder.isOpen = true;
+    ui.companyFinder.activeIndex = (ui.companyFinder.activeIndex - 1 + suggestions.length) % suggestions.length;
+    renderCompanyFinder(elements.companySearch.value.trim());
+    return;
+  }
+
+  if (event.key === "Enter" && ui.companyFinder.activeIndex >= 0) {
+    event.preventDefault();
+    selectCompanyFinderSuggestion(ui.companyFinder.activeIndex);
+    return;
+  }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    selectCompanyFinderSuggestion(0);
+    return;
+  }
+
+  if (event.key === "Escape") {
+    event.preventDefault();
+    ui.companyFinder.isOpen = false;
+    ui.companyFinder.activeIndex = -1;
+    renderCompanyFinder(elements.companySearch.value.trim());
+  }
+}
+
+function selectCompanyFinderSuggestion(index) {
+  const suggestion = ui.companyFinder.suggestions[index];
+  if (!suggestion) {
+    return;
+  }
+
+  ui.companyFinder.selectedDealId = suggestion.dealId;
+  ui.companyFinder.activeIndex = -1;
+  ui.companyFinder.isOpen = false;
+  elements.companySearch.value = suggestion.searchValue;
+  renderCompanyFinder(suggestion.searchValue);
+  openCompanyProfileById(suggestion.dealId, { syncSearch: false });
+}
+
+function renderCompanyProfileDrawer() {
+  const deal = state.deals.find((item) => item.id === ui.companyProfileDealId);
+  if (!deal) {
+    elements.companyProfileModal.hidden = true;
+    elements.companyProfileModal.setAttribute("aria-hidden", "true");
+    elements.companyProfileBody.innerHTML = "";
+    return;
+  }
+
+  const relatedDeals = getCompanyProfileDeals(deal);
+  const contacts = collectCompanyContactRows(relatedDeals);
+  const websites = uniqueValues(relatedDeals.map((item) => item.url));
+  const markets = uniqueValues(relatedDeals.map((item) => item.market));
+  const owners = uniqueValues(relatedDeals.map((item) => getDealOwner(item)));
+  const liveCount = relatedDeals.filter((item) => isLiveAccountStage(item.stage)).length;
+  const openCount = relatedDeals.filter((item) => !isInactiveDeal(item)).length;
+  const forecastValue = sumValues(relatedDeals.map((item) => getForecastValue(item)));
+  const activeDeal = relatedDeals[0];
+  const companyInfoRows = [
+    { label: "Company", value: getCompanyProfileLabel(activeDeal) },
+    { label: "Legal Entity", value: activeDeal.legalEntity || activeDeal.companyName },
+    { label: "Registration", value: activeDeal.companyRegistrationNumber },
+    { label: "License", value: activeDeal.companyLicense || activeDeal.licenseStatus },
+    { label: "Primary Market", value: activeDeal.market },
+    { label: "Segment", value: activeDeal.segment || activeDeal.type },
+    { label: "Owner", value: owners.join(" · ") || getDealOwner(activeDeal) },
+    { label: "Registered Address", value: activeDeal.companyRegisteredAddress },
+  ].filter((row) => cleanText(row.value));
+
+  elements.companyProfileModal.hidden = false;
+  elements.companyProfileModal.setAttribute("aria-hidden", "false");
+  elements.companyProfileBody.innerHTML = `
+    <section class="company-profile-summary">
+      <div class="company-profile-summary-copy">
+        <span class="company-profile-kicker">${escapeHtml(markets.join(" · ") || "No market assigned")}</span>
+        <strong>${escapeHtml(getCompanyProfileLabel(activeDeal))}</strong>
+        <p>${escapeHtml(buildDealContextLine(activeDeal) || activeDeal.statusText || "No commercial summary is currently logged for this company.")}</p>
+      </div>
+      <div class="company-profile-summary-actions">
+        ${renderDealWorkflowDocumentButtons(activeDeal, {
+          className: "button button-secondary button-small",
+          kinds: ["proposal", "legal", "dd", "integration", "signoff"],
+          includeTask: true,
+          includeEdit: true,
+          editLabel: "Open Deal Workspace",
+        })}
+      </div>
+    </section>
+
+    <section class="company-profile-metrics">
+      ${renderForecastMetric("Accounts", `${relatedDeals.length}`)}
+      ${renderForecastMetric("Active", `${openCount}`)}
+      ${renderForecastMetric("Live", `${liveCount}`)}
+      ${renderForecastMetric("Forecast", formatCompactCurrency(forecastValue), formatCurrency(forecastValue))}
+    </section>
+
+    <section class="company-profile-grid">
+      <article class="company-profile-card">
+        <div class="subpanel-head">
+          <h3>Company Snapshot</h3>
+          <span class="chip">${escapeHtml(`${markets.length || 1} market${markets.length === 1 ? "" : "s"}`)}</span>
+        </div>
+        <dl class="company-profile-list">
+          ${companyInfoRows
+            .map(
+              (row) => `
+                <div>
+                  <dt>${escapeHtml(row.label)}</dt>
+                  <dd>${escapeHtml(row.value)}</dd>
+                </div>
+              `
+            )
+            .join("")}
+        </dl>
+        ${
+          websites.length
+            ? `
+              <div class="company-profile-links">
+                ${websites
+                  .map(
+                    (url) => `
+                      <a class="tracking-link" href="${escapeAttribute(url)}" target="_blank" rel="noreferrer">
+                        <span>Website</span>
+                        <strong>${escapeHtml(url)}</strong>
+                      </a>
+                    `
+                  )
+                  .join("")}
+              </div>
+            `
+            : ""
+        }
+      </article>
+
+      <article class="company-profile-card">
+        <div class="subpanel-head">
+          <h3>Contacts & Emails</h3>
+          <span class="chip">${escapeHtml(`${contacts.length} contact${contacts.length === 1 ? "" : "s"}`)}</span>
+        </div>
+        ${
+          contacts.length
+            ? `
+              <div class="company-contact-list">
+                ${contacts
+                  .map(
+                    (contact) => `
+                      <article class="company-contact-card">
+                        <span>${escapeHtml(contact.role)}</span>
+                        <strong>${escapeHtml(contact.name)}</strong>
+                        ${
+                          contact.email
+                            ? `<a href="mailto:${escapeAttribute(contact.email)}">${escapeHtml(contact.email)}</a>`
+                            : `<small>${escapeHtml(contact.market || "Email not logged")}</small>`
+                        }
+                        ${contact.market ? `<small>${escapeHtml(contact.market)}</small>` : ""}
+                      </article>
+                    `
+                  )
+                  .join("")}
+              </div>
+            `
+            : '<div class="empty-state">No contacts or emails have been logged for this company yet.</div>'
+        }
+      </article>
+    </section>
+
+    <section class="company-profile-section">
+      <div class="subpanel-head">
+        <h3>Related Accounts</h3>
+        <span class="chip">${escapeHtml(`${relatedDeals.length} visible account${relatedDeals.length === 1 ? "" : "s"}`)}</span>
+      </div>
+      <div class="company-profile-account-list">
+        ${relatedDeals
+          .map(
+            (item) => `
+              <article class="company-account-card">
+                <div class="company-account-head">
+                  ${renderCompanyProfileTrigger(item, item.deal || item.client || item.operator || "Unnamed account", buildDealContextLine(item), "entity-trigger entity-trigger-block")}
+                  <span class="pill ${getDealHealth(item).pillClass}">${escapeHtml(item.stage || "No stage")}</span>
+                </div>
+                <div class="company-account-meta">
+                  <span><strong>Market:</strong> ${escapeHtml(item.market || "N/A")}</span>
+                  <span><strong>Owner:</strong> ${escapeHtml(getDealOwner(item) || "Unassigned")}</span>
+                  <span><strong>Follow-Up:</strong> ${formatDate(item.lastFollowUp)}</span>
+                  <span><strong>Value:</strong> ${escapeHtml(formatDealCommercialMetric(item))}</span>
+                </div>
+                <p>${escapeHtml(item.actionItems || item.statusText || "No next action defined for this account.")}</p>
+                <div class="row-actions">
+                  ${renderDealWorkflowDocumentButtons(item, {
+                    className: "icon-button",
+                    includeTask: true,
+                    includeEdit: true,
+                    editLabel: "Open Deal",
+                  })}
+                </div>
+              </article>
+            `
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+}
+
+function openCompanyProfileById(id, options = {}) {
+  const deal = state.deals.find((item) => item.id === id);
+  if (!deal) {
+    return;
+  }
+
+  ui.companyProfileDealId = id;
+  ui.companyFinder.selectedDealId = id;
+  if (options.syncSearch !== false) {
+    elements.companySearch.value = getCompanyProfileLabel(deal);
+  }
+  renderCompanyFinder(elements.companySearch.value.trim());
+  renderCompanyProfileDrawer();
+}
+
+function closeCompanyProfile() {
+  ui.companyProfileDealId = null;
+  renderCompanyProfileDrawer();
+}
+
+function getCompanyProfileKey(deal) {
+  const companyKey = normalizeSearchText(
+    deal.companyName || deal.documentClientName || deal.client || deal.operator || deal.deal || deal.id
+  );
+  return companyKey || cleanText(deal.id);
+}
+
+function getCompanyProfileLabel(deal) {
+  return cleanText(deal.companyName || deal.documentClientName || deal.client || deal.operator || deal.deal || "Unnamed Company");
+}
+
+function getCompanyProfileDeals(sourceDeal) {
+  const key = getCompanyProfileKey(sourceDeal);
+  return state.deals
+    .filter((deal) => getCompanyProfileKey(deal) === key)
+    .sort((left, right) => {
+      const stageDiff = STAGE_ORDER.indexOf(cleanText(right.stage)) - STAGE_ORDER.indexOf(cleanText(left.stage));
+      if (stageDiff !== 0) {
+        return stageDiff;
+      }
+      return Number(right.dealValue || 0) - Number(left.dealValue || 0);
+    });
+}
+
+function collectCompanyContactRows(deals) {
+  const contacts = [];
+  const seen = new Set();
+
+  const pushContact = (role, name, email, market = "") => {
+    const safeName = cleanText(name || email);
+    const safeEmail = cleanText(email);
+    if (!safeName && !safeEmail) {
+      return;
+    }
+    const key = [normalizeSearchText(role), normalizeSearchText(safeName), normalizeSearchText(safeEmail)].join("|");
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    contacts.push({
+      role: cleanText(role),
+      name: safeName || safeEmail,
+      email: safeEmail,
+      market: cleanText(market),
+    });
+  };
+
+  deals.forEach((deal) => {
+    const owner = getDealOwner(deal);
+    const ownerUser = state.users.find((user) => cleanText(user.fullName) === owner);
+    pushContact("Primary Contact", deal.primaryContact, "", deal.market);
+    pushContact("Decision Maker", deal.decisionMaker, "", deal.market);
+    pushContact("DD Contact", deal.ddContactName, deal.ddContactEmail, deal.market);
+    pushContact("Legal Representative", deal.legalRepresentativeName || deal.companyLegalRepresentative, deal.legalRepresentativeEmail, deal.market);
+    pushContact("Invoices", "Finance / Invoices", deal.invoiceEmail, deal.market);
+    pushContact("Support", "Customer Support", deal.supportEmail, deal.market);
+    pushContact("Management", "Management", deal.managementEmail, deal.market);
+    pushContact("Integration", "Integration", deal.integrationEmail, deal.market);
+    pushContact("Account Owner", owner, ownerUser?.email, deal.market);
+  });
+
+  return contacts;
 }
 
 function renderPipelineSearchStatus(filteredCount, baseCount, scopedCount) {
@@ -4436,8 +4981,12 @@ function renderPipelineBoard(deals) {
               <article class="kanban-card ${health.cardClass}">
                 <div class="pipeline-card-head">
                   <div>
-                    <h3>${escapeHtml(deal.deal)}</h3>
-                    <small>${escapeHtml(buildDealContextLine(deal))}</small>
+                    ${renderCompanyProfileTrigger(
+                      deal,
+                      deal.deal || getCompanyProfileLabel(deal),
+                      buildDealContextLine(deal),
+                      "entity-trigger entity-trigger-block entity-trigger-compact"
+                    )}
                   </div>
                   <strong>${escapeHtml(formatDealCommercialMetric(deal))}</strong>
                 </div>
@@ -4507,8 +5056,11 @@ function renderDealTable(deals) {
         <tr>
           <td>
             <div class="entity-title">
-              <strong>${escapeHtml(deal.deal)}</strong>
-              <small>${escapeHtml(buildDealContextLine(deal))}</small>
+              ${renderCompanyProfileTrigger(
+                deal,
+                deal.deal || getCompanyProfileLabel(deal),
+                buildDealContextLine(deal)
+              )}
             </div>
           </td>
           <td>
@@ -4575,7 +5127,7 @@ function renderRequestsView() {
       <article class="requests-active-card is-empty">
         <div class="requests-active-copy">
           <strong>No deal is currently open in the workspace.</strong>
-          <p>Open any client from Funnel, Dashboard, Forecast, or Intelligence to launch Legal, Commercial, DD, or Integration requests from this hub with one click.</p>
+          <p>Open any client from Funnel, Dashboard, Forecast, or Intelligence to launch Commercial, Legal, DD, Integration, Legal Signoff, Go Live, or Live follow-up from this hub.</p>
         </div>
       </article>
     `;
@@ -4584,8 +5136,12 @@ function renderRequestsView() {
       <article class="requests-active-card">
         <div class="requests-active-copy">
           <span class="operational-guide-kicker">Active deal</span>
-          <strong>${escapeHtml(activeDeal.deal || activeDeal.client || activeDeal.operator || "Current deal")}</strong>
-          <p>${escapeHtml(buildDealContextLine(activeDeal))}</p>
+          ${renderCompanyProfileTrigger(
+            activeDeal,
+            activeDeal.deal || activeDeal.client || activeDeal.operator || "Current deal",
+            buildDealContextLine(activeDeal),
+            "entity-trigger entity-trigger-block entity-trigger-compact"
+          )}
         </div>
         <div class="row-actions">
           ${renderDealWorkflowDocumentButtons(activeDeal, {
@@ -4604,7 +5160,7 @@ function renderRequestsView() {
     <button type="button" class="request-focus-card ${focus === "all" ? "is-active" : ""}" data-request-focus="all">
       <span>All Requests</span>
       <strong>${escapeHtml(String(sumValues(buckets.map((bucket) => bucket.deals.length))))}</strong>
-      <small>See the full request worklist across proposal, legal, DD, integration, and legal signoff.</small>
+      <small>See the full worklist across proposal, legal, DD, integration, legal signoff, go live, and live account control.</small>
     </button>
     ${buckets
       .map((bucket) => {
@@ -4636,7 +5192,10 @@ function renderRequestHubLane(bucket, maxItems = 6) {
           <h3>${escapeHtml(bucket.title)}</h3>
           <small>${escapeHtml(bucket.description)}</small>
         </div>
-        <span class="chip">${escapeHtml(`${bucket.deals.length} accounts`)}</span>
+        <div class="row-actions">
+          <span class="chip">${escapeHtml(`${bucket.deals.length} accounts`)}</span>
+          <button type="button" class="button button-ghost button-small" data-action="open-request-lane-pipeline" data-request-lane="${escapeAttribute(bucket.key)}">Open Accounts</button>
+        </div>
       </div>
       ${
         deals.length
@@ -4655,21 +5214,18 @@ function renderRequestHubLane(bucket, maxItems = 6) {
 function renderRequestHubDealCard(deal, key) {
   const guide = buildDealOperationalGuide(deal);
   const health = getDealHealth(deal);
-  const buttons =
-    renderDealWorkflowDocumentButtons(deal, {
-      className: "button button-secondary button-small",
-      kinds: [key],
-      includeTask: true,
-      includeEdit: true,
-      editLabel: "Open Deal",
-    });
+  const buttons = renderRequestLaneActionButtons(deal, key);
 
   return `
     <article class="request-hub-card ${health.cardClass}">
       <div class="request-hub-card-head">
         <div>
-          <strong>${escapeHtml(deal.deal || deal.client || deal.operator || "Untitled account")}</strong>
-          <small>${escapeHtml(buildDealContextLine(deal))}</small>
+          ${renderCompanyProfileTrigger(
+            deal,
+            deal.deal || deal.client || deal.operator || "Untitled account",
+            buildDealContextLine(deal),
+            "entity-trigger entity-trigger-block entity-trigger-compact"
+          )}
         </div>
         <span class="pill ${health.pillClass}">${escapeHtml(deal.stage || "No stage")}</span>
       </div>
@@ -4722,7 +5278,35 @@ function matchesRequestHubLane(deal, key) {
     return stage === "Legal Approval" || goLiveStatus === "Legal Sign-Off" || hasAnyText(deal.legalSignoffRequest, deal.legalApprovalDate);
   }
 
+  if (key === "go-live") {
+    return ["Legal Approval", "Go Live"].includes(stage) || ["Legal Sign-Off", "Completed"].includes(goLiveStatus);
+  }
+
+  if (key === "live") {
+    return ["Live", "Handover"].includes(stage) || goLiveStatus === "Live" || cleanText(deal.liveSince);
+  }
+
   return false;
+}
+
+function renderRequestLaneActionButtons(deal, key) {
+  if (["proposal", "legal", "dd", "integration", "signoff"].includes(key)) {
+    return renderDealWorkflowDocumentButtons(deal, {
+      className: "button button-secondary button-small",
+      kinds: [key],
+      includeTask: true,
+      includeEdit: true,
+      editLabel: "Open Deal",
+    });
+  }
+
+  return renderDealWorkflowDocumentButtons(deal, {
+    className: "button button-secondary button-small",
+    includeTask: true,
+    includeEdit: true,
+    editLabel: "Open Deal",
+    kinds: [],
+  });
 }
 
 function getRequestHubStatusText(deal, key) {
@@ -5879,6 +6463,22 @@ function openOperatorForecastDrilldown(operator, market) {
   );
 }
 
+function openRequestLaneDrilldown(laneKey) {
+  const key = cleanText(laneKey) || "all";
+  const scopedDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const matchedDeals =
+    key === "all"
+      ? scopedDeals.filter((deal) => REQUEST_HUB_DEFINITIONS.some((definition) => matchesRequestHubLane(deal, definition.key)))
+      : getRequestHubDeals(scopedDeals, key);
+  const label = key === "all" ? "All Requests" : getRequestHubTitle(key);
+  if (!matchedDeals.length) {
+    setBanner(`No accounts are available for ${label} in the current review window.`, "warn");
+    return;
+  }
+  const preset = createPipelinePreset("request-lane", label, { key });
+  openPipelinePresetDrilldown(preset, matchedDeals, `Pipeline drilldown loaded for ${label}: ${matchedDeals.length} matching accounts.`);
+}
+
 function openPipelinePresetDrilldown(preset, matchedDeals, successMessage) {
   resetPipelineOperationalFilters();
   ui.pipelinePreset = preset;
@@ -5971,6 +6571,14 @@ function getPipelinePresetDeals(preset, deals = getScopedDeals()) {
 
   if (preset.type === "stage-duration") {
     return getForecastEligibleDeals(deals).filter((deal) => doesDealMatchStageTransition(deal, preset.fromStage, preset.toStage));
+  }
+
+  if (preset.type === "request-lane") {
+    const activeDeals = getForecastEligibleDeals(deals);
+    if (preset.key === "all") {
+      return activeDeals.filter((deal) => REQUEST_HUB_DEFINITIONS.some((definition) => matchesRequestHubLane(deal, definition.key)));
+    }
+    return getRequestHubDeals(activeDeals, preset.key);
   }
 
   return getExecutiveKpiDrilldownDeals(preset.key, deals, { market: preset.market });
@@ -6197,6 +6805,10 @@ async function handleDealAction(event) {
     }
     return;
   }
+  if (action === "open-company-profile") {
+    openCompanyProfileById(id);
+    return;
+  }
 
   const deal = state.deals.find((item) => item.id === id);
   if (!deal) {
@@ -6303,6 +6915,10 @@ function handleRequestsAction(event) {
 
   const actionButton = event.target.closest("[data-action]");
   if (actionButton) {
+    if (actionButton.dataset.action === "open-request-lane-pipeline") {
+      openRequestLaneDrilldown(actionButton.dataset.requestLane);
+      return;
+    }
     void handleDealAction(event);
   }
 }
@@ -6743,6 +7359,7 @@ function fillDealForm(deal) {
 
   elements.dealFormTitle.textContent = `Edit Deal: ${deal.deal}`;
   elements.dealSubmitButton.textContent = "Update Deal";
+  resetCommercialBuilder();
   syncDealScoringPreview();
 }
 
@@ -6753,6 +7370,7 @@ function resetDealForm() {
   ui.editingDealId = null;
   elements.dealFormTitle.textContent = "New Deal";
   elements.dealSubmitButton.textContent = "Save Deal";
+  resetCommercialBuilder();
   syncDealScoringPreview();
 }
 
@@ -7923,6 +8541,206 @@ function handleDealScoringInput() {
   syncDealScoringPreview();
 }
 
+function handleDealAssistAction(event) {
+  const jumpButton = event.target.closest("[data-form-jump]");
+  if (jumpButton) {
+    const targetSection = document.getElementById(jumpButton.dataset.formJump || "");
+    if (targetSection) {
+      targetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    return;
+  }
+
+  const fillButton = event.target.closest("[data-fill-field]");
+  if (fillButton) {
+    const fieldName = cleanText(fillButton.dataset.fillField);
+    const fieldValue = cleanText(fillButton.dataset.fillValue);
+    const field = dealForm.elements[fieldName];
+    if (field) {
+      field.value = fieldValue;
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      field.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    return;
+  }
+
+  const presetButton = event.target.closest("[data-commercial-preset]");
+  if (presetButton) {
+    applyCommercialBuilderPreset(presetButton.dataset.commercialPreset);
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-commercial-action]");
+  if (actionButton) {
+    applyCommercialBuilderAction(actionButton.dataset.commercialAction);
+  }
+}
+
+function getCommercialBuilderElements() {
+  return {
+    product: document.getElementById("commercial-builder-product"),
+    model: document.getElementById("commercial-builder-model"),
+    base: document.getElementById("commercial-builder-base"),
+    rate: document.getElementById("commercial-builder-rate"),
+    fixedFee: document.getElementById("commercial-builder-fixed-fee"),
+    tier: document.getElementById("commercial-builder-tier"),
+    notes: document.getElementById("commercial-builder-notes"),
+  };
+}
+
+function resetCommercialBuilder() {
+  const builder = getCommercialBuilderElements();
+  Object.values(builder).forEach((element) => {
+    if (!element) {
+      return;
+    }
+    if (element.tagName === "SELECT") {
+      element.selectedIndex = 0;
+    } else {
+      element.value = "";
+    }
+  });
+}
+
+function applyCommercialBuilderPreset(presetKey) {
+  const builder = getCommercialBuilderElements();
+  const presets = {
+    "ggr-12": {
+      product: "Evolution Generic",
+      model: "Revenue Share %",
+      base: "GGR",
+      rate: "12%",
+      tier: "EUR 0-2M",
+      notes: "",
+    },
+    "ngr-11": {
+      product: "Evolution Generic",
+      model: "Revenue Share %",
+      base: "NGR",
+      rate: "11%",
+      tier: "EUR 0-2M",
+      notes: "",
+    },
+    "fixed-fee": {
+      product: "Growth Tables",
+      model: "Fixed Fee",
+      base: "Monthly Fee",
+      rate: "",
+      fixedFee: "0.15",
+      tier: "Per table",
+      notes: "Fixed fee",
+    },
+    tiered: {
+      product: "Evolution Generic",
+      model: "Tiered",
+      base: "GGR",
+      rate: "12%",
+      tier: "EUR 0-2M / 11% from EUR 2M onwards",
+      notes: "Tiered rev share",
+    },
+    "premium-addon": {
+      product: "Evolution Premium",
+      model: "Premium Add-On",
+      base: "GGR",
+      rate: "1%-5%",
+      tier: "As per premium schedule",
+      notes: "Premium add-on",
+    },
+  };
+
+  const preset = presets[cleanText(presetKey)];
+  if (!preset) {
+    return;
+  }
+
+  resetCommercialBuilder();
+  Object.entries(preset).forEach(([key, value]) => {
+    const element =
+      key === "fixedFee"
+        ? builder.fixedFee
+        : key === "product"
+        ? builder.product
+        : key === "model"
+        ? builder.model
+        : key === "base"
+        ? builder.base
+        : key === "rate"
+        ? builder.rate
+        : key === "tier"
+        ? builder.tier
+        : builder.notes;
+    if (element) {
+      element.value = value;
+    }
+  });
+}
+
+function getCommercialBuilderSnapshot() {
+  const builder = getCommercialBuilderElements();
+  return {
+    product: cleanText(builder.product?.value),
+    model: cleanText(builder.model?.value),
+    base: cleanText(builder.base?.value),
+    rate: cleanText(builder.rate?.value),
+    fixedFee: cleanText(builder.fixedFee?.value),
+    tier: cleanText(builder.tier?.value),
+    notes: cleanText(builder.notes?.value),
+  };
+}
+
+function buildCommercialBuilderTerm(snapshot) {
+  const product = snapshot.product || "Commercial Item";
+  const qualifier = snapshot.tier ? ` (${snapshot.tier})` : "";
+  if (snapshot.model === "Fixed Fee" || snapshot.fixedFee) {
+    return `${product}${qualifier}: EUR ${snapshot.fixedFee || "0"} fixed fee${snapshot.base ? ` (${snapshot.base})` : ""}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+  }
+  const rateBlock = snapshot.rate ? `${snapshot.rate} of ${snapshot.base || "GGR"}` : snapshot.base || snapshot.model || "Commercial structure";
+  return `${product}${qualifier}: ${rateBlock}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+}
+
+function buildCommercialBuilderScheduleRow(snapshot) {
+  const product = snapshot.product || "Commercial Item";
+  const commercial =
+    snapshot.model === "Fixed Fee" || snapshot.fixedFee
+      ? `EUR ${snapshot.fixedFee || "0"} fixed fee${snapshot.base ? ` (${snapshot.base})` : ""}`
+      : `${snapshot.rate || "TBC"}${snapshot.base ? ` of ${snapshot.base}` : ""}`;
+  return [product, snapshot.tier || snapshot.model || "Standard", commercial, snapshot.notes || ""].join(" | ");
+}
+
+function appendValueToTextarea(fieldName, nextLine) {
+  const field = dealForm.elements[fieldName];
+  if (!field || !cleanText(nextLine)) {
+    return;
+  }
+  const current = cleanMultilineText(field.value);
+  field.value = current ? `${current}\n${nextLine}` : nextLine;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function applyCommercialBuilderAction(action) {
+  const snapshot = getCommercialBuilderSnapshot();
+  if (action === "clear-builder") {
+    resetCommercialBuilder();
+    return;
+  }
+
+  if (!snapshot.product && !snapshot.rate && !snapshot.fixedFee) {
+    setBanner("Define at least the product and rate or fixed fee before applying a commercial line.", "warn");
+    return;
+  }
+
+  if (action === "append-terms") {
+    appendValueToTextarea("commercialTerms", buildCommercialBuilderTerm(snapshot));
+    setBanner("Commercial terms updated from the Commercial Builder.", "success");
+    return;
+  }
+
+  if (action === "append-schedule") {
+    appendValueToTextarea("commercialSchedule", buildCommercialBuilderScheduleRow(snapshot));
+    setBanner("Commercial schedule row added from the Commercial Builder.", "success");
+  }
+}
+
 function syncDealScoringPreview() {
   if (!dealForm) {
     return;
@@ -8267,6 +9085,26 @@ function buildDealContextLine(deal) {
     }
   });
   return unique.join(" · ") || cleanText(deal.source || "No additional context");
+}
+
+function renderCompanyProfileTrigger(deal, primary, secondary = "", className = "entity-trigger entity-trigger-block") {
+  const safePrimary = cleanText(primary) || getCompanyProfileLabel(deal);
+  const safeSecondary = cleanText(secondary);
+  return `
+    <button
+      type="button"
+      class="${escapeAttribute(className)}"
+      data-action="open-company-profile"
+      data-id="${escapeAttribute(deal.id)}"
+      title="${escapeAttribute(`Open company profile for ${getCompanyProfileLabel(deal)}`)}"
+    >
+      <div class="entity-trigger-copy">
+        <strong>${escapeHtml(safePrimary)}</strong>
+        ${safeSecondary ? `<small>${escapeHtml(safeSecondary)}</small>` : ""}
+      </div>
+      <small class="entity-trigger-hint">Profile</small>
+    </button>
+  `;
 }
 
 function formatForecastUnits(value) {
