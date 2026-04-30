@@ -3289,8 +3289,13 @@ button.stage-card {
   }
 
   .view-nav-shell {
+    gap: 10px;
     padding: 14px;
     border-radius: 24px;
+  }
+
+  .view-nav-meta {
+    display: none;
   }
 
   .hero-stats,
