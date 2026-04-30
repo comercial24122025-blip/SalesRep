@@ -8286,6 +8286,22 @@ function downloadBlob(filename, content, type) {
 
 async function downloadExcelWorkbook() {
   try {
+    if (serverMeta.storageMode === "static") {
+      const response = await fetch(STATIC_STATE_URL, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`No fue posible descargar el snapshot publicado (${response.status}).`);
+      }
+
+      const payload = await response.text();
+      downloadBlob(buildExportFilename("salesrep-published-snapshot", "json"), payload, "application/json;charset=utf-8");
+      setBanner("Published snapshot downloaded from GitHub Pages.", "success");
+      return;
+    }
+
     const downloadUrl = serverMeta.workbookUrl || (serverMeta.ready ? API_DOWNLOAD_URL : STATIC_WORKBOOK_URL);
     const response = await fetch(downloadUrl, {
       method: "GET",
@@ -8301,7 +8317,7 @@ async function downloadExcelWorkbook() {
     triggerBlobDownload(blob, filename);
     setBanner(`Excel descargado: ${filename}.`, "success");
   } catch (error) {
-    setBanner("No pude descargar el Excel. Verifica que el servidor local este activo e intenta otra vez.", "danger");
+    setBanner("No pude descargar el archivo. Verifica que el servidor local o la publicacion de GitHub este activa e intenta otra vez.", "danger");
   }
 }
 
@@ -8452,7 +8468,7 @@ function buildExcelBanner(message) {
     return `${message} Browser storage active for this published GitHub app.`;
   }
   if (serverMeta.storageMode === "static") {
-    return `${message} Published from GitHub snapshot.`;
+    return `${message} Published from GitHub snapshot. Changes persist in your browser until a server-backed workbook is connected.`;
   }
   if (!serverMeta.workbookPath) {
     return message;

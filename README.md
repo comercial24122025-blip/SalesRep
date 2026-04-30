@@ -18,7 +18,23 @@ App standalone para gestionar pipeline comercial y operativo en HTML, con almace
 - Exportacion CSV de deals y targets.
 - Servidor local minimo en Node para sincronizar el HTML con el archivo `.xlsx`.
 
-## Abrir la app
+## Publicacion web
+
+La app esta preparada para publicarse en GitHub Pages desde este repositorio:
+
+```text
+https://github.com/comercial24122025-blip/SalesRep
+```
+
+URL esperada de publicacion:
+
+```text
+https://comercial24122025-blip.github.io/SalesRep/
+```
+
+En la version publicada, SalesRep carga el snapshot `data/published-state.json` y guarda cambios en el navegador cuando no hay backend conectado.
+
+## Abrir la app localmente
 
 1. Inicia el servidor local:
 

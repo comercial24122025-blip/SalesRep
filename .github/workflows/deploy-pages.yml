@@ -32,7 +32,6 @@ jobs:
           cp script.js dist/script.js
           cp style.css dist/style.css
           cp data/published-state.json dist/data/published-state.json
-          cp data/pipeline-command-center.xlsx dist/data/pipeline-command-center.xlsx
           touch dist/.nojekyll
 
       - name: Upload Pages artifact
