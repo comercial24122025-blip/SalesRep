@@ -627,6 +627,7 @@ const elements = {
   companySearch: document.getElementById("company-search"),
   companySearchStatus: document.getElementById("company-search-status"),
   companySearchSuggestions: document.getElementById("company-search-suggestions"),
+  openCompanyProfile: document.getElementById("open-company-profile"),
   clearCompanySearch: document.getElementById("clear-company-search"),
   stageOverview: document.getElementById("stage-overview"),
   dashboardStageSummary: document.getElementById("dashboard-stage-summary"),
@@ -1015,6 +1016,10 @@ function bindEvents() {
     handleCompanyFinderKeydown(event);
   });
 
+  elements.openCompanyProfile.addEventListener("click", () => {
+    openCompanyFinderBestMatch();
+  });
+
   elements.clearCompanySearch.addEventListener("click", () => {
     ui.companyFinder.isOpen = false;
     ui.companyFinder.activeIndex = -1;
@@ -1025,8 +1030,14 @@ function bindEvents() {
     elements.companySearch.focus();
   });
 
-  elements.companySearchSuggestions.addEventListener("mousedown", (event) => {
+  elements.companySearchSuggestions.addEventListener("pointerdown", (event) => {
+    const button = event.target.closest("[data-company-finder-index]");
+    if (!button) {
+      return;
+    }
+
     event.preventDefault();
+    selectCompanyFinderSuggestion(Number(button.dataset.companyFinderIndex));
   });
 
   elements.companySearchSuggestions.addEventListener("click", (event) => {
@@ -1035,6 +1046,7 @@ function bindEvents() {
       return;
     }
 
+    event.preventDefault();
     selectCompanyFinderSuggestion(Number(button.dataset.companyFinderIndex));
   });
 
@@ -4390,6 +4402,15 @@ function renderCompanyFinder(query = elements.companySearch?.value || "") {
   const normalizedQuery = cleanText(query);
   ui.companyFinder.suggestions = ui.companyFinder.isOpen ? buildCompanyFinderSuggestions(normalizedQuery) : [];
   elements.companySearch.value = normalizedQuery;
+  const primarySuggestion = getCompanyFinderPrimarySuggestion(normalizedQuery);
+  if (elements.openCompanyProfile) {
+    elements.openCompanyProfile.disabled = !primarySuggestion;
+    elements.openCompanyProfile.textContent = primarySuggestion ? "Open Profile" : "Open Profile";
+    const primaryDeal = primarySuggestion ? state.deals.find((deal) => deal.id === primarySuggestion.dealId) : null;
+    elements.openCompanyProfile.title = primaryDeal
+      ? `Open ${getCompanyProfileLabel(primaryDeal)}`
+      : "Search a company to open the profile";
+  }
   renderCompanySearchStatus(normalizedQuery);
 
   const showList = ui.companyFinder.isOpen && Boolean(normalizedQuery);
@@ -4447,7 +4468,7 @@ function renderCompanySearchStatus(query) {
 
   const suggestionCount = ui.companyFinder.suggestions.length;
   elements.companySearchStatus.textContent = suggestionCount
-    ? `${suggestionCount} matching company profile${suggestionCount === 1 ? "" : "s"} found. Press Enter to open the best match.`
+    ? `${suggestionCount} matching company profile${suggestionCount === 1 ? "" : "s"} found. Press Enter or use Open Profile to launch the best match.`
     : "No company matched that search yet. Try operator name, contact name, website, or email.";
 }
 
@@ -4473,6 +4494,19 @@ function buildCompanyFinderSuggestions(query) {
   return Array.from(suggestionsByCompany.values())
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
     .slice(0, 8);
+}
+
+function getCompanyFinderPrimarySuggestion(query = elements.companySearch?.value || "") {
+  const normalizedQuery = cleanText(query);
+  if (!normalizedQuery) {
+    return null;
+  }
+
+  if (ui.companyFinder.suggestions.length) {
+    return ui.companyFinder.suggestions[0];
+  }
+
+  return buildCompanyFinderSuggestions(normalizedQuery)[0] || null;
 }
 
 function buildCompanyFinderSuggestion(deal, normalizedQuery) {
@@ -4516,6 +4550,11 @@ function buildCompanyFinderSuggestion(deal, normalizedQuery) {
 function handleCompanyFinderKeydown(event) {
   const { suggestions } = ui.companyFinder;
   if (!suggestions.length) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openCompanyFinderBestMatch();
+      return;
+    }
     if (event.key === "Escape") {
       ui.companyFinder.isOpen = false;
       renderCompanyFinder(elements.companySearch.value.trim());
@@ -4562,6 +4601,21 @@ function handleCompanyFinderKeydown(event) {
 function selectCompanyFinderSuggestion(index) {
   const suggestion = ui.companyFinder.suggestions[index];
   if (!suggestion) {
+    return;
+  }
+
+  ui.companyFinder.selectedDealId = suggestion.dealId;
+  ui.companyFinder.activeIndex = -1;
+  ui.companyFinder.isOpen = false;
+  elements.companySearch.value = suggestion.searchValue;
+  renderCompanyFinder(suggestion.searchValue);
+  openCompanyProfileById(suggestion.dealId, { syncSearch: false });
+}
+
+function openCompanyFinderBestMatch() {
+  const suggestion = getCompanyFinderPrimarySuggestion(elements.companySearch?.value || "");
+  if (!suggestion) {
+    setBanner("No matching company profile is ready yet. Try company, operator, contact, website, or email.", "warn");
     return;
   }
 

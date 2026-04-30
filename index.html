@@ -111,8 +111,8 @@
           <h2>Company Finder</h2>
           <p>Search any company, client, operator, contact, or email and open the company profile in one step.</p>
         </div>
-        <label class="company-search-field">
-          Find Company
+        <div class="company-search-field">
+          <label for="company-search" class="company-search-label">Find Company</label>
           <div class="finder-shell">
             <input
               id="company-search"
@@ -128,9 +128,12 @@
           </div>
           <div class="finder-foot">
             <small id="company-search-status" class="finder-helper">Search the full workspace by company name, operator, contact, website, or email.</small>
-            <button id="clear-company-search" type="button" class="button button-ghost button-small">Clear</button>
+            <div class="company-search-actions">
+              <button id="open-company-profile" type="button" class="button button-secondary button-small" disabled>Open Profile</button>
+              <button id="clear-company-search" type="button" class="button button-ghost button-small">Clear</button>
+            </div>
           </div>
-        </label>
+        </div>
       </section>
 
       <section class="view-nav-shell" aria-label="Primary navigation">

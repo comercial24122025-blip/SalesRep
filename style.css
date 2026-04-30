@@ -440,6 +440,15 @@ button.stat-card {
 
 .company-search-field {
   position: relative;
+  display: grid;
+  gap: 10px;
+}
+
+.company-search-label {
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .view-nav-shell {
@@ -1450,6 +1459,14 @@ textarea {
 
 .finder-foot .button {
   flex: 0 0 auto;
+}
+
+.company-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .finder-suggestions {
