@@ -31,6 +31,10 @@ export async function loadReferenceSeedState() {
   return runPythonJson(["seed-reference"]);
 }
 
+export async function importStateFromWorkbook(sourceWorkbookPath) {
+  return runPythonJson(["import-file", sourceWorkbookPath]);
+}
+
 export async function saveStateToWorkbook(workbookPath, state) {
   await fs.mkdir(path.dirname(workbookPath), { recursive: true });
 

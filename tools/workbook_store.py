@@ -13,7 +13,7 @@ LATAM_REFERENCE_WORKBOOK = Path("/Users/erickmendez/Documents/Sales/latam_market
 OPPORTUNITIES_WORKBOOK = Path("/Users/erickmendez/Documents/Sales/Opportunities-2026.xlsx")
 DEFAULT_MISSING_DEAL_VALUE = 25000.0
 
-STAGE_SEQUENCE = ["Lead", "New Business", "Legal", "Signed", "DD", "Integration", "Go Live", "Live", "On Hold", "Closed Lost"]
+STAGE_SEQUENCE = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Handover", "On Hold", "Closed Lost"]
 STAGE_RANK = {stage: index for index, stage in enumerate(STAGE_SEQUENCE, start=1)}
 
 MARKET_ALIASES = {
@@ -85,6 +85,25 @@ DEAL_COLUMNS = [
     ("Legal Entity", "legalEntity"),
     ("Site Status", "siteStatus"),
     ("Account Scope", "accountScope"),
+    ("Segment", "segment"),
+    ("Primary Contact", "primaryContact"),
+    ("Decision Maker", "decisionMaker"),
+    ("License Status", "licenseStatus"),
+    ("Products Current", "productsCurrent"),
+    ("Products Potential", "productsPotential"),
+    ("Current Competitors", "currentCompetitors"),
+    ("Target Priority", "targetPriority"),
+    ("Strategic Fit", "strategicFit"),
+    ("Revenue Potential EUR", "revenuePotentialEur"),
+    ("Revenue Potential Score", "revenuePotentialScore"),
+    ("Strategic Fit Score", "strategicFitScore"),
+    ("Close Probability Score", "closeProbabilityScore"),
+    ("License Score", "licenseScore"),
+    ("Legal Complexity Score", "legalComplexityScore"),
+    ("Technical Complexity Score", "technicalComplexityScore"),
+    ("Commercial Urgency Score", "commercialUrgencyScore"),
+    ("Opportunity Score", "opportunityScore"),
+    ("Priority Class", "priorityClass"),
     ("Status", "status"),
     ("Mo", "month"),
     ("Evo", "evo"),
@@ -128,8 +147,27 @@ DEAL_COLUMNS = [
     ("DB Column 14", "dbColumn14"),
 ]
 
+MARKET_INTEL_COLUMNS = [
+    ("ID", "id"),
+    ("Country", "country"),
+    ("Regulatory Status", "regulatoryStatus"),
+    ("License Type", "licenseType"),
+    ("Active Operators", "activeOperators"),
+    ("Target Operators", "targetOperators"),
+    ("Competitors Present", "competitorsPresent"),
+    ("Current Products", "currentProducts"),
+    ("Missing Products", "missingProducts"),
+    ("Revenue Potential EUR", "revenuePotentialEur"),
+    ("Regulatory Risk", "regulatoryRisk"),
+    ("Opportunity Level", "opportunityLevel"),
+    ("Strategic Notes", "strategicNotes"),
+    ("Created At", "createdAt"),
+    ("Updated At", "updatedAt"),
+]
+
 TASK_COLUMNS = [
     ("ID", "id"),
+    ("Task Number", "taskNumber"),
     ("Title", "title"),
     ("Scope Type", "scopeType"),
     ("Status", "status"),
@@ -147,6 +185,63 @@ TASK_COLUMNS = [
     ("Trace Log", "traceLog"),
     ("Next Step", "nextStep"),
     ("Notes", "notes"),
+    ("Created At", "createdAt"),
+    ("Updated At", "updatedAt"),
+]
+
+USER_COLUMNS = [
+    ("ID", "id"),
+    ("Full Name", "fullName"),
+    ("Email", "email"),
+    ("Role", "role"),
+    ("Status", "status"),
+    ("Team", "team"),
+    ("Market Focus", "marketFocus"),
+    ("Created At", "createdAt"),
+    ("Updated At", "updatedAt"),
+]
+
+WORKSPACE_COLUMNS = [
+    ("Workspace Name", "workspaceName"),
+    ("Organization Name", "organizationName"),
+    ("Admin Name", "adminName"),
+    ("Admin Email", "adminEmail"),
+    ("Subscription Plan", "subscriptionPlan"),
+    ("CRM Model", "crmModel"),
+    ("Fiscal Year", "fiscalYear"),
+    ("Default Currency", "defaultCurrency"),
+    ("Task Sequence", "taskSequence"),
+]
+
+CAMPAIGN_COLUMNS = [
+    ("ID", "id"),
+    ("Title", "title"),
+    ("Campaign Type", "campaignType"),
+    ("Status", "status"),
+    ("Priority", "priority"),
+    ("Operator", "operator"),
+    ("Client", "client"),
+    ("Deal ID", "dealId"),
+    ("Deal", "deal"),
+    ("Market", "market"),
+    ("Owner", "owner"),
+    ("Channel", "channel"),
+    ("Start Date", "startDate"),
+    ("End Date", "endDate"),
+    ("Budget EUR", "budgetEur"),
+    ("Prize Value EUR", "prizeValueEur"),
+    ("Forecast Lift EUR", "forecastLiftEur"),
+    ("Target Players", "targetPlayers"),
+    ("Target Wager", "targetWager"),
+    ("Target GGR", "targetGgr"),
+    ("Jira Ticket", "jiraTicket"),
+    ("Landing URL", "landingUrl"),
+    ("Mechanic", "mechanic"),
+    ("Offer Details", "offerDetails"),
+    ("Success Metric", "successMetric"),
+    ("Next Step", "nextStep"),
+    ("Notes", "notes"),
+    ("Trace Log", "traceLog"),
     ("Created At", "createdAt"),
     ("Updated At", "updatedAt"),
 ]
@@ -187,28 +282,31 @@ KPI_COLUMNS = [
 ]
 
 KPI_BOOTSTRAP = [
-    {"block": "New Business", "name": "New Leads Generated", "definition": "# of new leads added in period", "stage": "New Business", "frequency": "Weekly / Monthly", "notes": "Count of distinct clients added"},
-    {"block": "New Business", "name": "Qualified Opportunities", "definition": "# of active opportunities with real commercial potential", "stage": "New Business", "frequency": "Monthly", "notes": "Use Raw Status / Next Action"},
-    {"block": "New Business", "name": "Pipeline Value (€)", "definition": "SUM of Deal Value (€) in New Business", "stage": "New Business", "frequency": "Monthly", "notes": "From Pipeline_Data"},
+    {"block": "Lead", "name": "New Leads Generated", "definition": "# of new leads added in period", "stage": "Lead", "frequency": "Weekly / Monthly", "notes": "Count of distinct clients added"},
+    {"block": "Qualified", "name": "Qualified Opportunities", "definition": "# of active opportunities with real commercial potential", "stage": "Qualified", "frequency": "Monthly", "notes": "Use raw status and next action"},
+    {"block": "Proposal", "name": "Proposal Value (€)", "definition": "SUM of Deal Value (€) in Proposal", "stage": "Proposal", "frequency": "Monthly", "notes": "From pipeline data"},
     {"block": "Legal", "name": "Deals in Legal", "definition": "# of deals currently in Legal", "stage": "Legal", "frequency": "Weekly", "notes": "Stage = Legal"},
     {"block": "Legal", "name": "Avg Time in Legal", "definition": "Average days from first legal ticket to stage exit", "stage": "Legal", "frequency": "Weekly", "notes": "Requires start/end dates if later added"},
     {"block": "DD", "name": "Deals in DD", "definition": "# of deals currently in DD", "stage": "DD", "frequency": "Weekly", "notes": "Stage = DD"},
     {"block": "DD", "name": "DD Completion Rate %", "definition": "Deals moved from DD to Integration / Deals in DD", "stage": "DD", "frequency": "Weekly", "notes": "Process KPI"},
-    {"block": "DD", "name": "DD Aging >30d", "definition": "# of DD deals with last follow-up older than 30 days", "stage": "DD", "frequency": "Weekly", "notes": "Use Last Follow Up"},
+    {"block": "DD", "name": "DD Aging >30d", "definition": "# of DD deals with last follow-up older than 30 days", "stage": "DD", "frequency": "Weekly", "notes": "Use last follow up"},
     {"block": "Integration", "name": "Clients in Integration", "definition": "# of deals currently in Integration", "stage": "Integration", "frequency": "Weekly", "notes": "Stage = Integration"},
-    {"block": "Integration", "name": "Integration Pipeline Value (€)", "definition": "SUM of Deal Value (€) in Integration", "stage": "Integration", "frequency": "Weekly", "notes": "From Pipeline_Data"},
+    {"block": "Integration", "name": "Integration Pipeline Value (€)", "definition": "SUM of Deal Value (€) in Integration", "stage": "Integration", "frequency": "Weekly", "notes": "From pipeline data"},
     {"block": "Integration", "name": "Integration to Go Live Conversion %", "definition": "Deals moved to Go Live / Deals in Integration", "stage": "Integration", "frequency": "Weekly", "notes": "Requires stage progression tracking"},
     {"block": "Go Live", "name": "New Go Lives", "definition": "# of clients with technical + legal sign-off", "stage": "Go Live", "frequency": "Monthly", "notes": "Stage = Go Live"},
-    {"block": "Go Live", "name": "Go Live Value (€)", "definition": "SUM of Deal Value (€) in Go Live", "stage": "Go Live", "frequency": "Monthly", "notes": "From Pipeline_Data"},
-    {"block": "Execution", "name": "Signed to Live Conversion %", "definition": "Go Live deals / Signed deals", "stage": "Legal-DD-Integration-Go Live", "frequency": "Monthly", "notes": "Requires clear signed definition"},
+    {"block": "Go Live", "name": "Go Live Value (€)", "definition": "SUM of Deal Value (€) in Go Live", "stage": "Go Live", "frequency": "Monthly", "notes": "From pipeline data"},
+    {"block": "Execution", "name": "Legal to Go Live Conversion %", "definition": "Go Live deals / opportunities that entered Legal", "stage": "Legal-DD-Integration-Legal Approval-Go Live", "frequency": "Monthly", "notes": "Measures execution quality after commercial agreement"},
+    {"block": "Handover", "name": "Handover Completion Rate %", "definition": "Completed Handovers / Go Live Accounts", "stage": "Handover", "frequency": "Monthly", "notes": "Measures transfer discipline after launch"},
+    {"block": "Execution", "name": "Stage Cadence KPI", "definition": "Average days between recorded funnel milestone dates", "stage": "Lead-Proposal-Legal-Integration-Go Live-Handover", "frequency": "Weekly / Monthly", "notes": "Uses Prospect, Offer, Signed ETA, Integration, Live, and Handover dates; benchmark <= 30 days"},
     {"block": "Market Growth", "name": "Market Penetration %", "definition": "Live clients in market / total target operators", "stage": "Live / Growth", "frequency": "Monthly", "notes": "Target universe needed"},
     {"block": "Collaboration", "name": "Existing Client Growth (€)", "definition": "Revenue uplift influenced in existing clients", "stage": "Live / Growth", "frequency": "Monthly", "notes": "Manual input or linked rev data"},
+    {"block": "Growth", "name": "Campaign Growth %", "definition": "Forecast Lift EUR / Budget EUR x 100", "stage": "Campaigns / Growth", "frequency": "Weekly / Monthly", "notes": "Projected incremental lift relative to committed campaign investment"},
 ]
 
 
 def main() -> None:
     if len(sys.argv) < 2:
-        raise SystemExit("Usage: workbook_store.py <read|write|seed-reference> ...")
+        raise SystemExit("Usage: workbook_store.py <read|write|seed-reference|import-file> ...")
 
     command = sys.argv[1]
 
@@ -229,6 +327,11 @@ def main() -> None:
         print(json.dumps(load_reference_seed_state()))
         return
 
+    if command == "import-file":
+        workbook_path = Path(sys.argv[2])
+        print(json.dumps(import_workbook(workbook_path)))
+        return
+
     raise SystemExit(f"Unknown command: {command}")
 
 
@@ -237,25 +340,142 @@ def read_workbook(path: Path) -> dict[str, Any]:
         return load_reference_seed_state()
 
     wb = load_workbook(path, data_only=True)
-    deals = normalize_deal_collection(read_deals_sheet(wb["Deals"])) if "Deals" in wb.sheetnames else []
-    targets = normalize_target_collection(read_targets_sheet(wb["Targets"])) if "Targets" in wb.sheetnames else [empty_target()]
-    kpis = read_kpi_sheet(wb["KPI Catalogue"]) if "KPI Catalogue" in wb.sheetnames else KPI_BOOTSTRAP
-    tasks = normalize_task_collection(read_tasks_sheet(wb["Tasks"])) if "Tasks" in wb.sheetnames else []
-    return {"deals": deals, "targets": targets, "kpis": kpis, "tasks": tasks, "latamReference": load_latam_reference()}
+    bootstrap = create_bootstrap_state()
+    deals_sheet_name = find_sheet_name(wb.sheetnames, exact={"Deals"})
+    market_intel_sheet_name = find_sheet_name(wb.sheetnames, exact={"Market Intelligence"}, contains={"market intelligence"})
+    targets_sheet_name = find_sheet_name(wb.sheetnames, exact={"Targets"}, contains={"targets"})
+    kpi_sheet_name = find_sheet_name(wb.sheetnames, exact={"KPI Catalogue"}, contains={"kpi catalogue", "kpi catalog"})
+    tasks_sheet_name = find_sheet_name(wb.sheetnames, exact={"Tasks"})
+    users_sheet_name = find_sheet_name(wb.sheetnames, exact={"Users"})
+    workspace_sheet_name = find_sheet_name(wb.sheetnames, exact={"Workspace"})
+    campaigns_sheet_name = find_sheet_name(wb.sheetnames, exact={"Campaigns"})
+
+    deals = normalize_deal_collection(read_deals_sheet(wb[deals_sheet_name])) if deals_sheet_name else []
+    market_intel = normalize_market_intel_collection(read_market_intel_sheet(wb[market_intel_sheet_name])) if market_intel_sheet_name else normalize_market_intel_collection(bootstrap.get("marketIntel", []))
+    targets = normalize_target_collection(read_targets_sheet(wb[targets_sheet_name])) if targets_sheet_name else [empty_target()]
+    kpis = read_kpi_sheet(wb[kpi_sheet_name]) if kpi_sheet_name else merge_kpi_catalogue(KPI_BOOTSTRAP)
+    tasks = normalize_task_collection(read_tasks_sheet(wb[tasks_sheet_name])) if tasks_sheet_name else []
+    users = normalize_user_collection(read_users_sheet(wb[users_sheet_name])) if users_sheet_name else []
+    if not users:
+        users = normalize_user_collection(bootstrap["users"])
+    workspace = normalize_workspace(read_workspace_sheet(wb[workspace_sheet_name])) if workspace_sheet_name else normalize_workspace(bootstrap["workspace"])
+    campaigns = normalize_campaign_collection(read_campaigns_sheet(wb[campaigns_sheet_name])) if campaigns_sheet_name else []
+    tasks, workspace = sync_task_numbers(tasks, workspace)
+    return {
+        "deals": deals,
+        "marketIntel": market_intel,
+        "targets": targets,
+        "kpis": kpis,
+        "tasks": tasks,
+        "campaigns": campaigns,
+        "users": users,
+        "workspace": workspace,
+        "latamReference": load_latam_reference(),
+    }
 
 
 def load_reference_seed_state() -> dict[str, Any]:
     bootstrap = create_bootstrap_state()
     deals = load_opportunities_deals()
     targets = load_opportunities_targets()
+    latam_reference = load_latam_reference()
 
     return {
         "deals": normalize_deal_collection(deals or bootstrap["deals"]),
+        "marketIntel": normalize_market_intel_collection(build_market_intelligence_from_reference(latam_reference) or bootstrap.get("marketIntel", [])),
         "targets": normalize_target_collection(targets or bootstrap["targets"]),
         "kpis": KPI_BOOTSTRAP,
         "tasks": normalize_task_collection(bootstrap.get("tasks", [])),
-        "latamReference": load_latam_reference(),
+        "campaigns": normalize_campaign_collection(bootstrap.get("campaigns", [])),
+        "users": normalize_user_collection(bootstrap.get("users", [])),
+        "workspace": normalize_workspace(bootstrap.get("workspace", {})),
+        "latamReference": latam_reference,
     }
+
+
+def import_workbook(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Workbook not found: {path}")
+
+    try:
+        wb = load_workbook(path, data_only=True)
+    except Exception as exc:
+        raise ValueError(
+            "SalesRep could not read this Excel file. Use a modern .xlsx/.xlsm workbook and verify the file is not corrupted or password-protected."
+        ) from exc
+    sheetnames = list(wb.sheetnames)
+    bootstrap = create_bootstrap_state()
+
+    salesrep_detected = any(
+        [
+            find_sheet_name(sheetnames, exact={"Deals"}),
+            find_sheet_name(sheetnames, exact={"Tasks"}),
+            find_sheet_name(sheetnames, exact={"Workspace"}),
+            find_sheet_name(sheetnames, exact={"Campaigns"}),
+            find_sheet_name(sheetnames, exact={"Users"}),
+            find_sheet_name(sheetnames, exact={"KPI Catalogue"}, contains={"kpi catalogue", "kpi catalog"}),
+            find_sheet_name(sheetnames, exact={"Market Intelligence"}, contains={"market intelligence"}),
+        ]
+    )
+    accounts_sheet_name = find_sheet_name(sheetnames, exact={"Accounts"}, contains={"accounts"})
+    hot_leads_sheet_name = find_sheet_name(sheetnames, exact={"Hot_Leads", "Hot Leads"}, contains={"hot leads"})
+    targets_legacy_sheet_name = find_sheet_name(sheetnames, exact={"Targets 2025"}, contains={"targets 2025", "targets"})
+
+    if salesrep_detected:
+        state = read_workbook(path)
+        return {
+            "state": state,
+            "meta": {
+                "mode": "salesrep-workbook",
+                "sheetNames": sheetnames,
+                "counts": {
+                    "deals": len(state.get("deals", [])),
+                    "marketIntel": len(state.get("marketIntel", [])),
+                    "targets": len(state.get("targets", [])),
+                    "tasks": len(state.get("tasks", [])),
+                    "campaigns": len(state.get("campaigns", [])),
+                },
+            },
+        }
+
+    if accounts_sheet_name or hot_leads_sheet_name or targets_legacy_sheet_name:
+        deals_input: list[dict[str, Any]] = []
+        if accounts_sheet_name:
+            deals_input.extend(read_accounts_sheet(wb[accounts_sheet_name]))
+        if hot_leads_sheet_name:
+            deals_input.extend(read_hot_leads_sheet(wb[hot_leads_sheet_name]))
+
+        targets_input = read_opportunities_targets_sheet(wb[targets_legacy_sheet_name]) if targets_legacy_sheet_name else []
+        latam_reference = load_latam_reference()
+        state = {
+            "deals": normalize_deal_collection(deals_input),
+            "marketIntel": normalize_market_intel_collection(build_market_intelligence_from_reference(latam_reference) or bootstrap.get("marketIntel", [])),
+            "targets": normalize_target_collection(targets_input or bootstrap.get("targets", [])),
+            "kpis": KPI_BOOTSTRAP,
+            "tasks": normalize_task_collection(bootstrap.get("tasks", [])),
+            "campaigns": normalize_campaign_collection(bootstrap.get("campaigns", [])),
+            "users": normalize_user_collection(bootstrap.get("users", [])),
+            "workspace": normalize_workspace(bootstrap.get("workspace", {})),
+            "latamReference": latam_reference,
+        }
+        return {
+            "state": state,
+            "meta": {
+                "mode": "opportunities-source",
+                "sheetNames": sheetnames,
+                "counts": {
+                    "deals": len(state.get("deals", [])),
+                    "marketIntel": len(state.get("marketIntel", [])),
+                    "targets": len(state.get("targets", [])),
+                    "tasks": len(state.get("tasks", [])),
+                    "campaigns": len(state.get("campaigns", [])),
+                },
+            },
+        }
+
+    raise ValueError(
+        "Unsupported Excel format. Expected a SalesRep workbook with sheets like Deals/Targets or an opportunities source workbook with Accounts/Hot_Leads/Targets 2025."
+    )
 
 
 def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
@@ -267,20 +487,35 @@ def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
 
     dashboard = wb.create_sheet("Dashboard")
     deals_sheet = wb.create_sheet("Deals")
+    market_intel_sheet = wb.create_sheet("Market Intelligence")
     targets_sheet = wb.create_sheet("Targets")
     tasks_sheet = wb.create_sheet("Tasks")
+    users_sheet = wb.create_sheet("Users")
+    workspace_sheet = wb.create_sheet("Workspace")
+    campaigns_sheet = wb.create_sheet("Campaigns")
     lists_sheet = wb.create_sheet("Lists")
     kpi_sheet = wb.create_sheet("KPI Catalogue")
 
     deals = normalize_deal_collection([normalize_deal(item) for item in state.get("deals", [])])
+    market_intel = normalize_market_intel_collection([normalize_market_intel(item) for item in state.get("marketIntel", [])])
     targets = normalize_target_collection([normalize_target(item) for item in state.get("targets", [])])
-    kpis = [normalize_kpi(item) for item in state.get("kpis", [])] or KPI_BOOTSTRAP
+    kpis = merge_kpi_catalogue([normalize_kpi(item) for item in state.get("kpis", [])] or KPI_BOOTSTRAP)
     tasks = normalize_task_collection([normalize_task(item) for item in state.get("tasks", [])])
+    users = normalize_user_collection([normalize_user(item) for item in state.get("users", [])])
+    if not users:
+        users = normalize_user_collection(create_bootstrap_state()["users"])
+    workspace = normalize_workspace(state.get("workspace", {}))
+    campaigns = normalize_campaign_collection([normalize_campaign(item) for item in state.get("campaigns", [])])
+    tasks, workspace = sync_task_numbers(tasks, workspace)
 
     write_dashboard_sheet(dashboard, deals, targets)
     write_deals_sheet(deals_sheet, deals)
+    write_market_intel_sheet(market_intel_sheet, market_intel)
     write_targets_sheet(targets_sheet, targets)
     write_tasks_sheet(tasks_sheet, tasks)
+    write_users_sheet(users_sheet, users)
+    write_workspace_sheet(workspace_sheet, workspace)
+    write_campaigns_sheet(campaigns_sheet, campaigns)
     write_lists_sheet(lists_sheet, deals, targets)
     write_kpi_sheet(kpi_sheet, kpis)
 
@@ -294,7 +529,7 @@ def write_dashboard_sheet(ws, deals, targets) -> None:
     target_summary = summarize_target_counts(targets, active_year)
     pipeline_value = sum_values([deal.get("dealValue") for deal in deals])
     signed_count = sum(1 for deal in deals if deal.get("signedFlag"))
-    live_count = sum(1 for deal in deals if deal.get("stage") in {"Live", "Go Live"} or deal.get("goLiveFlag"))
+    live_count = sum(1 for deal in deals if deal.get("stage") in {"Go Live", "Handover"} or deal.get("goLiveFlag"))
     dd_aging = sum(1 for deal in deals if deal.get("stage") == "DD" and days_since(deal.get("lastFollowUp")) > 30)
 
     rows = [
@@ -306,7 +541,7 @@ def write_dashboard_sheet(ws, deals, targets) -> None:
         ["Type", dominant_type, None, "Integrations", sum(1 for deal in deals if deal.get("stage") == "Integration"), sum_values([deal.get("dealValue") for deal in deals if deal.get("stage") == "Integration"]), target_summary["integrations"]],
         ["Platform", "All", None, "DD Pipeline", sum(1 for deal in deals if deal.get("stage") == "DD"), sum_values([deal.get("dealValue") for deal in deals if deal.get("stage") == "DD"]), target_summary["ddPipeline"]],
         ["New Traffic", "All", None, "New Go Live", sum(1 for deal in deals if deal.get("goLiveFlag")), sum_values([deal.get("dealValue") for deal in deals if deal.get("goLiveFlag")]), target_summary["newGoLive"]],
-        ["DD Aging >30d", dd_aging, None, "Total Go Live", live_count, sum_values([deal.get("dealValue") for deal in deals if deal.get("stage") in {"Go Live", "Live"} or deal.get("goLiveFlag")]), target_summary["totalGoLive"]],
+        ["DD Aging >30d", dd_aging, None, "Total Go Live", live_count, sum_values([deal.get("dealValue") for deal in deals if deal.get("stage") in {"Go Live", "Handover"} or deal.get("goLiveFlag")]), target_summary["totalGoLive"]],
     ]
 
     for row in rows:
@@ -317,6 +552,12 @@ def write_deals_sheet(ws, deals) -> None:
     ws.append([label for label, _ in DEAL_COLUMNS])
     for deal in deals:
         ws.append([excel_cell_value(deal.get(key)) for _, key in DEAL_COLUMNS])
+
+
+def write_market_intel_sheet(ws, market_intel) -> None:
+    ws.append([label for label, _ in MARKET_INTEL_COLUMNS])
+    for item in market_intel:
+        ws.append([excel_cell_value(item.get(key)) for _, key in MARKET_INTEL_COLUMNS])
 
 
 def write_targets_sheet(ws, targets) -> None:
@@ -348,6 +589,23 @@ def write_tasks_sheet(ws, tasks) -> None:
     ws.append([label for label, _ in TASK_COLUMNS])
     for task in tasks:
         ws.append([excel_cell_value(task.get(key)) for _, key in TASK_COLUMNS])
+
+
+def write_users_sheet(ws, users) -> None:
+    ws.append([label for label, _ in USER_COLUMNS])
+    for user in users:
+        ws.append([excel_cell_value(user.get(key)) for _, key in USER_COLUMNS])
+
+
+def write_workspace_sheet(ws, workspace) -> None:
+    ws.append([label for label, _ in WORKSPACE_COLUMNS])
+    ws.append([excel_cell_value(workspace.get(key)) for _, key in WORKSPACE_COLUMNS])
+
+
+def write_campaigns_sheet(ws, campaigns) -> None:
+    ws.append([label for label, _ in CAMPAIGN_COLUMNS])
+    for campaign in campaigns:
+        ws.append([excel_cell_value(campaign.get(key)) for _, key in CAMPAIGN_COLUMNS])
 
 
 def write_lists_sheet(ws, deals, targets) -> None:
@@ -400,6 +658,24 @@ def read_deals_sheet(ws) -> list[dict[str, Any]]:
     return deals
 
 
+def read_market_intel_sheet(ws) -> list[dict[str, Any]]:
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    header = [str(cell) if cell is not None else "" for cell in rows[0]]
+    index = {label: position for position, label in enumerate(header)}
+    items: list[dict[str, Any]] = []
+
+    for row in rows[1:]:
+        if not row or not any(cell is not None and str(cell).strip() for cell in row):
+            continue
+        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in MARKET_INTEL_COLUMNS}
+        items.append(normalize_market_intel(raw))
+
+    return items
+
+
 def read_targets_sheet(ws) -> list[dict[str, Any]]:
     rows = list(ws.iter_rows(values_only=True))
     detail_targets = read_target_detail_rows(rows)
@@ -446,6 +722,54 @@ def read_tasks_sheet(ws) -> list[dict[str, Any]]:
     return tasks
 
 
+def read_users_sheet(ws) -> list[dict[str, Any]]:
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    header = [str(cell) if cell is not None else "" for cell in rows[0]]
+    index = {label: position for position, label in enumerate(header)}
+    users: list[dict[str, Any]] = []
+
+    for row in rows[1:]:
+        if not row or not any(cell is not None and str(cell).strip() for cell in row):
+            continue
+        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in USER_COLUMNS}
+        users.append(normalize_user(raw))
+
+    return users
+
+
+def read_workspace_sheet(ws) -> dict[str, Any]:
+    rows = list(ws.iter_rows(values_only=True))
+    if len(rows) < 2:
+        return empty_workspace()
+
+    header = [str(cell) if cell is not None else "" for cell in rows[0]]
+    values = rows[1]
+    index = {label: position for position, label in enumerate(header)}
+    raw = {key: values[index[label]] if label in index and index[label] < len(values) else None for label, key in WORKSPACE_COLUMNS}
+    return normalize_workspace(raw)
+
+
+def read_campaigns_sheet(ws) -> list[dict[str, Any]]:
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    header = [str(cell) if cell is not None else "" for cell in rows[0]]
+    index = {label: position for position, label in enumerate(header)}
+    campaigns: list[dict[str, Any]] = []
+
+    for row in rows[1:]:
+        if not row or not any(cell is not None and str(cell).strip() for cell in row):
+            continue
+        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in CAMPAIGN_COLUMNS}
+        campaigns.append(normalize_campaign(raw))
+
+    return campaigns
+
+
 def read_target_detail_rows(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
     header_index = None
 
@@ -485,7 +809,29 @@ def read_kpi_sheet(ws) -> list[dict[str, Any]]:
             continue
         items.append({key: stringify(row[index[label]]) if label in index and index[label] < len(row) else "" for label, key in KPI_COLUMNS})
 
-    return items or KPI_BOOTSTRAP
+    return merge_kpi_catalogue(items or KPI_BOOTSTRAP)
+
+
+def find_sheet_name(sheetnames: list[str], *, exact: set[str] | None = None, contains: set[str] | None = None) -> str | None:
+    normalized_map = {normalize_sheet_name(name): name for name in sheetnames}
+
+    for candidate in exact or set():
+        match = normalized_map.get(normalize_sheet_name(candidate))
+        if match:
+            return match
+
+    contains_values = {normalize_sheet_name(value) for value in (contains or set()) if value}
+    if contains_values:
+        for name in sheetnames:
+            normalized_name = normalize_sheet_name(name)
+            if any(value in normalized_name for value in contains_values):
+                return name
+
+    return None
+
+
+def normalize_sheet_name(value: Any) -> str:
+    return " ".join(stringify(value).replace("_", " ").replace("-", " ").lower().split())
 
 
 def load_opportunities_deals() -> list[dict[str, Any]]:
@@ -493,8 +839,9 @@ def load_opportunities_deals() -> list[dict[str, Any]]:
         return []
 
     wb = load_workbook(OPPORTUNITIES_WORKBOOK, data_only=True)
-    if "Accounts" in wb.sheetnames:
-        return read_accounts_sheet(wb["Accounts"])
+    accounts_sheet_name = find_sheet_name(wb.sheetnames, exact={"Accounts"}, contains={"accounts"})
+    if accounts_sheet_name:
+        return read_accounts_sheet(wb[accounts_sheet_name])
 
     return []
 
@@ -504,10 +851,11 @@ def load_opportunities_targets() -> list[dict[str, Any]]:
         return []
 
     wb = load_workbook(OPPORTUNITIES_WORKBOOK, data_only=True)
-    if "Targets 2025" not in wb.sheetnames:
+    targets_sheet_name = find_sheet_name(wb.sheetnames, exact={"Targets 2025"}, contains={"targets 2025", "targets"})
+    if not targets_sheet_name:
         return []
 
-    return read_opportunities_targets_sheet(wb["Targets 2025"])
+    return read_opportunities_targets_sheet(wb[targets_sheet_name])
 
 
 def read_opportunities_targets_sheet(ws) -> list[dict[str, Any]]:
@@ -856,6 +1204,53 @@ def empty_latam_reference() -> dict[str, Any]:
     return {"markets": [], "stageTotals": [], "operatorsByMarket": []}
 
 
+def build_market_intelligence_from_reference(reference: dict[str, Any]) -> list[dict[str, Any]]:
+    markets = reference.get("markets", []) if isinstance(reference, dict) else []
+    operator_matrix = {
+        clean_text(item.get("market")).lower(): item
+        for item in (reference.get("operatorsByMarket", []) if isinstance(reference, dict) else [])
+        if clean_text(item.get("market"))
+    }
+
+    items: list[dict[str, Any]] = []
+    for market in markets:
+        market_name = normalize_market(market.get("market"))
+        if not market_name:
+            continue
+
+        matrix = operator_matrix.get(market_name.lower(), {})
+        target_operators = unique_values(
+            matrix.get("newBusiness", [])
+            + matrix.get("legal", [])
+            + matrix.get("dd", [])
+            + matrix.get("integration", [])
+            + matrix.get("goLive", [])
+        )
+        active_operators = unique_values(matrix.get("integration", []) + matrix.get("goLive", []))
+
+        items.append(
+            normalize_market_intel(
+                {
+                    "id": f"intel-{market_name.lower().replace(' ', '-')}",
+                    "country": market_name,
+                    "regulatoryStatus": clean_text(market.get("stageFocus")) or "Mapped",
+                    "licenseType": "Market mapped",
+                    "activeOperators": ", ".join(active_operators),
+                    "targetOperators": ", ".join(target_operators),
+                    "competitorsPresent": "",
+                    "currentProducts": "",
+                    "missingProducts": "",
+                    "revenuePotentialEur": to_float(market.get("growthForecast")) or to_float(market.get("totalValue")) or 0,
+                    "regulatoryRisk": "Medium",
+                    "opportunityLevel": clean_text(market.get("priority")) or "Medium",
+                    "strategicNotes": f"Stage focus: {clean_text(market.get('stageFocus')) or 'Market mapped from LATAM reference'}.",
+                }
+            )
+        )
+
+    return items
+
+
 def create_bootstrap_state() -> dict[str, Any]:
     year = datetime.utcnow().year
     return {
@@ -885,7 +1280,92 @@ def create_bootstrap_state() -> dict[str, Any]:
             )
         ],
         "kpis": KPI_BOOTSTRAP,
+        "marketIntel": [
+            normalize_market_intel(
+                {
+                    "id": "intel-mx",
+                    "country": "Mexico",
+                    "regulatoryStatus": "Open and active",
+                    "licenseType": "B2C",
+                    "activeOperators": "Betcris, Caliente, Codere",
+                    "targetOperators": "Betcris, Codere, Strendus",
+                    "competitorsPresent": "Pragmatic Play, Playtech",
+                    "currentProducts": "Casino, sportsbook",
+                    "missingProducts": "Live casino expansion, dedicated tables",
+                    "revenuePotentialEur": 425000,
+                    "regulatoryRisk": "Medium",
+                    "opportunityLevel": "High Priority",
+                    "strategicNotes": "Large market with strong operator density and visible whitespace for live product expansion.",
+                }
+            ),
+            normalize_market_intel(
+                {
+                    "id": "intel-pe",
+                    "country": "Peru",
+                    "regulatoryStatus": "Scaling under new framework",
+                    "licenseType": "Online gaming",
+                    "activeOperators": "Apuesta Total, Betsson",
+                    "targetOperators": "Apuesta Total, Inkabet, Betano",
+                    "competitorsPresent": "Pragmatic Play, Playtech",
+                    "currentProducts": "Casino, sportsbook",
+                    "missingProducts": "Live casino, progressive content",
+                    "revenuePotentialEur": 250000,
+                    "regulatoryRisk": "Medium",
+                    "opportunityLevel": "Medium",
+                    "strategicNotes": "Good expansion market with clear product whitespace and strong need for structured target mapping.",
+                }
+            ),
+        ],
         "tasks": [],
+        "campaigns": [],
+        "users": [
+            normalize_user(
+                {
+                    "id": "user-admin",
+                    "fullName": "LATAM Workspace Admin",
+                    "email": "admin@salesrep.local",
+                    "role": "Administrator",
+                    "status": "Active",
+                    "team": "Revenue Operations",
+                    "marketFocus": "LATAM",
+                }
+            ),
+            normalize_user(
+                {
+                    "id": "user-manager",
+                    "fullName": "Commercial Manager",
+                    "email": "manager@salesrep.local",
+                    "role": "Sales Manager",
+                    "status": "Active",
+                    "team": "Commercial",
+                    "marketFocus": "Mexico, Peru, Panama",
+                }
+            ),
+            normalize_user(
+                {
+                    "id": "user-ops",
+                    "fullName": "Integration Ops",
+                    "email": "ops@salesrep.local",
+                    "role": "Revenue Ops",
+                    "status": "Active",
+                    "team": "Operations",
+                    "marketFocus": "Integration, Go Live",
+                }
+            ),
+        ],
+        "workspace": normalize_workspace(
+            {
+                "workspaceName": "SalesRep LATAM",
+                "organizationName": "Evolution LATAM",
+                "adminName": "LATAM Workspace Admin",
+                "adminEmail": "admin@salesrep.local",
+                "subscriptionPlan": "Enterprise",
+                "crmModel": "New + Existing Accounts",
+                "fiscalYear": year,
+                "defaultCurrency": "EUR",
+                "taskSequence": 0,
+            }
+        ),
     }
 
 
@@ -898,7 +1378,7 @@ def normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
         "type": normalize_type(record.get("type")),
         "market": normalize_market(record.get("market")),
         "platform": normalize_platform(record.get("platform")),
-        "stage": normalize_stage(record.get("stage")) or "New Business",
+        "stage": normalize_stage(record.get("stage")) or "Lead",
         "signingEta": normalize_date(record.get("signingEta")),
         "signingYear": to_int(record.get("signingYear")),
         "signingMonth": to_int(record.get("signingMonth")),
@@ -929,6 +1409,25 @@ def normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
         "legalEntity": clean_text(record.get("legalEntity")),
         "siteStatus": clean_text(record.get("siteStatus")),
         "accountScope": clean_text(record.get("accountScope")),
+        "segment": clean_text(record.get("segment")),
+        "primaryContact": clean_text(record.get("primaryContact")),
+        "decisionMaker": clean_text(record.get("decisionMaker")),
+        "licenseStatus": clean_text(record.get("licenseStatus")),
+        "productsCurrent": clean_text(record.get("productsCurrent")),
+        "productsPotential": clean_text(record.get("productsPotential")),
+        "currentCompetitors": clean_text(record.get("currentCompetitors")),
+        "targetPriority": clean_text(record.get("targetPriority")),
+        "strategicFit": clean_text(record.get("strategicFit")),
+        "revenuePotentialEur": choose_numeric_value(record.get("revenuePotentialEur"), resolved_deal_value) or 0,
+        "revenuePotentialScore": to_float(record.get("revenuePotentialScore")),
+        "strategicFitScore": to_float(record.get("strategicFitScore")),
+        "closeProbabilityScore": to_float(record.get("closeProbabilityScore")),
+        "licenseScore": to_float(record.get("licenseScore")),
+        "legalComplexityScore": to_float(record.get("legalComplexityScore")),
+        "technicalComplexityScore": to_float(record.get("technicalComplexityScore")),
+        "commercialUrgencyScore": to_float(record.get("commercialUrgencyScore")),
+        "opportunityScore": to_float(record.get("opportunityScore")),
+        "priorityClass": clean_text(record.get("priorityClass")),
         "status": clean_text(record.get("status")),
         "agreement": clean_text(record.get("agreement")),
         "integration": clean_text(record.get("integration")),
@@ -1013,9 +1512,30 @@ def normalize_target(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_market_intel(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": clean_text(record.get("id")) or f"intel-{datetime.utcnow().timestamp()}",
+        "country": normalize_market(record.get("country")),
+        "regulatoryStatus": clean_text(record.get("regulatoryStatus")),
+        "licenseType": clean_text(record.get("licenseType")),
+        "activeOperators": clean_text(record.get("activeOperators")),
+        "targetOperators": clean_text(record.get("targetOperators")),
+        "competitorsPresent": clean_text(record.get("competitorsPresent")),
+        "currentProducts": clean_text(record.get("currentProducts")),
+        "missingProducts": clean_text(record.get("missingProducts")),
+        "revenuePotentialEur": to_float(record.get("revenuePotentialEur")) or 0,
+        "regulatoryRisk": clean_text(record.get("regulatoryRisk")) or "Medium",
+        "opportunityLevel": clean_text(record.get("opportunityLevel")) or "Medium",
+        "strategicNotes": clean_text(record.get("strategicNotes")),
+        "createdAt": clean_text(record.get("createdAt")),
+        "updatedAt": clean_text(record.get("updatedAt")),
+    }
+
+
 def normalize_task(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": clean_text(record.get("id")) or f"task-{datetime.utcnow().timestamp()}",
+        "taskNumber": clean_text(record.get("taskNumber")),
         "title": clean_text(record.get("title")),
         "scopeType": clean_text(record.get("scopeType")) or "Client",
         "status": clean_text(record.get("status")) or "Open",
@@ -1038,6 +1558,70 @@ def normalize_task(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def normalize_user(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": clean_text(record.get("id")) or f"user-{datetime.utcnow().timestamp()}",
+        "fullName": clean_text(record.get("fullName")),
+        "email": clean_text(record.get("email")),
+        "role": clean_text(record.get("role")) or "Viewer",
+        "status": clean_text(record.get("status")) or "Active",
+        "team": clean_text(record.get("team")),
+        "marketFocus": clean_text(record.get("marketFocus")),
+        "createdAt": clean_text(record.get("createdAt")),
+        "updatedAt": clean_text(record.get("updatedAt")),
+    }
+
+
+def normalize_workspace(record: dict[str, Any]) -> dict[str, Any]:
+    year = datetime.utcnow().year
+    return {
+        "workspaceName": clean_text(record.get("workspaceName")) or "SalesRep LATAM",
+        "organizationName": clean_text(record.get("organizationName")) or "Evolution LATAM",
+        "adminName": clean_text(record.get("adminName")) or "LATAM Workspace Admin",
+        "adminEmail": clean_text(record.get("adminEmail")) or "admin@salesrep.local",
+        "subscriptionPlan": clean_text(record.get("subscriptionPlan")) or "Enterprise",
+        "crmModel": clean_text(record.get("crmModel")) or "New + Existing Accounts",
+        "fiscalYear": to_int(record.get("fiscalYear")) or year,
+        "defaultCurrency": clean_text(record.get("defaultCurrency")) or "EUR",
+        "taskSequence": to_int(record.get("taskSequence")) or 0,
+    }
+
+
+def normalize_campaign(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": clean_text(record.get("id")) or f"campaign-{datetime.utcnow().timestamp()}",
+        "title": clean_text(record.get("title")),
+        "campaignType": clean_text(record.get("campaignType")) or "Activation",
+        "status": clean_text(record.get("status")) or "Planned",
+        "priority": clean_text(record.get("priority")) or "Medium",
+        "operator": clean_text(record.get("operator")),
+        "client": clean_text(record.get("client")),
+        "dealId": clean_text(record.get("dealId")),
+        "deal": clean_text(record.get("deal")),
+        "market": normalize_market(record.get("market")),
+        "owner": clean_text(record.get("owner")),
+        "channel": clean_text(record.get("channel")),
+        "startDate": normalize_date(record.get("startDate")),
+        "endDate": normalize_date(record.get("endDate")),
+        "budgetEur": to_float(record.get("budgetEur")) or 0,
+        "prizeValueEur": to_float(record.get("prizeValueEur")) or 0,
+        "forecastLiftEur": to_float(record.get("forecastLiftEur")) or 0,
+        "targetPlayers": to_int(record.get("targetPlayers")) or 0,
+        "targetWager": to_float(record.get("targetWager")) or 0,
+        "targetGgr": to_float(record.get("targetGgr")) or 0,
+        "jiraTicket": clean_text(record.get("jiraTicket")),
+        "landingUrl": clean_text(record.get("landingUrl")),
+        "mechanic": clean_text(record.get("mechanic")),
+        "offerDetails": clean_text(record.get("offerDetails")),
+        "successMetric": clean_text(record.get("successMetric")),
+        "nextStep": clean_text(record.get("nextStep")),
+        "notes": clean_text(record.get("notes")),
+        "traceLog": clean_text(record.get("traceLog")),
+        "createdAt": clean_text(record.get("createdAt")),
+        "updatedAt": clean_text(record.get("updatedAt")),
+    }
+
+
 def normalize_kpi(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "block": clean_text(record.get("block")),
@@ -1047,6 +1631,37 @@ def normalize_kpi(record: dict[str, Any]) -> dict[str, Any]:
         "frequency": clean_text(record.get("frequency")),
         "notes": clean_text(record.get("notes")),
     }
+
+
+def kpi_catalogue_key(record: dict[str, Any]) -> str:
+    kpi = normalize_kpi(record)
+    return clean_text(kpi.get("name")).lower()
+
+
+def merge_kpi_catalogue(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    preferred_order: list[str] = []
+
+    for item in KPI_BOOTSTRAP:
+        normalized = normalize_kpi(item)
+        key = kpi_catalogue_key(normalized)
+        preferred_order.append(key)
+        merged[key] = normalized
+
+    for item in records:
+        normalized = normalize_kpi(item)
+        key = kpi_catalogue_key(normalized)
+        if not normalized.get("name") or key in merged:
+            continue
+        merged[key] = normalized
+
+    def sort_key(item: tuple[str, dict[str, Any]]) -> tuple[int, int, str]:
+        key, payload = item
+        if key in preferred_order:
+            return (0, preferred_order.index(key), payload.get("name", ""))
+        return (1, 0, payload.get("name", ""))
+
+    return [value for _, value in sorted(merged.items(), key=sort_key)]
 
 
 def excel_cell_value(value: Any) -> Any:
@@ -1125,14 +1740,29 @@ def normalize_stage(value: Any) -> str:
 
     collapsed = text.lower().replace("-", " ")
     stage_aliases = {
+        "mapped lead": "Lead",
         "lead": "Lead",
-        "new business": "New Business",
+        "prospect": "Lead",
+        "qualified lead": "Qualified",
+        "qualified": "Qualified",
+        "new business": "Qualified",
+        "proposal": "Proposal",
+        "offer": "Proposal",
         "legal": "Legal",
-        "signed": "Signed",
+        "signed": "Legal",
+        "contract": "Legal",
+        "negotiation": "Legal",
         "dd": "DD",
+        "due diligence": "DD",
         "integration": "Integration",
+        "onboarding": "Integration",
+        "legal approval": "Legal Approval",
+        "approval": "Legal Approval",
+        "signoff": "Legal Approval",
+        "sign off": "Legal Approval",
         "go live": "Go Live",
-        "live": "Live",
+        "live": "Handover",
+        "handover": "Handover",
         "on hold": "On Hold",
         "closed lost": "Closed Lost",
     }
@@ -1146,7 +1776,7 @@ def infer_hot_lead_stage(status: Any, agreement: Any, integration: Any, dd_value
     dd_text = clean_text(dd_value).lower()
 
     if normalize_date(live_since) or status_text == "live":
-        return "Live"
+        return "Handover"
     if status_text in {"cancelled", "canceled", "inactive"}:
         return "Closed Lost"
     if status_text in {"hold", "on hold"}:
@@ -1158,9 +1788,9 @@ def infer_hot_lead_stage(status: Any, agreement: Any, integration: Any, dd_value
     if status_text in {"legal", "nda"}:
         return "Legal"
     if status_text == "signed":
-        return "Signed"
+        return "Legal"
     if agreement_text == "signed":
-        return "Signed"
+        return "Legal"
     return "Lead"
 
 
@@ -1169,13 +1799,13 @@ def infer_account_stage(status: Any, offer_date: Any, integration_date: Any, liv
     site_text = clean_text(site_status).lower()
 
     if normalize_date(live_date) or status_text == "live":
-        return "Live"
+        return "Handover"
     if normalize_date(integration_date) or status_text == "integration":
         return "Integration"
     if status_text == "legal":
         return "Legal"
     if status_text == "offer" or normalize_date(offer_date):
-        return "New Business"
+        return "Proposal"
     if status_text in {"on hold", "inactive"}:
         return "On Hold"
     if status_text in {"canceled", "cancelled"} and site_text != "active":
@@ -1183,9 +1813,10 @@ def infer_account_stage(status: Any, offer_date: Any, integration_date: Any, liv
 
     mapping = {
         "prospect": "Lead",
+        "qualified": "Qualified",
         "on hold": "On Hold",
     }
-    return mapping.get(status_text, "Lead")
+    return mapping.get(status_text, "Qualified" if clean_text(status) else "Lead")
 
 
 def has_process_started(value: Any) -> bool:
@@ -1238,9 +1869,9 @@ def infer_account_agreement(status: Any, offer_date: Any, integration_date: Any,
     if normalize_date(live_date) or normalize_date(integration_date):
         return "Signed"
     if status_text == "legal":
-        return "Negotiating"
+        return "Negotiation"
     if status_text == "offer" or normalize_date(offer_date):
-        return "Drafting"
+        return "Negotiation"
     if status_text in {"on hold", "inactive"}:
         return "Blocked"
     if status_text in {"canceled", "cancelled"} and site_text != "active":
@@ -1252,7 +1883,7 @@ def infer_account_legal_status(stage: Any) -> str:
     normalized = normalize_stage(stage)
     if normalized == "Legal":
         return "In Review"
-    if stage_in_or_after(normalized, "Signed"):
+    if stage_in_or_after(normalized, "DD"):
         return "Approved"
     if normalized in {"On Hold", "Closed Lost"}:
         return "Blocked"
@@ -1274,7 +1905,7 @@ def infer_account_integration_status(stage: Any) -> str:
     normalized = normalize_stage(stage)
     if normalized == "Integration":
         return "In Progress"
-    if normalized in {"Go Live", "Live"}:
+    if normalized in {"Legal Approval", "Go Live", "Handover"}:
         return "Completed"
     if normalized in {"On Hold", "Closed Lost"}:
         return "Blocked"
@@ -1283,10 +1914,10 @@ def infer_account_integration_status(stage: Any) -> str:
 
 def infer_account_go_live_status(stage: Any, live_date: Any) -> str:
     normalized = normalize_stage(stage)
-    if normalize_date(live_date) or normalized == "Live":
+    if normalize_date(live_date) or normalized == "Handover":
         return "Live"
-    if normalized in {"Integration", "Go Live"}:
-        return "Scheduled"
+    if normalized in {"Legal Approval", "Go Live"}:
+        return "Legal Sign-Off"
     if normalized in {"On Hold", "Closed Lost"}:
         return "Blocked"
     return "Not Started"
@@ -1328,6 +1959,40 @@ def normalize_task_collection(tasks: list[dict[str, Any]]) -> list[dict[str, Any
     return sorted(merged.values(), key=task_sort_key)
 
 
+def normalize_user_collection(users: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+
+    for item in users:
+        user = normalize_user(item)
+        merged[user["id"]] = user
+
+    return sorted(merged.values(), key=lambda item: (item.get("role", ""), item.get("fullName", "")))
+
+
+def normalize_campaign_collection(campaigns: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+
+    for item in campaigns:
+        campaign = normalize_campaign(item)
+        merged[campaign["id"]] = campaign
+
+    return sorted(merged.values(), key=campaign_sort_key)
+
+
+def normalize_market_intel_collection(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+
+    for item in items:
+        market_intel = normalize_market_intel(item)
+        key = clean_text(market_intel.get("country")).lower() or market_intel.get("id", "")
+        if key in merged:
+            merged[key] = merge_market_intel(merged[key], market_intel)
+        else:
+            merged[key] = market_intel
+
+    return sorted(merged.values(), key=lambda item: (-(to_float(item.get("revenuePotentialEur")) or 0), item.get("country", "")))
+
+
 def normalize_target_collection(targets: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[tuple[int, str, str, str, bool], dict[str, Any]] = {}
 
@@ -1346,6 +2011,39 @@ def normalize_target_collection(targets: list[dict[str, Any]]) -> list[dict[str,
             merged[key] = target
 
     return sorted(merged.values(), key=lambda item: (-int(item.get("year") or 0), item.get("market", ""), item.get("type", ""), item.get("platform", "")))
+
+
+def sync_task_numbers(tasks: list[dict[str, Any]], workspace: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    normalized_workspace = normalize_workspace(workspace)
+    max_sequence = normalized_workspace.get("taskSequence", 0)
+    normalized_tasks = [normalize_task(task) for task in tasks]
+
+    for task in normalized_tasks:
+        sequence = extract_task_sequence(task.get("taskNumber"))
+        if sequence > max_sequence:
+            max_sequence = sequence
+
+    for task in sorted(normalized_tasks, key=lambda item: (clean_text(item.get("createdAt")) or "9999-12-31", item.get("title", ""))):
+        if clean_text(task.get("taskNumber")):
+            continue
+        max_sequence += 1
+        task["taskNumber"] = format_task_number(max_sequence, task, normalized_workspace)
+
+    normalized_workspace["taskSequence"] = max_sequence
+    return normalize_task_collection(normalized_tasks), normalized_workspace
+
+
+def extract_task_sequence(value: Any) -> int:
+    text = clean_text(value)
+    if not text or "-" not in text:
+        return 0
+    tail = text.rsplit("-", 1)[-1]
+    return to_int(tail) or 0
+
+
+def format_task_number(sequence: int, task: dict[str, Any], workspace: dict[str, Any]) -> str:
+    year = to_int(task.get("targetYear")) or to_int(workspace.get("fiscalYear")) or datetime.utcnow().year
+    return f"TSK-{year}-{sequence:04d}"
 
 
 def build_deal_key(deal: dict[str, Any]) -> tuple[str, str, str]:
@@ -1396,6 +2094,18 @@ def task_sort_key(task: dict[str, Any]) -> tuple[int, int, str, str]:
     )
 
 
+def campaign_sort_key(campaign: dict[str, Any]) -> tuple[int, int, str, str]:
+    status_order = {"Live": 0, "Ready": 1, "Planned": 2, "Paused": 3, "Completed": 4, "Cancelled": 5}
+    priority_order = {"Critical": 0, "High": 1, "Medium": 2, "Low": 3}
+    start_date = clean_text(campaign.get("startDate")) or "9999-12-31"
+    return (
+        status_order.get(campaign.get("status", ""), 9),
+        priority_order.get(campaign.get("priority", ""), 9),
+        start_date,
+        campaign.get("title", ""),
+    )
+
+
 def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     preferred = pick_preferred_deal(left, right)
     secondary = right if preferred is left else left
@@ -1412,6 +2122,12 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
         "legalEntity",
         "siteStatus",
         "accountScope",
+        "segment",
+        "primaryContact",
+        "decisionMaker",
+        "licenseStatus",
+        "targetPriority",
+        "priorityClass",
         "casinoName",
         "legalStatus",
         "ddStatus",
@@ -1441,6 +2157,10 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
         "comments",
         "actionItems",
         "updates",
+        "productsCurrent",
+        "productsPotential",
+        "currentCompetitors",
+        "strategicFit",
         "ezugiId",
         "evoInstance",
         "evoSkinId",
@@ -1462,7 +2182,19 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     ]:
         result[key] = merge_text_blocks(preferred.get(key), secondary.get(key))
 
-    for key in ["dealValue", "dealValueAlt"]:
+    for key in [
+        "dealValue",
+        "dealValueAlt",
+        "revenuePotentialEur",
+        "revenuePotentialScore",
+        "strategicFitScore",
+        "closeProbabilityScore",
+        "licenseScore",
+        "legalComplexityScore",
+        "technicalComplexityScore",
+        "commercialUrgencyScore",
+        "opportunityScore",
+    ]:
         result[key] = choose_numeric_value(left.get(key), right.get(key))
 
     for key in ["signingYear", "signingMonth"]:
@@ -1494,6 +2226,31 @@ def merge_targets(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]
     return normalize_target(result)
 
 
+def merge_market_intel(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    result = dict(left)
+    result["id"] = choose_preferred_string(left.get("id"), right.get("id")) or result["id"]
+
+    for key in [
+        "country",
+        "regulatoryStatus",
+        "licenseType",
+        "activeOperators",
+        "targetOperators",
+        "competitorsPresent",
+        "currentProducts",
+        "missingProducts",
+        "regulatoryRisk",
+        "opportunityLevel",
+        "strategicNotes",
+        "createdAt",
+        "updatedAt",
+    ]:
+        result[key] = choose_preferred_string(left.get(key), right.get(key))
+
+    result["revenuePotentialEur"] = choose_numeric_value(left.get("revenuePotentialEur"), right.get("revenuePotentialEur")) or 0
+    return normalize_market_intel(result)
+
+
 def pick_preferred_deal(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     left_score = deal_completeness_score(left)
     right_score = deal_completeness_score(right)
@@ -1519,6 +2276,9 @@ def deal_completeness_score(deal: dict[str, Any]) -> int:
             "client",
             "operator",
             "kam",
+            "segment",
+            "decisionMaker",
+            "licenseStatus",
             "legalEntity",
             "url",
             "casinoName",
@@ -1697,6 +2457,10 @@ def blank_if_zero(value: Any) -> Any:
 def empty_target() -> dict[str, Any]:
     year = datetime.utcnow().year
     return normalize_target({"id": f"target-{year}-global", "year": year, "market": "Global", "type": "All", "platform": "All"})
+
+
+def empty_workspace() -> dict[str, Any]:
+    return normalize_workspace({})
 
 
 def targets_have_values(targets: list[dict[str, Any]]) -> bool:

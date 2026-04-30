@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
-import { ensureWorkbook, loadReferenceSeedState, loadStateFromWorkbook, saveStateToWorkbook } from "./excelStore.mjs";
+import { ensureWorkbook, importStateFromWorkbook, loadReferenceSeedState, loadStateFromWorkbook, saveStateToWorkbook } from "./excelStore.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,13 @@ await ensureWorkbook(WORKBOOK_PATH);
 
 const server = http.createServer(async (request, response) => {
   try {
+    setCorsHeaders(response);
+    if (request.method === "OPTIONS") {
+      response.writeHead(204);
+      response.end();
+      return;
+    }
+
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
     const { pathname } = url;
 
@@ -69,6 +77,37 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (pathname === "/api/upload" && request.method === "POST") {
+      const originalName = sanitizeUploadFilename(url.searchParams.get("filename") || "uploaded-workbook.xlsx");
+      const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "salesrep-upload-"));
+      const uploadPath = path.join(tmpDir, originalName);
+
+      try {
+        const content = await readBinaryBody(request);
+        if (!content.byteLength) {
+          throw new Error("The uploaded file is empty.");
+        }
+
+        await fs.writeFile(uploadPath, content);
+        const imported = await importStateFromWorkbook(uploadPath);
+        const currentState = await loadStateFromWorkbook(WORKBOOK_PATH);
+        const nextState = mergeImportedState(currentState, imported);
+        const meta = await saveStateToWorkbook(WORKBOOK_PATH, nextState);
+
+        return sendJson(response, 200, {
+          ok: true,
+          workbookPath: meta.workbookPath,
+          savedAt: meta.savedAt,
+          importMeta: {
+            ...(imported.meta || {}),
+            filename: originalName,
+          },
+        });
+      } finally {
+        await fs.rm(tmpDir, { recursive: true, force: true });
+      }
+    }
+
     if (pathname.startsWith("/api/")) {
       sendJson(response, 404, { error: "Not found" });
       return;
@@ -102,6 +141,12 @@ function safeJoin(rootDir, pathname) {
   return normalized;
 }
 
+function setCorsHeaders(response) {
+  response.setHeader("Access-Control-Allow-Origin", "*");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
 function sendJson(response, statusCode, payload) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, { "Content-Type": MIME_TYPES[".json"] });
@@ -122,12 +167,54 @@ async function readJsonBody(request) {
   return raw ? JSON.parse(raw) : {};
 }
 
+async function readBinaryBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+function sanitizeUploadFilename(filename) {
+  const base = path.basename(String(filename || "uploaded-workbook.xlsx").trim()) || "uploaded-workbook.xlsx";
+  const normalized = base.replace(/[^a-zA-Z0-9._-]+/g, "-");
+  if ([".xlsx", ".xlsm", ".xltx", ".xltm", ".xls"].some((suffix) => normalized.toLowerCase().endsWith(suffix))) {
+    return normalized;
+  }
+  return `${normalized}.xlsx`;
+}
+
+function mergeImportedState(currentState, importedPayload) {
+  const payload = importedPayload && typeof importedPayload === "object" ? importedPayload : {};
+  const importedState = payload.state && typeof payload.state === "object" ? payload.state : {};
+  const mode = String(payload.meta?.mode || "");
+
+  if (mode === "opportunities-source") {
+    return {
+      deals: Array.isArray(importedState.deals) ? importedState.deals : [],
+      marketIntel: Array.isArray(importedState.marketIntel) ? importedState.marketIntel : [],
+      targets: Array.isArray(importedState.targets) ? importedState.targets : [],
+      kpis: Array.isArray(currentState.kpis) && currentState.kpis.length ? currentState.kpis : Array.isArray(importedState.kpis) ? importedState.kpis : [],
+      tasks: Array.isArray(currentState.tasks) ? currentState.tasks : [],
+      campaigns: Array.isArray(currentState.campaigns) ? currentState.campaigns : [],
+      users: Array.isArray(currentState.users) ? currentState.users : [],
+      workspace: currentState.workspace && typeof currentState.workspace === "object" ? currentState.workspace : {},
+    };
+  }
+
+  return normalizeIncomingState(importedState);
+}
+
 function normalizeIncomingState(payload) {
   const body = payload && typeof payload === "object" ? payload : {};
   return {
     deals: Array.isArray(body.deals) ? body.deals : [],
+    marketIntel: Array.isArray(body.marketIntel) ? body.marketIntel : [],
     targets: Array.isArray(body.targets) ? body.targets : [],
     kpis: Array.isArray(body.kpis) ? body.kpis : [],
     tasks: Array.isArray(body.tasks) ? body.tasks : [],
+    campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
+    users: Array.isArray(body.users) ? body.users : [],
+    workspace: body.workspace && typeof body.workspace === "object" ? body.workspace : {},
   };
 }

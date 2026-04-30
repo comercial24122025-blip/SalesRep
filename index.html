@@ -1,28 +1,50 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pipeline Command Center</title>
+    <title>SalesRep CRM Cloud</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div id="app-loading-overlay" class="loading-overlay is-visible" aria-live="polite" aria-hidden="false">
+      <div class="loading-overlay-card">
+        <span class="loading-overlay-kicker">SalesRep workspace</span>
+        <strong id="loading-overlay-title">Loading workbook</strong>
+        <p id="loading-overlay-copy">Syncing pipeline, tasks, market intelligence, and forecast data from Excel.</p>
+      </div>
+    </div>
     <div class="shell">
       <header class="hero">
           <div class="hero-topline">
             <div class="hero-copy">
-              <p class="eyebrow">Standalone sales operations cockpit</p>
-              <h1>Pipeline Command Center</h1>
+              <p class="eyebrow">SalesRep SaaS workspace</p>
+              <h1>SalesRep CRM Cloud</h1>
               <p class="hero-text">
-                Manage new and existing accounts, monitor Legal, DD, Integration, and Go Live execution,
-                and benchmark delivery against targets and KPI commitments without relying on Salesforce.
+                Manage new and existing accounts in a SaaS-ready CRM cockpit with user administration,
+                operator control, forecast management, and execution tracking from Market Intelligence through Go Live and Handover.
               </p>
+            </div>
+
+            <div class="hero-tenant">
+              <div class="hero-tenant-card">
+                <span class="hero-tenant-label">Workspace</span>
+                <strong id="workspace-badge">SalesRep LATAM</strong>
+                <small id="workspace-plan-badge">Enterprise plan</small>
+              </div>
+              <div class="hero-tenant-card">
+                <label for="active-user-select" class="hero-tenant-label">Active User</label>
+                <select id="active-user-select" class="hero-user-select"></select>
+                <small id="workspace-user-role">Administrator access</small>
+              </div>
             </div>
 
           <div class="hero-actions">
             <button id="reset-demo-button" class="button button-ghost">Reload Reference</button>
             <button id="reload-excel-button" class="button button-ghost">Refresh Workbook</button>
+            <button id="upload-excel-button" class="button button-ghost">Upload Excel</button>
             <button id="download-excel-button" class="button button-secondary">Download Excel</button>
+            <input id="upload-excel-input" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" hidden />
           </div>
         </div>
 
@@ -55,27 +77,27 @@
           </div>
         </section>
 
-        <section class="hero-stats" aria-label="Resumen ejecutivo">
-          <article class="stat-card">
+        <section id="hero-stats" class="hero-stats" aria-label="Resumen ejecutivo">
+          <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="weighted-forecast">
             <span>Weighted Forecast</span>
             <strong id="hero-pipeline-value">€0</strong>
             <small>Probability-weighted expected account output</small>
-          </article>
-          <article class="stat-card">
+          </button>
+          <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="commit-forecast">
             <span>Commit Forecast</span>
             <strong id="hero-signed-count">0</strong>
             <small>Deals carrying high execution confidence</small>
-          </article>
-          <article class="stat-card">
-            <span>Live Accounts</span>
+          </button>
+          <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="active-accounts">
+            <span>Active Accounts</span>
             <strong id="hero-live-count">0</strong>
-            <small>Accounts already operational or in production</small>
-          </article>
-          <article class="stat-card accent-card">
+            <small>Accounts already live and inside handover management</small>
+          </button>
+          <button type="button" class="stat-card accent-card is-clickable" data-action="open-executive-kpi" data-kpi-key="at-risk">
             <span>At Risk</span>
             <strong id="hero-dd-aging">0</strong>
             <small>Accounts with blockers or overdue follow-up</small>
-          </article>
+          </button>
         </section>
 
         <p id="app-banner" class="banner" aria-live="polite">
@@ -85,16 +107,60 @@
 
       <section class="view-nav-shell" aria-label="Primary navigation">
         <div class="view-nav-meta">
-          <p class="panel-kicker">Workspace navigation</p>
-          <p class="view-nav-text">Move across the executive view, commercial pipeline, targets, tasks, and KPI catalogue.</p>
+          <p class="panel-kicker">Operating flow</p>
+          <p class="view-nav-text">Follow the commercial operating flow from market intelligence and target mapping to execution, go live, handover, and performance review.</p>
         </div>
         <nav class="view-switcher" aria-label="Secciones de la app">
           <button class="view-tab is-active" data-view-trigger="dashboard">Dashboard</button>
-          <button class="view-tab" data-view-trigger="pipeline">Pipeline</button>
-          <button class="view-tab" data-view-trigger="targets">Targets</button>
-          <button class="view-tab" data-view-trigger="tasks">Tasks</button>
-          <button class="view-tab" data-view-trigger="catalogue">KPI Catalogue</button>
+          <button class="view-tab" data-view-trigger="admin">1. Setup</button>
+          <button class="view-tab" data-view-trigger="crm">2. Intelligence</button>
+          <button class="view-tab" data-view-trigger="pipeline">3. Funnel</button>
+          <button class="view-tab" data-view-trigger="tasks">4. Tasks & Jira</button>
+          <button class="view-tab" data-view-trigger="campaigns">5. Growth & Handover</button>
+          <button class="view-tab" data-view-trigger="targets">6. Targets & Forecast</button>
+          <button class="view-tab" data-view-trigger="catalogue">7. KPIs</button>
         </nav>
+      </section>
+
+      <section class="module-flow-shell" aria-label="Module workflow">
+        <div class="module-flow-head">
+          <div>
+            <p class="panel-kicker">Guided journey</p>
+            <h2>Onboarding, Initiation & Progress Flow</h2>
+          </div>
+          <span id="module-flow-summary" class="chip">0 of 6 modules ready</span>
+        </div>
+        <div id="module-flow-grid" class="module-flow-grid"></div>
+      </section>
+
+      <section class="workflow-command-shell" aria-label="Workflow command bar">
+        <div class="workflow-command-main">
+          <div class="workflow-command-block">
+            <span class="workflow-label">Current module</span>
+            <strong id="workflow-current-title">Executive Dashboard</strong>
+            <p id="workflow-current-copy">Use the executive dashboard to understand the current commercial picture before jumping into action.</p>
+          </div>
+          <div class="workflow-command-block workflow-command-block-next">
+            <span class="workflow-label">Recommended next</span>
+            <strong id="workflow-next-title">System Setup</strong>
+            <p id="workflow-next-copy">Complete system setup and assign active owners before moving accounts through the commercial funnel.</p>
+          </div>
+        </div>
+        <div class="workflow-command-side">
+          <div class="workflow-progress">
+            <div class="workflow-progress-copy">
+              <span class="workflow-label">Journey progress</span>
+              <strong id="workflow-progress-label">0% complete</strong>
+            </div>
+            <div class="workflow-progress-track">
+              <span id="workflow-progress-fill"></span>
+            </div>
+          </div>
+          <div class="workflow-actions">
+            <button id="workflow-open-current" class="button button-ghost button-small">Open current module</button>
+            <button id="workflow-open-next" class="button button-primary button-small">Open recommended next</button>
+          </div>
+        </div>
       </section>
 
       <main class="views">
@@ -122,6 +188,17 @@
               <div id="forecast-summary" class="forecast-grid"></div>
             </section>
 
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">KPI interpretation</p>
+                  <h2>Executive KPI Readout</h2>
+                </div>
+                <span class="chip">What the numbers mean</span>
+              </div>
+              <div id="executive-kpi-readout" class="executive-readout-grid"></div>
+            </section>
+
             <section class="panel">
               <div class="panel-head">
                 <div>
@@ -129,27 +206,27 @@
                   <h2>Operating Signals</h2>
                 </div>
               </div>
-              <div class="signal-grid">
-                <article class="signal-card">
+              <div id="dashboard-signals" class="signal-grid">
+                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="legal">
                   <span>Deals in Legal</span>
                   <strong id="signal-legal">0</strong>
-                  <small>Accounts currently in legal review</small>
-                </article>
-                <article class="signal-card">
+                  <small>Accounts currently under legal review and contract negotiation</small>
+                </button>
+                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="dd">
                   <span>Deals in DD</span>
                   <strong id="signal-dd">0</strong>
                   <small>Active due diligence workload</small>
-                </article>
-                <article class="signal-card">
+                </button>
+                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="integration">
                   <span>Clients in Integration</span>
                   <strong id="signal-integration">0</strong>
                   <small>Implementations in active execution</small>
-                </article>
-                <article class="signal-card">
-                  <span>New Traffic</span>
+                </button>
+                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="handover-pending">
+                  <span>Handover Pending</span>
                   <strong id="signal-new-traffic">0</strong>
-                  <small>Deals tagged as new traffic generation</small>
-                </article>
+                  <small>Go live accounts still pending formal transfer</small>
+                </button>
               </div>
             </section>
 
@@ -166,8 +243,8 @@
             <section class="panel">
               <div class="panel-head">
                 <div>
-                  <p class="panel-kicker">Calendar pulse</p>
-                  <h2>Time Cadence</h2>
+                  <p class="panel-kicker">Execution cadence</p>
+                  <h2>Stage Duration</h2>
                 </div>
               </div>
               <div id="dashboard-timeline" class="timeline-bars"></div>
@@ -212,7 +289,7 @@
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Lead coverage</p>
-                  <h2>Leads by Market</h2>
+                  <h2>Lead and Qualified by Market</h2>
                 </div>
                 <span class="chip">Count + follow-up + task management</span>
               </div>
@@ -220,6 +297,17 @@
                 <div id="lead-market-counts" class="market-list"></div>
                 <div id="latest-leads-by-market" class="lead-feed"></div>
               </div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Market interpretation</p>
+                  <h2>Market Opportunity Narrative</h2>
+                </div>
+                <span class="chip">Opportunity + risk + target coverage</span>
+              </div>
+              <div id="market-interpretation-board" class="market-interpretation-board"></div>
             </section>
 
             <section class="panel panel-wide">
@@ -256,6 +344,162 @@
                 <span id="risk-count" class="chip">0 alerts</span>
               </div>
               <div id="risk-list" class="risk-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view="crm">
+          <div class="dashboard-layout crm-layout">
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Portfolio control</p>
+                  <h2>CRM Command Center</h2>
+                </div>
+                <span id="crm-portfolio-summary" class="chip">0 accounts</span>
+              </div>
+              <div id="crm-kpi-grid" class="forecast-grid"></div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Market intelligence</p>
+                  <h2>Market Intelligence & Target Mapping</h2>
+                </div>
+                <span id="market-intel-summary" class="chip">0 markets mapped</span>
+              </div>
+              <div class="crm-intel-layout">
+                <form id="market-intel-form" class="entity-form">
+                  <div class="form-section">
+                    <h3 id="market-intel-form-title">New Market Intelligence Record</h3>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        Country / Market
+                        <input name="country" type="text" placeholder="Peru" required />
+                      </label>
+                      <label>
+                        Regulatory Status
+                        <input name="regulatoryStatus" type="text" placeholder="Open, pending, restricted..." />
+                      </label>
+                      <label>
+                        License Type
+                        <input name="licenseType" type="text" placeholder="National, local, B2C..." />
+                      </label>
+                      <label>
+                        Regulatory Risk
+                        <select name="regulatoryRisk">
+                          <option>Low</option>
+                          <option>Medium</option>
+                          <option>High</option>
+                        </select>
+                      </label>
+                      <label>
+                        Opportunity Level
+                        <select name="opportunityLevel">
+                          <option>High Priority</option>
+                          <option>Medium</option>
+                          <option>Low</option>
+                          <option>Observation</option>
+                        </select>
+                      </label>
+                      <label>
+                        Revenue Potential (EUR)
+                        <input name="revenuePotentialEur" type="number" min="0" step="0.01" placeholder="0" />
+                      </label>
+                      <label class="full-span">
+                        Active Operators
+                        <textarea name="activeOperators" rows="3" placeholder="Comma-separated or one per line"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Target Operators
+                        <textarea name="targetOperators" rows="3" placeholder="Operators you want to convert into leads"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Competitors Present
+                        <textarea name="competitorsPresent" rows="2" placeholder="Competitor landscape"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Current Products
+                        <textarea name="currentProducts" rows="2" placeholder="Products already active in the market"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Missing Products / Whitespace
+                        <textarea name="missingProducts" rows="2" placeholder="Open product whitespace and white-label opportunities"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Strategic Notes
+                        <textarea name="strategicNotes" rows="4" placeholder="Strategic context, blockers, timing, and why this market matters"></textarea>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-actions">
+                    <button type="submit" id="market-intel-submit-button" class="button button-primary">Save Market Intelligence</button>
+                    <button type="button" id="market-intel-cancel-button" class="button button-ghost">Clear</button>
+                  </div>
+                </form>
+
+                <div class="crm-intel-stack">
+                  <section class="crm-score-shell">
+                    <div class="subpanel-head">
+                      <h3>Priority Market Radar</h3>
+                      <span class="chip">Whitespace + target operators + revenue potential</span>
+                    </div>
+                    <div id="market-intel-board" class="market-intel-board"></div>
+                  </section>
+
+                  <section class="crm-score-shell">
+                    <div class="subpanel-head">
+                      <h3>Opportunity Scoring Radar</h3>
+                      <span class="chip">Top opportunities by weighted commercial attractiveness</span>
+                    </div>
+                    <div id="opportunity-score-board" class="opportunity-score-board"></div>
+                  </section>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Execution by owner</p>
+                  <h2>Commercial Coverage</h2>
+                </div>
+                <span id="crm-owner-summary" class="chip">0 owners</span>
+              </div>
+              <div id="crm-owner-board" class="crm-owner-board"></div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Operator portfolio</p>
+                  <h2>Account Control & Opportunity Scoring</h2>
+                </div>
+                <span class="chip">Target mapping, scoring, ownership, execution</span>
+              </div>
+
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Operator / Client</th>
+                      <th>Market</th>
+                      <th>Segment</th>
+                      <th>Owner</th>
+                      <th>Stage</th>
+                      <th>Score</th>
+                      <th>Priority</th>
+                      <th>Potential</th>
+                      <th>Open Tasks</th>
+                      <th>Next Action</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="crm-operator-table-body"></tbody>
+                </table>
+              </div>
             </section>
           </div>
         </section>
@@ -303,15 +547,14 @@
                       Stage
                       <select name="stage">
                         <option>Lead</option>
-                        <option>New Business</option>
+                        <option>Qualified</option>
+                        <option>Proposal</option>
                         <option>Legal</option>
-                        <option>Signed</option>
                         <option>DD</option>
                         <option>Integration</option>
+                        <option>Legal Approval</option>
                         <option>Go Live</option>
-                        <option>Live</option>
-                        <option>On Hold</option>
-                        <option>Closed Lost</option>
+                        <option>Handover</option>
                       </select>
                     </label>
                     <label>
@@ -360,6 +603,98 @@
                     Status Text
                     <textarea name="statusText" rows="3" placeholder="Commercial or operating summary"></textarea>
                   </label>
+                </div>
+
+                <div class="form-section">
+                  <h3>Target Mapping & Opportunity Scoring</h3>
+                  <div class="form-grid form-grid-3">
+                    <label>
+                      Segment
+                      <input name="segment" type="text" placeholder="Online, retail, casino, sportsbook, lottery..." />
+                    </label>
+                    <label>
+                      Primary Contact
+                      <input name="primaryContact" type="text" placeholder="Main contact name" />
+                    </label>
+                    <label>
+                      Decision Maker
+                      <input name="decisionMaker" type="text" placeholder="Decision maker" />
+                    </label>
+                    <label>
+                      License Status
+                      <input name="licenseStatus" type="text" placeholder="Approved, pending, restricted..." />
+                    </label>
+                    <label>
+                      Current Competitors
+                      <input name="currentCompetitors" type="text" placeholder="Competitors currently active" />
+                    </label>
+                    <label>
+                      Target Priority
+                      <select name="targetPriority">
+                        <option>High Priority</option>
+                        <option>Medium</option>
+                        <option>Low</option>
+                        <option>Observation</option>
+                      </select>
+                    </label>
+                    <label>
+                      Revenue Potential (EUR)
+                      <input name="revenuePotentialEur" type="number" min="0" step="0.01" placeholder="0" />
+                    </label>
+                    <label class="full-span">
+                      Current Products
+                      <textarea name="productsCurrent" rows="2" placeholder="Products currently active with this operator"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Potential Products
+                      <textarea name="productsPotential" rows="2" placeholder="Products that could be opened through this account"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Strategic Fit
+                      <textarea name="strategicFit" rows="2" placeholder="Why this operator matters strategically for Evolution LATAM"></textarea>
+                    </label>
+                  </div>
+
+                  <p class="form-note">Complexity scores use higher values for higher complexity. SalesRep converts them into simplicity inside the weighted score.</p>
+
+                  <div class="form-grid form-grid-4">
+                    <label>
+                      Revenue Potential Score
+                      <input name="revenuePotentialScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Strategic Fit Score
+                      <input name="strategicFitScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Close Probability Score
+                      <input name="closeProbabilityScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      License Score
+                      <input name="licenseScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Legal Complexity Score
+                      <input name="legalComplexityScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Technical Complexity Score
+                      <input name="technicalComplexityScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Commercial Urgency Score
+                      <input name="commercialUrgencyScore" type="number" min="0" max="100" step="1" placeholder="0-100" />
+                    </label>
+                    <label>
+                      Opportunity Score
+                      <input name="opportunityScore" type="number" min="0" max="100" step="1" readonly />
+                    </label>
+                    <label>
+                      Priority Class
+                      <input name="priorityClass" type="text" readonly />
+                    </label>
+                  </div>
                 </div>
 
                 <div class="form-section">
@@ -424,11 +759,10 @@
                   <h3>Operating status</h3>
                   <div class="form-grid form-grid-2">
                     <label>
-                      Agreement
+                      Commercial Agreement
                       <select name="agreement">
                         <option>Not Started</option>
-                        <option>Drafting</option>
-                        <option>Negotiating</option>
+                        <option>Negotiation</option>
                         <option>Signed</option>
                         <option>Blocked</option>
                       </select>
@@ -447,8 +781,8 @@
                       DD Status
                       <select name="ddStatus">
                         <option>Not Started</option>
+                        <option>Started</option>
                         <option>In Progress</option>
-                        <option>Pending Client</option>
                         <option>Completed</option>
                         <option>Blocked</option>
                       </select>
@@ -457,8 +791,8 @@
                       Integration Status
                       <select name="integrationStatus">
                         <option>Not Started</option>
+                        <option>Started</option>
                         <option>In Progress</option>
-                        <option>UAT</option>
                         <option>Completed</option>
                         <option>Blocked</option>
                       </select>
@@ -467,8 +801,8 @@
                       Go Live Status
                       <select name="goLiveStatus">
                         <option>Not Started</option>
-                        <option>Ready for Sign-off</option>
-                        <option>Scheduled</option>
+                        <option>Legal Sign-Off</option>
+                        <option>Completed</option>
                         <option>Live</option>
                         <option>Blocked</option>
                       </select>
@@ -593,7 +927,7 @@
             <section class="panel content-panel pipeline-panel">
               <div class="panel-head">
                 <div>
-                  <p class="panel-kicker">Pipeline board</p>
+                  <p class="panel-kicker">Commercial funnel</p>
                   <h2>Pipeline Readout</h2>
                 </div>
                 <div class="head-actions">
@@ -799,8 +1133,12 @@
                   <h3>Task definition</h3>
                   <div class="form-grid form-grid-2">
                     <label>
+                      Task Number
+                      <input name="taskNumber" type="text" placeholder="Assigned on save" readonly />
+                    </label>
+                    <label>
                       Title
-                      <input name="title" type="text" placeholder="Ej. Follow-up legal Argentina" required />
+                      <input name="title" type="text" placeholder="Ex. Argentina legal follow-up" required />
                     </label>
                     <label>
                       Scope Type
@@ -836,8 +1174,8 @@
                       <input name="dueDate" type="date" />
                     </label>
                     <label>
-                      Owner
-                      <input name="owner" type="text" placeholder="Owner responsable" />
+                      Assignee
+                      <select name="owner"></select>
                     </label>
                     <label>
                       Deal ID
@@ -921,6 +1259,7 @@
                 <table class="data-table">
                   <thead>
                     <tr>
+                      <th>Task #</th>
                       <th>Title</th>
                       <th>Scope</th>
                       <th>Status</th>
@@ -932,6 +1271,354 @@
                     </tr>
                   </thead>
                   <tbody id="task-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view="campaigns">
+          <div class="workspace">
+            <section class="panel form-panel sticky-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Promotional planning</p>
+                  <h2 id="campaign-form-title">New Campaign</h2>
+                </div>
+                <span id="campaign-live-count" class="chip">0 ready / live</span>
+              </div>
+
+              <form id="campaign-form" class="entity-form">
+                <div class="form-section">
+                  <h3>Campaign brief</h3>
+                  <div class="form-grid form-grid-2">
+                    <label>
+                      Title
+                      <input name="title" type="text" placeholder="Ex. Peru Q2 Free Spins Launch" required />
+                    </label>
+                    <label>
+                      Campaign Type
+                      <select name="campaignType">
+                        <option>Activation</option>
+                        <option>Tournament</option>
+                        <option>Giveaway</option>
+                        <option>Progressive</option>
+                        <option>Free Spins</option>
+                        <option>Promo Bundle</option>
+                      </select>
+                    </label>
+                    <label>
+                      Status
+                      <select name="status">
+                        <option>Planned</option>
+                        <option>Ready</option>
+                        <option>Live</option>
+                        <option>Paused</option>
+                        <option>Completed</option>
+                        <option>Cancelled</option>
+                      </select>
+                    </label>
+                    <label>
+                      Priority
+                      <select name="priority">
+                        <option>Critical</option>
+                        <option>High</option>
+                        <option selected>Medium</option>
+                        <option>Low</option>
+                      </select>
+                    </label>
+                    <label>
+                      Operator
+                      <input name="operator" type="text" placeholder="Operator" />
+                    </label>
+                    <label>
+                      Client
+                      <input name="client" type="text" placeholder="Client / account" />
+                    </label>
+                    <label>
+                      Deal ID
+                      <input name="dealId" type="text" placeholder="Linked deal ID" />
+                    </label>
+                    <label>
+                      Deal
+                      <input name="deal" type="text" placeholder="Linked deal" />
+                    </label>
+                    <label>
+                      Market
+                      <input name="market" type="text" placeholder="Market" />
+                    </label>
+                    <label>
+                      Owner
+                      <input name="owner" type="text" placeholder="Campaign owner" />
+                    </label>
+                    <label>
+                      Channel
+                      <input name="channel" type="text" placeholder="CRM, onsite, VIP, affiliates..." />
+                    </label>
+                    <label>
+                      Jira Ticket
+                      <input name="jiraTicket" type="text" placeholder="Jira ticket / link" />
+                    </label>
+                    <label>
+                      Start Date
+                      <input name="startDate" type="date" />
+                    </label>
+                    <label>
+                      End Date
+                      <input name="endDate" type="date" />
+                    </label>
+                    <label>
+                      Landing URL
+                      <input name="landingUrl" type="url" placeholder="https://promo..." />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-section">
+                  <h3>Budget and KPI targets</h3>
+                  <div class="form-grid form-grid-3">
+                    <label>
+                      Budget EUR
+                      <input name="budgetEur" type="number" min="0" step="0.01" />
+                    </label>
+                    <label>
+                      Prize Value EUR
+                      <input name="prizeValueEur" type="number" min="0" step="0.01" />
+                    </label>
+                    <label>
+                      Forecast Lift EUR
+                      <input name="forecastLiftEur" type="number" min="0" step="0.01" />
+                    </label>
+                    <label>
+                      Target Players
+                      <input name="targetPlayers" type="number" min="0" step="1" />
+                    </label>
+                    <label>
+                      Target Wager
+                      <input name="targetWager" type="number" min="0" step="0.01" />
+                    </label>
+                    <label>
+                      Target GGR
+                      <input name="targetGgr" type="number" min="0" step="0.01" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-section">
+                  <h3>Mechanic and execution</h3>
+                  <div class="form-grid form-grid-2">
+                    <label class="full-span">
+                      Mechanic
+                      <textarea name="mechanic" rows="3" placeholder="Promo mechanic: activation, leaderboard, draw, jackpot, free spins, etc."></textarea>
+                    </label>
+                    <label class="full-span">
+                      Offer Details
+                      <textarea name="offerDetails" rows="3" placeholder="Reward structure, qualification rules, timing, segmentation..."></textarea>
+                    </label>
+                    <label class="full-span">
+                      Success Metric
+                      <textarea name="successMetric" rows="2" placeholder="Main KPI to measure performance and ROI"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Next Step
+                      <textarea name="nextStep" rows="3" placeholder="Next execution step"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Notes
+                      <textarea name="notes" rows="3" placeholder="Commercial rationale, blockers, or dependencies"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Add Trace Entry
+                      <textarea name="traceEntry" rows="3" placeholder="New campaign update for the trace log"></textarea>
+                    </label>
+                    <label class="full-span">
+                      Trace Log
+                      <textarea name="traceLog" rows="5" placeholder="Historical campaign trace" readonly></textarea>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" id="campaign-submit-button" class="button button-primary">Save Campaign</button>
+                  <button type="button" id="campaign-cancel-button" class="button button-ghost">Clear</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel content-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Operator promotions</p>
+                  <h2>Campaigns by operator and market</h2>
+                </div>
+                <div class="head-actions">
+                  <span id="campaign-summary" class="chip">0 campaigns</span>
+                  <button id="export-campaigns-csv" class="button button-ghost button-small">Export CSV</button>
+                </div>
+              </div>
+
+              <div id="campaign-board" class="campaign-board"></div>
+
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Title</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Operator</th>
+                      <th>Market</th>
+                      <th>Window</th>
+                      <th>Budget / Forecast</th>
+                      <th>Latest Trace</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="campaign-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view="admin">
+          <div class="workspace">
+            <section class="panel form-panel sticky-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">SaaS administration</p>
+                  <h2 id="workspace-form-title">Workspace Settings</h2>
+                </div>
+                <span id="admin-license-summary" class="chip">Enterprise</span>
+              </div>
+
+              <form id="workspace-form" class="entity-form">
+                <div class="form-section">
+                  <h3>Workspace</h3>
+                  <div class="form-grid form-grid-2">
+                    <label>
+                      Workspace Name
+                      <input name="workspaceName" type="text" placeholder="SalesRep LATAM" required />
+                    </label>
+                    <label>
+                      Organization
+                      <input name="organizationName" type="text" placeholder="Evolution LATAM" required />
+                    </label>
+                    <label>
+                      Admin Name
+                      <input name="adminName" type="text" placeholder="Workspace admin" />
+                    </label>
+                    <label>
+                      Admin Email
+                      <input name="adminEmail" type="email" placeholder="admin@company.com" />
+                    </label>
+                    <label>
+                      Plan
+                      <select name="subscriptionPlan">
+                        <option>Starter</option>
+                        <option>Growth</option>
+                        <option selected>Enterprise</option>
+                      </select>
+                    </label>
+                    <label>
+                      CRM Model
+                      <input name="crmModel" type="text" placeholder="New + Existing Accounts" />
+                    </label>
+                    <label>
+                      Fiscal Year
+                      <input name="fiscalYear" type="number" min="2024" max="2035" />
+                    </label>
+                    <label>
+                      Currency
+                      <input name="defaultCurrency" type="text" placeholder="EUR" maxlength="10" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" id="workspace-submit-button" class="button button-primary">Save Workspace</button>
+                  <button type="button" id="workspace-cancel-button" class="button button-ghost">Reset</button>
+                </div>
+              </form>
+
+              <form id="user-form" class="entity-form">
+                <div class="form-section">
+                  <h3>User Administration</h3>
+                  <div class="form-grid form-grid-2">
+                    <label>
+                      Full Name
+                      <input name="fullName" type="text" placeholder="User full name" required />
+                    </label>
+                    <label>
+                      Email
+                      <input name="email" type="email" placeholder="user@company.com" required />
+                    </label>
+                    <label>
+                      Role
+                      <select name="role">
+                        <option>Administrator</option>
+                        <option>Sales Manager</option>
+                        <option>Account Manager</option>
+                        <option>Revenue Ops</option>
+                        <option>Viewer</option>
+                      </select>
+                    </label>
+                    <label>
+                      Status
+                      <select name="status">
+                        <option>Active</option>
+                        <option>Invited</option>
+                        <option>Suspended</option>
+                      </select>
+                    </label>
+                    <label>
+                      Team
+                      <input name="team" type="text" placeholder="Commercial, Operations..." />
+                    </label>
+                    <label>
+                      Market Focus
+                      <input name="marketFocus" type="text" placeholder="LATAM, Peru, Mexico..." />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" id="user-submit-button" class="button button-primary">Save User</button>
+                  <button type="button" id="user-cancel-button" class="button button-ghost">Clear</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel content-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Tenant control</p>
+                  <h2>User Access & Admin Governance</h2>
+                </div>
+                <div class="head-actions">
+                  <span id="user-summary" class="chip">0 users</span>
+                  <span id="admin-access-summary" class="chip">0 admins</span>
+                </div>
+              </div>
+
+              <div id="admin-workspace-cards" class="decision-grid"></div>
+              <div id="user-board" class="crm-owner-board"></div>
+
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Team</th>
+                      <th>Market Focus</th>
+                      <th>Assigned Tasks</th>
+                      <th>Managed Accounts</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="user-table-body"></tbody>
                 </table>
               </div>
             </section>
