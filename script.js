@@ -5,6 +5,7 @@ const API_SAVE_URL = resolveApiUrl("/api/save");
 const API_RESET_DEMO_URL = resolveApiUrl("/api/reset-demo");
 const API_DOWNLOAD_URL = resolveApiUrl("/api/download");
 const API_UPLOAD_URL = resolveApiUrl("/api/upload");
+const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
 const BROWSER_STATE_STORAGE_KEY = "salesrep-published-state-v1";
@@ -54,10 +55,143 @@ const STAGE_CADENCE_MILESTONES = [
   ["Lead", "prospectDate"],
   ["Proposal", "offerDate"],
   ["Legal", "signedEta"],
+  ["DD", "ddDate"],
   ["Integration", "integrationDate"],
   ["Go Live", "liveDate"],
   ["Handover", "handover"],
 ];
+
+const DOCUMENT_STAGE_ACTIONS = {
+  legal: {
+    targetStage: "Legal",
+    statusField: "legalStatus",
+    statusValue: "In Review",
+    preserveValues: ["In Review", "Counterparty Review", "Approved", "Blocked"],
+    actionLabel: "Legal Request",
+  },
+  proposal: {
+    targetStage: "Proposal",
+    dateField: "offerDate",
+    actionLabel: "Business Proposal",
+  },
+  dd: {
+    targetStage: "DD",
+    dateField: "ddDate",
+    statusField: "ddStatus",
+    statusValue: "Started",
+    flagField: "ddStartedFlag",
+    actionLabel: "DD Request",
+  },
+  integration: {
+    targetStage: "Integration",
+    dateField: "integrationDate",
+    statusField: "integrationStatus",
+    statusValue: "Started",
+    flagField: "integrationStartedFlag",
+    actionLabel: "Integration Request",
+  },
+};
+
+const REQUEST_HUB_DEFINITIONS = [
+  {
+    key: "proposal",
+    title: "Commercial Proposal",
+    description: "Control pricing, scope, validity, and negotiated terms before contract kickoff.",
+    stageHint: "Lead · Qualified · Proposal",
+    emptyLabel: "No visible accounts are currently sitting in the commercial proposal lane.",
+  },
+  {
+    key: "legal",
+    title: "Legal Request",
+    description: "Start the new service agreement with full client information and commercials already aligned.",
+    stageHint: "Proposal · Legal",
+    emptyLabel: "No visible accounts currently require a legal request handoff.",
+  },
+  {
+    key: "dd",
+    title: "DD Request",
+    description: "Launch due diligence with compliance contacts, documents, and DD ownership clearly identified.",
+    stageHint: "Legal · DD",
+    emptyLabel: "No visible accounts are currently waiting for DD initiation or follow-up.",
+  },
+  {
+    key: "integration",
+    title: "Integration Request",
+    description: "Send the technical kickoff with Jira, products, channels, launch scope, and delivery owners.",
+    stageHint: "DD · Integration",
+    emptyLabel: "No visible accounts are currently inside the integration request lane.",
+  },
+  {
+    key: "approval",
+    title: "Legal Approval",
+    description: "Control final sign-off before launch and highlight the accounts closest to Go Live readiness.",
+    stageHint: "Legal Approval · Go Live",
+    emptyLabel: "No visible accounts are currently in final legal approval.",
+  },
+];
+
+const STAGE_OPERATION_BLUEPRINT = {
+  Lead: {
+    objective: "Map the account, assign ownership, and establish the first commercial contact baseline.",
+    nextStage: "Qualified",
+    ownerHint: "Sales Rep / KAM",
+    primaryActionKind: null,
+  },
+  Qualified: {
+    objective: "Validate that the operator has real commercial potential, product fit, and decision-making access.",
+    nextStage: "Proposal",
+    ownerHint: "Sales Rep / KAM",
+    primaryActionKind: "proposal",
+  },
+  Proposal: {
+    objective: "Turn the opportunity into a formal commercial offer with pricing, scope, and validity controlled.",
+    nextStage: "Legal",
+    ownerHint: "Sales Rep / Sales Manager",
+    primaryActionKind: "proposal",
+  },
+  Legal: {
+    objective: "Launch the service agreement with full client information and the commercials already agreed.",
+    nextStage: "DD",
+    ownerHint: "Legal + Sales",
+    primaryActionKind: "legal",
+  },
+  DD: {
+    objective: "Open due diligence with named contacts, documents, and compliance evidence ready to review.",
+    nextStage: "Integration",
+    ownerHint: "Compliance / Sales Ops",
+    primaryActionKind: "dd",
+  },
+  Integration: {
+    objective: "Kick off technical execution with Jira, delivery contacts, URL, and product scope already locked.",
+    nextStage: "Legal Approval",
+    ownerHint: "Integration / Delivery",
+    primaryActionKind: "integration",
+  },
+  "Legal Approval": {
+    objective: "Confirm contract, DD, and integration are closed before authorizing launch readiness.",
+    nextStage: "Go Live",
+    ownerHint: "Legal / Ops / Sales",
+    primaryActionKind: null,
+  },
+  "Go Live": {
+    objective: "Confirm sign-off, launch timing, and operating readiness before the client is treated as active.",
+    nextStage: "Live",
+    ownerHint: "Operations / Account Team",
+    primaryActionKind: null,
+  },
+  Live: {
+    objective: "Stabilize the active client with follow-up cadence, growth ownership, and post-launch control.",
+    nextStage: "Handover",
+    ownerHint: "Account Management",
+    primaryActionKind: null,
+  },
+  Handover: {
+    objective: "Transfer the live client with context, contacts, blockers, and future opportunity visibility.",
+    nextStage: "Performance Review",
+    ownerHint: "Account Management / Regional Team",
+    primaryActionKind: null,
+  },
+};
 
 const KPI_CATALOGUE = [
   {
@@ -271,6 +405,7 @@ const PIPELINE_CSV_COLUMNS = [
   ["Priority Class", "priorityClass"],
   ["Prospect Date", "prospectDate"],
   ["Offer Date", "offerDate"],
+  ["DD Date", "ddDate"],
   ["Integration Date", "integrationDate"],
   ["Live Date", "liveDate"],
   ["Platform", "platform"],
@@ -303,6 +438,48 @@ const PIPELINE_CSV_COLUMNS = [
   ["DD TKT", "ddTicket"],
   ["Integration Chat", "skype"],
   ["Integration Email", "integrationEmail"],
+  ["Company Name", "companyName"],
+  ["Company Registration Number", "companyRegistrationNumber"],
+  ["Company Registered Address", "companyRegisteredAddress"],
+  ["Company Legal Representative", "companyLegalRepresentative"],
+  ["Company License", "companyLicense"],
+  ["Invoice Email", "invoiceEmail"],
+  ["Support Email", "supportEmail"],
+  ["Management Email", "managementEmail"],
+  ["DD Contact Name", "ddContactName"],
+  ["DD Contact Email", "ddContactEmail"],
+  ["Legal Representative Name", "legalRepresentativeName"],
+  ["Legal Representative ID", "legalRepresentativeId"],
+  ["Legal Representative Address", "legalRepresentativeAddress"],
+  ["Legal Representative Email", "legalRepresentativeEmail"],
+  ["Client Based", "clientBased"],
+  ["Other Live Suppliers", "otherLiveSuppliers"],
+  ["Integration Team", "integrationTeam"],
+  ["Teams Group", "teamsGroup"],
+  ["Integration Request", "integrationRequest"],
+  ["Other Info", "otherInfo"],
+  ["Document Client Name", "documentClientName"],
+  ["Proposal Validity Days", "proposalValidityDays"],
+  ["Proposal Valid Until", "proposalValidUntil"],
+  ["Proposal Request", "proposalRequest"],
+  ["Negotiated Products", "negotiatedProducts"],
+  ["Activation Requirements", "activationRequirements"],
+  ["Pricing Base", "pricingBase"],
+  ["Deduction Terms", "deductionTerms"],
+  ["Commercial Terms", "commercialTerms"],
+  ["Commercial Schedule", "commercialSchedule"],
+  ["Negotiation Scope", "negotiationScope"],
+  ["Setup Fee Status", "setupFeeStatus"],
+  ["Setup Fee Amount", "setupFeeAmount"],
+  ["Marketing Commitments", "marketingCommitments"],
+  ["Live Games Top Position", "liveGamesTopPosition"],
+  ["Slots Top Position", "slotsTopPosition"],
+  ["Deductions Allowed", "deductionsAllowed"],
+  ["Bonus Cap", "bonusCap"],
+  ["Gaming Tax", "gamingTax"],
+  ["Withholding Tax", "withholdingTax"],
+  ["Advance Payment", "advancePayment"],
+  ["Credit Notes", "creditNotes"],
   ["Comments", "comments"],
   ["Action Items", "actionItems"],
   ["Updates", "updates"],
@@ -454,6 +631,12 @@ const elements = {
   latamStageRadar: document.getElementById("latam-stage-radar"),
   riskList: document.getElementById("risk-list"),
   riskCount: document.getElementById("risk-count"),
+  requestsSummary: document.getElementById("requests-summary"),
+  requestsKpiGrid: document.getElementById("requests-kpi-grid"),
+  requestsFocusChip: document.getElementById("requests-focus-chip"),
+  requestsActiveDeal: document.getElementById("requests-active-deal"),
+  requestsFocusGrid: document.getElementById("requests-focus-grid"),
+  requestsBoard: document.getElementById("requests-board"),
   pipelineSearch: document.getElementById("pipeline-search"),
   pipelineSearchStatus: document.getElementById("pipeline-search-status"),
   pipelineSearchSuggestions: document.getElementById("pipeline-search-suggestions"),
@@ -466,8 +649,12 @@ const elements = {
   pipelineStageStrip: document.getElementById("pipeline-stage-strip"),
   pipelineBoard: document.getElementById("pipeline-board"),
   dealTableBody: document.getElementById("deal-table-body"),
+  dealWorkflowGuide: document.getElementById("deal-workflow-guide"),
+  dealWorkflowStageBadge: document.getElementById("deal-workflow-stage-badge"),
   dealFormTitle: document.getElementById("deal-form-title"),
   dealSubmitButton: document.getElementById("deal-submit-button"),
+  pipelineOperatingGuide: document.getElementById("pipeline-operating-guide"),
+  pipelineOperatingStageChip: document.getElementById("pipeline-operating-stage-chip"),
   targetFormTitle: document.getElementById("target-form-title"),
   targetSubmitButton: document.getElementById("target-submit-button"),
   targetSummaryTitle: document.getElementById("target-summary-title"),
@@ -501,6 +688,8 @@ const elements = {
   loadingOverlay: document.getElementById("app-loading-overlay"),
   loadingOverlayTitle: document.getElementById("loading-overlay-title"),
   loadingOverlayCopy: document.getElementById("loading-overlay-copy"),
+  openRequestsModuleButton: document.getElementById("open-requests-module-button"),
+  requestsOpenPipeline: document.getElementById("requests-open-pipeline"),
 };
 
 const ui = {
@@ -512,6 +701,7 @@ const ui = {
   editingCampaignId: null,
   editingUserId: null,
   activeUserId: "",
+  requestsFocus: "all",
   filters: {
     year: "All",
     quarter: "All",
@@ -681,6 +871,35 @@ function bindEvents() {
     resetDealForm();
     setBanner("Deal form cleared.", "default");
   });
+  document.getElementById("copy-legal-brief-button").addEventListener("click", () => {
+    void copyDealBrief("legal");
+  });
+  document.getElementById("copy-proposal-brief-button").addEventListener("click", () => {
+    void copyDealBrief("proposal");
+  });
+  document.getElementById("copy-integration-brief-button").addEventListener("click", () => {
+    void copyDealBrief("integration");
+  });
+  document.getElementById("copy-negotiation-brief-button").addEventListener("click", () => {
+    void copyDealBrief("negotiation");
+  });
+  elements.openRequestsModuleButton?.addEventListener("click", () => {
+    ui.activeView = "requests";
+    renderViewState();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  document.getElementById("export-contract-request-button").addEventListener("click", () => {
+    void exportDealDocx("legal");
+  });
+  document.getElementById("export-commercial-proposal-button").addEventListener("click", () => {
+    void exportDealDocx("proposal");
+  });
+  document.getElementById("export-dd-request-button").addEventListener("click", () => {
+    void exportDealDocx("dd");
+  });
+  document.getElementById("export-integration-request-button").addEventListener("click", () => {
+    void exportDealDocx("integration");
+  });
 
   marketIntelForm.addEventListener("submit", handleMarketIntelSubmit);
   document.getElementById("market-intel-cancel-button").addEventListener("click", () => {
@@ -822,11 +1041,23 @@ function bindEvents() {
   elements.targetProgress.addEventListener("click", handleTargetProgressAction);
   elements.pipelineBoard.addEventListener("click", handleDealAction);
   elements.dealTableBody.addEventListener("click", handleDealAction);
+  elements.dealWorkflowGuide?.addEventListener("click", handleDealWorkflowGuideAction);
+  elements.pipelineOperatingGuide?.addEventListener("click", handleStageFunnelAction);
   elements.crmOperatorTableBody.addEventListener("click", handleDealAction);
   elements.dashboardSpotlight.addEventListener("click", handleDealAction);
   elements.executiveKpiReadout.addEventListener("click", handleExecutiveKpiAction);
   elements.marketIntelBoard.addEventListener("click", handleMarketIntelAction);
   elements.marketInterpretationBoard.addEventListener("click", handleDealAction);
+  elements.riskList.addEventListener("click", handleDealAction);
+  elements.requestsKpiGrid?.addEventListener("click", handleRequestsAction);
+  elements.requestsActiveDeal?.addEventListener("click", handleRequestsAction);
+  elements.requestsFocusGrid?.addEventListener("click", handleRequestsAction);
+  elements.requestsBoard?.addEventListener("click", handleRequestsAction);
+  elements.requestsOpenPipeline?.addEventListener("click", () => {
+    ui.activeView = "pipeline";
+    renderViewState();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
     openWorkflowModule(getWorkflowCurrentAndNext().current.view);
@@ -1582,6 +1813,48 @@ function createEmptyDeal() {
     ddTicket: "",
     skype: "",
     integrationEmail: "",
+    companyName: "",
+    companyRegistrationNumber: "",
+    companyRegisteredAddress: "",
+    companyLegalRepresentative: "",
+    companyLicense: "",
+    invoiceEmail: "",
+    supportEmail: "",
+    managementEmail: "",
+    ddContactName: "",
+    ddContactEmail: "",
+    legalRepresentativeName: "",
+    legalRepresentativeId: "",
+    legalRepresentativeAddress: "",
+    legalRepresentativeEmail: "",
+    clientBased: "",
+    otherLiveSuppliers: "",
+    integrationTeam: "",
+    teamsGroup: "",
+    integrationRequest: "",
+    otherInfo: "",
+    documentClientName: "",
+    proposalValidityDays: 30,
+    proposalValidUntil: "",
+    proposalRequest: "",
+    negotiatedProducts: "",
+    activationRequirements: "",
+    pricingBase: "",
+    deductionTerms: "",
+    commercialTerms: "",
+    commercialSchedule: "",
+    negotiationScope: "",
+    setupFeeStatus: "",
+    setupFeeAmount: "",
+    marketingCommitments: "",
+    liveGamesTopPosition: "",
+    slotsTopPosition: "",
+    deductionsAllowed: "",
+    bonusCap: "",
+    gamingTax: "",
+    withholdingTax: "",
+    advancePayment: "",
+    creditNotes: "",
     updates: "",
   });
 }
@@ -1837,9 +2110,52 @@ function normalizeDeal(input) {
     ddTicket: cleanText(input.ddTicket),
     skype: cleanText(input.skype),
     integrationEmail: cleanText(input.integrationEmail),
+    companyName: cleanText(input.companyName),
+    companyRegistrationNumber: cleanText(input.companyRegistrationNumber),
+    companyRegisteredAddress: cleanText(input.companyRegisteredAddress),
+    companyLegalRepresentative: cleanText(input.companyLegalRepresentative),
+    companyLicense: cleanText(input.companyLicense),
+    invoiceEmail: cleanText(input.invoiceEmail),
+    supportEmail: cleanText(input.supportEmail),
+    managementEmail: cleanText(input.managementEmail),
+    ddContactName: cleanText(input.ddContactName),
+    ddContactEmail: cleanText(input.ddContactEmail),
+    legalRepresentativeName: cleanText(input.legalRepresentativeName),
+    legalRepresentativeId: cleanText(input.legalRepresentativeId),
+    legalRepresentativeAddress: cleanText(input.legalRepresentativeAddress),
+    legalRepresentativeEmail: cleanText(input.legalRepresentativeEmail),
+    clientBased: cleanText(input.clientBased),
+    otherLiveSuppliers: cleanText(input.otherLiveSuppliers),
+    integrationTeam: cleanText(input.integrationTeam),
+    teamsGroup: cleanText(input.teamsGroup),
+    integrationRequest: cleanText(input.integrationRequest),
+    otherInfo: cleanText(input.otherInfo),
+    documentClientName: cleanText(input.documentClientName),
+    proposalValidityDays: Math.max(1, toNullableNumber(input.proposalValidityDays) || base.proposalValidityDays),
+    proposalValidUntil: normalizeDateInput(input.proposalValidUntil),
+    proposalRequest: cleanText(input.proposalRequest),
+    negotiatedProducts: cleanText(input.negotiatedProducts),
+    activationRequirements: cleanText(input.activationRequirements),
+    pricingBase: cleanText(input.pricingBase),
+    deductionTerms: cleanText(input.deductionTerms),
+    commercialTerms: cleanText(input.commercialTerms),
+    commercialSchedule: cleanMultilineText(input.commercialSchedule),
+    negotiationScope: cleanText(input.negotiationScope),
+    setupFeeStatus: cleanText(input.setupFeeStatus),
+    setupFeeAmount: cleanText(input.setupFeeAmount),
+    marketingCommitments: cleanMultilineText(input.marketingCommitments),
+    liveGamesTopPosition: cleanText(input.liveGamesTopPosition),
+    slotsTopPosition: cleanText(input.slotsTopPosition),
+    deductionsAllowed: cleanMultilineText(input.deductionsAllowed),
+    bonusCap: cleanText(input.bonusCap),
+    gamingTax: cleanText(input.gamingTax),
+    withholdingTax: cleanText(input.withholdingTax),
+    advancePayment: cleanText(input.advancePayment),
+    creditNotes: cleanMultilineText(input.creditNotes),
     updates: cleanText(input.updates),
     prospectDate: normalizeDateInput(input.prospectDate),
     offerDate: normalizeDateInput(input.offerDate),
+    ddDate: normalizeDateInput(input.ddDate),
     integrationDate: normalizeDateInput(input.integrationDate),
     liveDate: normalizeDateInput(input.liveDate),
     casinoName: cleanText(input.casinoName),
@@ -2186,9 +2502,52 @@ function createDealShape() {
     ddTicket: "",
     skype: "",
     integrationEmail: "",
+    companyName: "",
+    companyRegistrationNumber: "",
+    companyRegisteredAddress: "",
+    companyLegalRepresentative: "",
+    companyLicense: "",
+    invoiceEmail: "",
+    supportEmail: "",
+    managementEmail: "",
+    ddContactName: "",
+    ddContactEmail: "",
+    legalRepresentativeName: "",
+    legalRepresentativeId: "",
+    legalRepresentativeAddress: "",
+    legalRepresentativeEmail: "",
+    clientBased: "",
+    otherLiveSuppliers: "",
+    integrationTeam: "",
+    teamsGroup: "",
+    integrationRequest: "",
+    otherInfo: "",
+    documentClientName: "",
+    proposalValidityDays: 30,
+    proposalValidUntil: "",
+    proposalRequest: "",
+    negotiatedProducts: "",
+    activationRequirements: "",
+    pricingBase: "",
+    deductionTerms: "",
+    commercialTerms: "",
+    commercialSchedule: "",
+    negotiationScope: "",
+    setupFeeStatus: "",
+    setupFeeAmount: "",
+    marketingCommitments: "",
+    liveGamesTopPosition: "",
+    slotsTopPosition: "",
+    deductionsAllowed: "",
+    bonusCap: "",
+    gamingTax: "",
+    withholdingTax: "",
+    advancePayment: "",
+    creditNotes: "",
     updates: "",
     prospectDate: "",
     offerDate: "",
+    ddDate: "",
     integrationDate: "",
     liveDate: "",
     casinoName: "",
@@ -2321,6 +2680,7 @@ function renderAll() {
   renderDashboard();
   renderCrmView();
   renderPipeline();
+  renderRequestsView();
   renderTargets();
   renderTasks();
   renderCampaigns();
@@ -2569,9 +2929,13 @@ function renderCrmView() {
           <td>${escapeHtml(deal.actionItems || deal.statusText || "No next action defined")}</td>
           <td>
             <div class="row-actions">
-              <button class="icon-button" data-action="edit-deal" data-id="${escapeHtml(deal.id)}">Edit Deal</button>
-              <button class="icon-button" data-action="create-task-from-deal" data-id="${escapeHtml(deal.id)}">Create Task</button>
-              <button class="icon-button" data-action="create-campaign-from-deal" data-id="${escapeHtml(deal.id)}">Create Campaign</button>
+              ${renderDealWorkflowDocumentButtons(deal, {
+                className: "icon-button",
+                includeTask: true,
+                includeCampaign: true,
+                includeEdit: true,
+                editLabel: "Edit Deal",
+              })}
             </div>
           </td>
         </tr>
@@ -2883,7 +3247,7 @@ function renderDashboardSpotlight(deals) {
     .map((deal) => {
       const health = getDealHealth(deal);
       return `
-        <button type="button" class="spotlight-card is-clickable" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">
+        <article class="spotlight-card">
           <div class="spotlight-main">
             <div>
               <strong>${escapeHtml(deal.deal)}</strong>
@@ -2898,17 +3262,18 @@ function renderDashboardSpotlight(deals) {
             <span>${usesValue ? formatCurrency(deal.dealValue) : escapeHtml(formatDealCommercialMetric(deal))}</span>
           </div>
           <p>${escapeHtml(deal.statusText || deal.comments || "No executive summary available.")}</p>
-        </button>
+          <div class="row-actions">
+            ${renderDealWorkflowDocumentButtons(deal, {
+              className: "icon-button",
+              includeTask: true,
+              includeEdit: true,
+              editLabel: "Edit Deal",
+            })}
+          </div>
+        </article>
       `;
     })
     .join("");
-
-  elements.dashboardSpotlight.querySelectorAll("[data-action='edit-deal']").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      openDealEditorById(button.dataset.id);
-    });
-  });
 }
 
 function renderForecastSummary(deals) {
@@ -3717,9 +4082,13 @@ function renderLeadTrackerCard(deal) {
           </label>
         </div>
         <div class="lead-task-actions">
-          <button type="button" class="button button-ghost button-small" data-action="create-task-from-deal" data-id="${escapeAttribute(deal.id)}">Create Task</button>
+          ${renderDealWorkflowDocumentButtons(deal, {
+            className: "button button-ghost button-small",
+            includeTask: true,
+            includeEdit: true,
+            editLabel: "Open Deal",
+          })}
           <button type="submit" class="button button-secondary button-small">Save Follow-Up</button>
-          <button type="button" class="button button-ghost button-small" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">Open Deal</button>
         </div>
       </form>
     </article>
@@ -3793,6 +4162,14 @@ function renderRiskList(deals) {
             <span><strong>Client:</strong> ${escapeHtml(item.deal.client || "N/A")}</span>
             <span><strong>Market:</strong> ${escapeHtml(item.deal.market || "N/A")}</span>
             <span><strong>Last Follow Up:</strong> ${formatDate(item.deal.lastFollowUp)}</span>
+          </div>
+          <div class="row-actions">
+            ${renderDealWorkflowDocumentButtons(item.deal, {
+              className: "icon-button",
+              includeTask: true,
+              includeEdit: true,
+              editLabel: "Edit Deal",
+            })}
           </div>
         </article>
       `;
@@ -3873,6 +4250,7 @@ function renderPipeline() {
   renderPipelineSearchStatus(deals.length, baseDeals.length, scopedDeals.length);
   renderPipelineSummary(deals);
   renderPipelineStageStrip(deals);
+  renderPipelineOperatingGuide(deals);
   renderPipelineBoard(deals);
   renderDealTable(deals);
 }
@@ -4054,12 +4432,19 @@ function renderPipelineBoard(deals) {
                   <span><strong>Platform:</strong> ${escapeHtml(deal.platform || "N/A")}</span>
                   <span><strong>Go Live:</strong> ${escapeHtml(deal.goLiveStatus || "N/A")}</span>
                 </div>
+                ${renderDealOperationalPulse(deal)}
                 ${renderStageStatusBlock(deal)}
+                ${renderRequestPackStatusBlock(deal)}
                 ${renderTrackingLinks(deal)}
                 <p>${escapeHtml(deal.statusText || deal.comments || "No operating summary available.")}</p>
                 <div class="kanban-actions">
-                  <button class="icon-button" data-action="create-campaign-from-deal" data-id="${escapeHtml(deal.id)}">Create Campaign</button>
-                  <button class="icon-button" data-action="edit-deal" data-id="${escapeHtml(deal.id)}">Edit</button>
+                  ${renderDealWorkflowDocumentButtons(deal, {
+                    className: "icon-button",
+                    includeTask: true,
+                    includeCampaign: true,
+                    includeEdit: true,
+                    editLabel: "Edit",
+                  })}
                   <button class="icon-button danger" data-action="delete-deal" data-id="${escapeHtml(deal.id)}">Delete</button>
                 </div>
               </article>
@@ -4116,12 +4501,17 @@ function renderDealTable(deals) {
           <td><span class="pill ${health.pillClass}">${escapeHtml(health.label)}</span></td>
           <td>${escapeHtml(formatDealCommercialMetric(deal))}</td>
           <td>${formatDate(deal.lastFollowUp)}</td>
-          <td class="table-status">${renderStageStatusBlock(deal, "compact")}</td>
+          <td class="table-status">${renderStageStatusBlock(deal, "compact")}${renderRequestPackStatusBlock(deal, "compact")}</td>
           <td class="table-tracking">${renderTrackingLinks(deal, "compact")}</td>
           <td>
             <div class="row-actions">
-              <button class="icon-button" data-action="create-campaign-from-deal" data-id="${escapeHtml(deal.id)}">Create Campaign</button>
-              <button class="icon-button" data-action="edit-deal" data-id="${escapeHtml(deal.id)}">Edit</button>
+              ${renderDealWorkflowDocumentButtons(deal, {
+                className: "icon-button",
+                includeTask: true,
+                includeCampaign: true,
+                includeEdit: true,
+                editLabel: "Edit",
+              })}
               <button class="icon-button danger" data-action="delete-deal" data-id="${escapeHtml(deal.id)}">Delete</button>
             </div>
           </td>
@@ -4129,6 +4519,220 @@ function renderDealTable(deals) {
       `;
     })
     .join("");
+}
+
+function renderRequestsView() {
+  if (!elements.requestsSummary || !elements.requestsKpiGrid || !elements.requestsActiveDeal || !elements.requestsFocusGrid || !elements.requestsBoard) {
+    return;
+  }
+
+  const scopedDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const buckets = REQUEST_HUB_DEFINITIONS.map((definition) => ({
+    ...definition,
+    deals: getRequestHubDeals(scopedDeals, definition.key),
+  }));
+  const activeLaneCount = buckets.filter((bucket) => bucket.deals.length > 0).length;
+  const focus = cleanText(ui.requestsFocus) || "all";
+  const activeDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+
+  elements.requestsSummary.textContent = `${activeLaneCount} active lanes`;
+  elements.requestsFocusChip.textContent = `Focus: ${focus === "all" ? "All requests" : getRequestHubTitle(focus)}`;
+  elements.requestsKpiGrid.innerHTML = buckets
+    .map((bucket) => {
+      return `
+        <button type="button" class="forecast-card is-clickable ${focus === bucket.key ? "is-selected" : ""}" data-request-focus="${escapeAttribute(bucket.key)}">
+          <span>${escapeHtml(bucket.title)}</span>
+          <strong>${escapeHtml(String(bucket.deals.length))}</strong>
+          <small>${escapeHtml(bucket.description)}</small>
+        </button>
+      `;
+    })
+    .join("");
+
+  if (!activeDeal) {
+    elements.requestsActiveDeal.innerHTML = `
+      <article class="requests-active-card is-empty">
+        <div class="requests-active-copy">
+          <strong>No deal is currently open in the workspace.</strong>
+          <p>Open any client from Funnel, Dashboard, Forecast, or Intelligence to launch Legal, Commercial, DD, or Integration requests from this hub with one click.</p>
+        </div>
+      </article>
+    `;
+  } else {
+    elements.requestsActiveDeal.innerHTML = `
+      <article class="requests-active-card">
+        <div class="requests-active-copy">
+          <span class="operational-guide-kicker">Active deal</span>
+          <strong>${escapeHtml(activeDeal.deal || activeDeal.client || activeDeal.operator || "Current deal")}</strong>
+          <p>${escapeHtml(buildDealContextLine(activeDeal))}</p>
+        </div>
+        <div class="row-actions">
+          ${renderDealWorkflowDocumentButtons(activeDeal, {
+            className: "button button-secondary button-small",
+            kinds: ["legal", "proposal", "dd", "integration"],
+            includeTask: true,
+            includeEdit: true,
+            editLabel: "Open Deal",
+          })}
+        </div>
+      </article>
+    `;
+  }
+
+  elements.requestsFocusGrid.innerHTML = `
+    <button type="button" class="request-focus-card ${focus === "all" ? "is-active" : ""}" data-request-focus="all">
+      <span>All Requests</span>
+      <strong>${escapeHtml(String(sumValues(buckets.map((bucket) => bucket.deals.length))))}</strong>
+      <small>See the full request worklist across legal, commercial, DD, integration, and approval.</small>
+    </button>
+    ${buckets
+      .map((bucket) => {
+        return `
+          <button type="button" class="request-focus-card ${focus === bucket.key ? "is-active" : ""}" data-request-focus="${escapeAttribute(bucket.key)}">
+            <span>${escapeHtml(bucket.title)}</span>
+            <strong>${escapeHtml(String(bucket.deals.length))}</strong>
+            <small>${escapeHtml(bucket.stageHint)}</small>
+          </button>
+        `;
+      })
+      .join("")}
+  `;
+
+  const visibleBuckets = focus === "all" ? buckets : buckets.filter((bucket) => bucket.key === focus);
+  elements.requestsBoard.innerHTML = visibleBuckets.length
+    ? visibleBuckets.map((bucket) => renderRequestHubLane(bucket, focus === "all" ? 6 : 24)).join("")
+    : '<div class="empty-state">No request lane is currently selected.</div>';
+}
+
+function renderRequestHubLane(bucket, maxItems = 6) {
+  const deals = bucket.deals.slice(0, maxItems);
+  const hiddenCount = Math.max(bucket.deals.length - deals.length, 0);
+
+  return `
+    <section class="request-lane">
+      <div class="subpanel-head">
+        <div>
+          <h3>${escapeHtml(bucket.title)}</h3>
+          <small>${escapeHtml(bucket.description)}</small>
+        </div>
+        <span class="chip">${escapeHtml(`${bucket.deals.length} accounts`)}</span>
+      </div>
+      ${
+        deals.length
+          ? `<div class="request-lane-grid">${deals.map((deal) => renderRequestHubDealCard(deal, bucket.key)).join("")}</div>`
+          : `<div class="empty-state">${escapeHtml(bucket.emptyLabel)}</div>`
+      }
+      ${
+        hiddenCount > 0
+          ? `<div class="request-lane-foot">${escapeHtml(`${hiddenCount} more accounts match this lane in the current time window.`)}</div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function renderRequestHubDealCard(deal, key) {
+  const guide = buildDealOperationalGuide(deal);
+  const health = getDealHealth(deal);
+  const buttons =
+    key === "approval"
+      ? renderDealWorkflowDocumentButtons(deal, {
+          className: "button button-secondary button-small",
+          kinds: [],
+          includeTask: true,
+          includeEdit: true,
+          editLabel: "Open Deal",
+        })
+      : renderDealWorkflowDocumentButtons(deal, {
+          className: "button button-secondary button-small",
+          kinds: [key],
+          includeTask: true,
+          includeEdit: true,
+          editLabel: "Open Deal",
+        });
+
+  return `
+    <article class="request-hub-card ${health.cardClass}">
+      <div class="request-hub-card-head">
+        <div>
+          <strong>${escapeHtml(deal.deal || deal.client || deal.operator || "Untitled account")}</strong>
+          <small>${escapeHtml(buildDealContextLine(deal))}</small>
+        </div>
+        <span class="pill ${health.pillClass}">${escapeHtml(deal.stage || "No stage")}</span>
+      </div>
+      <div class="request-hub-meta">
+        <span><strong>Market:</strong> ${escapeHtml(deal.market || "N/A")}</span>
+        <span><strong>Owner:</strong> ${escapeHtml(getDealOwner(deal) || "Unassigned")}</span>
+        <span><strong>Follow-up:</strong> ${escapeHtml(formatDate(deal.lastFollowUp))}</span>
+        <span><strong>Status:</strong> ${escapeHtml(getRequestHubStatusText(deal, key))}</span>
+      </div>
+      <p>${escapeHtml(guide.recommendation)}</p>
+      <div class="row-actions">${buttons}</div>
+    </article>
+  `;
+}
+
+function getRequestHubDeals(deals, key) {
+  return deals.filter((deal) => matchesRequestHubLane(deal, key)).sort((left, right) => {
+    const stageDiff = STAGE_ORDER.indexOf(cleanText(left.stage)) - STAGE_ORDER.indexOf(cleanText(right.stage));
+    if (stageDiff !== 0) {
+      return stageDiff;
+    }
+    return (daysSince(left.lastFollowUp) || 0) - (daysSince(right.lastFollowUp) || 0);
+  });
+}
+
+function matchesRequestHubLane(deal, key) {
+  const stage = cleanText(deal.stage);
+  const legalStatus = cleanText(deal.legalStatus);
+  const ddStatus = cleanText(deal.ddStatus);
+  const integrationStatus = cleanText(deal.integrationStatus);
+  const goLiveStatus = cleanText(deal.goLiveStatus);
+
+  if (key === "proposal") {
+    return ["Lead", "Qualified", "Proposal"].includes(stage) || hasAnyText(deal.proposalRequest, deal.commercialTerms, deal.commercialSchedule);
+  }
+
+  if (key === "legal") {
+    return ["Proposal", "Legal"].includes(stage) || (legalStatus && legalStatus !== "Not Started") || hasAnyText(deal.companyName, deal.companyRegistrationNumber, deal.companyLicense);
+  }
+
+  if (key === "dd") {
+    return ["Legal", "DD"].includes(stage) || (ddStatus && ddStatus !== "Not Started") || hasAnyText(deal.ddContactName, deal.ddContactEmail, deal.ddTicket);
+  }
+
+  if (key === "integration") {
+    return ["DD", "Integration"].includes(stage) || (integrationStatus && integrationStatus !== "Not Started") || hasAnyText(deal.integrationRequest, deal.integrationEmail, deal.jira);
+  }
+
+  if (key === "approval") {
+    return stage === "Legal Approval" || goLiveStatus === "Legal Sign-Off";
+  }
+
+  return false;
+}
+
+function getRequestHubStatusText(deal, key) {
+  if (key === "proposal") {
+    return deal.offerDate ? `Offer date ${formatDate(deal.offerDate)}` : deal.agreement || "Commercial scope pending";
+  }
+  if (key === "legal") {
+    return deal.legalStatus || deal.agreement || "Legal pack pending";
+  }
+  if (key === "dd") {
+    return deal.ddStatus || "DD pending";
+  }
+  if (key === "integration") {
+    return deal.integrationStatus || "Integration pending";
+  }
+  if (key === "approval") {
+    return deal.goLiveStatus || deal.legalStatus || "Approval pending";
+  }
+  return deal.status || "Pending";
+}
+
+function getRequestHubTitle(key) {
+  return REQUEST_HUB_DEFINITIONS.find((item) => item.key === key)?.title || "Requests";
 }
 
 function renderTargets() {
@@ -4590,60 +5194,13 @@ function renderKpiCatalogue() {
     .join("");
 }
 
-async function handleDealSubmit(event) {
-  event.preventDefault();
-
+function buildDealDraftFromForm(existingDeal) {
   const formData = new FormData(dealForm);
-  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
-  const draft = normalizeDeal({
-    ...existingDeal,
-    id: ui.editingDealId || generateId("deal"),
-    deal: formData.get("deal"),
-    client: formData.get("client"),
-    operator: formData.get("operator"),
-    groupName: formData.get("groupName"),
-    kam: formData.get("kam"),
-    type: formData.get("type"),
-    market: formData.get("market"),
-    jurisdiction: formData.get("jurisdiction"),
-    legalEntity: formData.get("legalEntity"),
-    siteStatus: formData.get("siteStatus"),
-    accountScope: formData.get("accountScope"),
-    segment: formData.get("segment"),
-    primaryContact: formData.get("primaryContact"),
-    decisionMaker: formData.get("decisionMaker"),
-    licenseStatus: formData.get("licenseStatus"),
-    productsCurrent: formData.get("productsCurrent"),
-    productsPotential: formData.get("productsPotential"),
-    currentCompetitors: formData.get("currentCompetitors"),
-    targetPriority: formData.get("targetPriority"),
-    strategicFit: formData.get("strategicFit"),
-    platform: formData.get("platform"),
-    stage: formData.get("stage"),
-    signingEta: formData.get("signingEta"),
-    signingYear: formData.get("signingYear"),
-    signingMonth: formData.get("signingMonth"),
-    dealValue: formData.get("dealValue"),
-    dealValueAlt: formData.get("dealValueAlt"),
-    revenuePotentialEur: formData.get("revenuePotentialEur"),
-    revenuePotentialScore: formData.get("revenuePotentialScore"),
-    strategicFitScore: formData.get("strategicFitScore"),
-    closeProbabilityScore: formData.get("closeProbabilityScore"),
-    licenseScore: formData.get("licenseScore"),
-    legalComplexityScore: formData.get("legalComplexityScore"),
-    technicalComplexityScore: formData.get("technicalComplexityScore"),
-    commercialUrgencyScore: formData.get("commercialUrgencyScore"),
-    opportunityScore: formData.get("opportunityScore"),
-    priorityClass: formData.get("priorityClass"),
-    legalStatus: formData.get("legalStatus"),
-    ddStatus: formData.get("ddStatus"),
-    integrationStatus: formData.get("integrationStatus"),
-    goLiveStatus: formData.get("goLiveStatus"),
+  return normalizeDeal({
+    ...(existingDeal || {}),
+    ...Object.fromEntries(formData.entries()),
+    id: ui.editingDealId || existingDeal?.id || generateId("deal"),
     newTraffic: formData.has("newTraffic"),
-    comments: formData.get("comments"),
-    actionItems: formData.get("actionItems"),
-    source: formData.get("source"),
-    statusText: formData.get("statusText"),
     leadFlag: formData.has("leadFlag"),
     signedFlag: formData.has("signedFlag"),
     ddStartedFlag: formData.has("ddStartedFlag"),
@@ -4651,48 +5208,14 @@ async function handleDealSubmit(event) {
     integrationStartedFlag: formData.has("integrationStartedFlag"),
     integrationCompletedFlag: formData.has("integrationCompletedFlag"),
     goLiveFlag: formData.has("goLiveFlag"),
-    month: formData.get("month"),
-    evo: formData.get("evo"),
-    status: formData.get("status"),
-    agreement: formData.get("agreement"),
-    integration: formData.get("integration"),
-    dd: formData.get("dd"),
-    signedEta: formData.get("signedEta"),
-    liveSince: formData.get("liveSince"),
-    lastFollowUp: formData.get("lastFollowUp"),
-    handover: formData.get("handover"),
-    prospectDate: formData.get("prospectDate"),
-    offerDate: formData.get("offerDate"),
-    integrationDate: formData.get("integrationDate"),
-    liveDate: formData.get("liveDate"),
-    brands: formData.get("brands"),
-    entityInfo: formData.get("entityInfo"),
-    casinoName: formData.get("casinoName"),
-    ezugiId: formData.get("ezugiId"),
-    evoInstance: formData.get("evoInstance"),
-    evoSkinId: formData.get("evoSkinId"),
-    ezugiSkin: formData.get("ezugiSkin"),
-    url: formData.get("url"),
-    jira: formData.get("jira"),
-    ddTicket: formData.get("ddTicket"),
-    skype: formData.get("skype"),
-    integrationEmail: formData.get("integrationEmail"),
-    updates: formData.get("updates"),
-    dbColumn1: formData.get("dbColumn1"),
-    dbColumn2: formData.get("dbColumn2"),
-    dbColumn3: formData.get("dbColumn3"),
-    dbColumn4: formData.get("dbColumn4"),
-    dbColumn5: formData.get("dbColumn5"),
-    dbColumn6: formData.get("dbColumn6"),
-    dbColumn7: formData.get("dbColumn7"),
-    dbColumn8: formData.get("dbColumn8"),
-    dbColumn9: formData.get("dbColumn9"),
-    dbColumn10: formData.get("dbColumn10"),
-    dbColumn11: formData.get("dbColumn11"),
-    dbColumn12: formData.get("dbColumn12"),
-    dbColumn13: formData.get("dbColumn13"),
-    dbColumn14: formData.get("dbColumn14"),
   });
+}
+
+async function handleDealSubmit(event) {
+  event.preventDefault();
+
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
 
   if (!draft.deal.trim()) {
     setBanner("El campo Deal es obligatorio.", "danger");
@@ -5123,6 +5646,28 @@ function openStageFunnelDrilldown(stage) {
   renderAll();
   window.scrollTo({ top: 0, behavior: "smooth" });
   setBanner(`Pipeline filtered to ${normalizedStage}: ${matchedDeals.length} matching deals.`, "success");
+}
+
+function handleDealWorkflowGuideAction(event) {
+  const documentButton = event.target.closest("[data-stage-doc-action]");
+  if (documentButton) {
+    void exportDealDocx(documentButton.dataset.stageDocAction);
+    return;
+  }
+
+  const taskButton = event.target.closest("[data-stage-prefill-task]");
+  if (!taskButton) {
+    return;
+  }
+
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  if (!hasAnyText(draft.deal, draft.client, draft.operator)) {
+    setBanner("Name the deal, client, or operator before creating a follow-up task.", "warn");
+    return;
+  }
+
+  prefillTaskFromDealSnapshot(draft);
 }
 
 function handleDashboardDrilldownAction(event) {
@@ -5602,6 +6147,34 @@ async function handleDealAction(event) {
     }
     return;
   }
+  if (action === "create-legal-request-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      void exportDealDocx("legal", sourceDeal);
+    }
+    return;
+  }
+  if (action === "create-proposal-request-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      void exportDealDocx("proposal", sourceDeal);
+    }
+    return;
+  }
+  if (action === "create-dd-request-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      void exportDealDocx("dd", sourceDeal);
+    }
+    return;
+  }
+  if (action === "create-integration-request-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      void exportDealDocx("integration", sourceDeal);
+    }
+    return;
+  }
 
   const deal = state.deals.find((item) => item.id === id);
   if (!deal) {
@@ -5696,6 +6269,20 @@ async function handleLeadTrackerSubmit(event) {
     buildExcelBanner(saved ? `Seguimiento actualizado: ${updatedLead.deal}.` : `Seguimiento actualizado solo en memoria: ${updatedLead.deal}.`),
     saved ? "success" : "warn"
   );
+}
+
+function handleRequestsAction(event) {
+  const focusButton = event.target.closest("[data-request-focus]");
+  if (focusButton) {
+    ui.requestsFocus = cleanText(focusButton.dataset.requestFocus) || "all";
+    renderRequestsView();
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-action]");
+  if (actionButton) {
+    void handleDealAction(event);
+  }
 }
 
 async function handleTargetAction(event) {
@@ -5871,17 +6458,11 @@ function openWorkflowModule(view) {
 
 function prefillTaskFromDeal(deal) {
   const draft = normalizeTask({
-    ...createEmptyTask(),
+    ...buildTaskPrefillFromSnapshot(deal),
     title: `Follow-up ${deal.client || deal.deal}`,
     scopeType: "Client",
     dealId: deal.id,
-    deal: deal.deal,
-    client: deal.client,
-    operator: deal.operator,
-    market: deal.market,
-    jiraTicket: deal.jira,
-    owner: deal.kam,
-    nextStep: deal.actionItems,
+    nextStep: deal.actionItems || buildDealOperationalGuide(deal).recommendation,
     notes: deal.statusText || deal.comments,
   });
   ui.activeView = "tasks";
@@ -5889,6 +6470,15 @@ function prefillTaskFromDeal(deal) {
   fillTaskForm(draft);
   renderViewState();
   setBanner(`Nueva tarea prefijada desde ${deal.deal}.`, "default");
+}
+
+function prefillTaskFromDealSnapshot(deal) {
+  const draft = buildTaskPrefillFromSnapshot(deal);
+  ui.activeView = "tasks";
+  ui.editingTaskId = null;
+  fillTaskForm(draft);
+  renderViewState();
+  setBanner(`Follow-up task prepared from ${deal.deal || deal.client || deal.operator || "current deal"}.`, "default");
 }
 
 function prefillTaskFromMarket(market) {
@@ -6036,6 +6626,7 @@ function fillDealForm(deal) {
     "handover",
     "prospectDate",
     "offerDate",
+    "ddDate",
     "integrationDate",
     "liveDate",
     "brands",
@@ -6050,6 +6641,48 @@ function fillDealForm(deal) {
     "ddTicket",
     "skype",
     "integrationEmail",
+    "companyName",
+    "companyRegistrationNumber",
+    "companyRegisteredAddress",
+    "companyLegalRepresentative",
+    "companyLicense",
+    "invoiceEmail",
+    "supportEmail",
+    "managementEmail",
+    "ddContactName",
+    "ddContactEmail",
+    "legalRepresentativeName",
+    "legalRepresentativeId",
+    "legalRepresentativeAddress",
+    "legalRepresentativeEmail",
+    "clientBased",
+    "otherLiveSuppliers",
+    "integrationTeam",
+    "teamsGroup",
+    "integrationRequest",
+    "otherInfo",
+    "documentClientName",
+    "proposalValidityDays",
+    "proposalValidUntil",
+    "proposalRequest",
+    "negotiatedProducts",
+    "activationRequirements",
+    "pricingBase",
+    "deductionTerms",
+    "commercialTerms",
+    "commercialSchedule",
+    "negotiationScope",
+    "setupFeeStatus",
+    "setupFeeAmount",
+    "marketingCommitments",
+    "liveGamesTopPosition",
+    "slotsTopPosition",
+    "deductionsAllowed",
+    "bonusCap",
+    "gamingTax",
+    "withholdingTax",
+    "advancePayment",
+    "creditNotes",
     "updates",
     "dbColumn1",
     "dbColumn2",
@@ -6493,11 +7126,15 @@ function buildPipelineFinderSuggestion(deal, normalizedQuery) {
     scorePipelineFinderField("Lead", deal.leadFlag ? deal.deal : "", normalizedQuery, 4),
     scorePipelineFinderField("Client", deal.client, normalizedQuery, 4),
     scorePipelineFinderField("Operator", deal.operator, normalizedQuery, 4),
+    scorePipelineFinderField("Company", deal.companyName, normalizedQuery, 4),
     scorePipelineFinderField("Market", deal.market, normalizedQuery, 3),
     scorePipelineFinderField("Casino", deal.casinoName, normalizedQuery, 3),
     scorePipelineFinderField("Group", deal.groupName, normalizedQuery, 3),
     scorePipelineFinderField("Jira", deal.jira, normalizedQuery, 3),
     scorePipelineFinderField("DD Ticket", deal.ddTicket, normalizedQuery, 3),
+    scorePipelineFinderField("Legal Representative", deal.legalRepresentativeName, normalizedQuery, 2),
+    scorePipelineFinderField("Proposal", deal.proposalRequest, normalizedQuery, 2),
+    scorePipelineFinderField("Integration Request", deal.integrationRequest, normalizedQuery, 2),
     scorePipelineFinderField("Website", deal.url, normalizedQuery, 2),
     scorePipelineFinderField("Integration Chat", deal.skype, normalizedQuery, 2),
   ].filter(Boolean);
@@ -7289,6 +7926,8 @@ function syncDealScoringPreview() {
   if (dealForm.elements.priorityClass) {
     dealForm.elements.priorityClass.value = scoring.priorityClass;
   }
+
+  renderDealWorkflowGuideFromForm();
 }
 
 function computeOpportunityScoring(input = {}) {
@@ -7715,6 +8354,624 @@ function renderStageStatusBlock(deal, density = "default") {
   `;
 }
 
+function renderRequestPackStatusBlock(deal, density = "default") {
+  const items = getRequestPackStatusItems(deal);
+  return `
+    <div class="request-status-grid ${density === "compact" ? "is-compact" : ""}">
+      ${items
+        .map((item) => {
+          return `
+            <article class="request-status-item">
+              <span>${escapeHtml(item.label)}</span>
+              <strong>${escapeHtml(item.value)}</strong>
+              ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getRequestPackStatusItems(deal) {
+  return [
+    buildRequestPackStatusItem("Legal Pack", [
+      { label: "Company", value: deal.companyName || deal.client || deal.legalEntity },
+      { label: "Registration", value: deal.companyRegistrationNumber },
+      { label: "Registered Address", value: deal.companyRegisteredAddress },
+      { label: "License", value: deal.companyLicense || deal.licenseStatus },
+      { label: "Invoice Email", value: deal.invoiceEmail },
+      { label: "DD Contact", value: deal.ddContactName && deal.ddContactEmail ? `${deal.ddContactName} ${deal.ddContactEmail}` : deal.ddContactName || deal.ddContactEmail },
+      { label: "Legal Representative", value: deal.legalRepresentativeName || deal.companyLegalRepresentative },
+      { label: "Legal Rep Email", value: deal.legalRepresentativeEmail },
+      { label: "Setup Fee", value: [deal.setupFeeStatus, deal.setupFeeAmount ? `EUR ${deal.setupFeeAmount}` : ""].filter(Boolean).join(" · ") },
+      { label: "Deductions Allowed", value: deal.deductionsAllowed },
+    ]),
+    buildRequestPackStatusItem("Proposal Brief", [
+      { label: "Proposal Request", value: deal.proposalRequest },
+      { label: "Products", value: deal.negotiatedProducts || deal.productsPotential || deal.productsCurrent },
+      { label: "Commercial Terms", value: deal.commercialTerms },
+      { label: "Commercial Schedule", value: deal.commercialSchedule },
+      { label: "Pricing Base", value: deal.pricingBase },
+      { label: "Deductions", value: deal.deductionTerms },
+      { label: "Validity", value: buildProposalValidityText(deal) },
+      { label: "Activation Requirements", value: deal.activationRequirements },
+    ]),
+    buildRequestPackStatusItem("DD Brief", [
+      { label: "DD Date", value: deal.ddDate },
+      { label: "DD Status", value: deal.ddStatus },
+      { label: "DD Contact", value: deal.ddContactName && deal.ddContactEmail ? `${deal.ddContactName} ${deal.ddContactEmail}` : deal.ddContactName || deal.ddContactEmail },
+      { label: "DD Ticket", value: deal.ddTicket },
+      { label: "License", value: deal.companyLicense || deal.licenseStatus },
+      { label: "Deductions Allowed", value: deal.deductionsAllowed || deal.deductionTerms },
+    ]),
+    buildRequestPackStatusItem("Integration Brief", [
+      { label: "Client Based", value: deal.clientBased || deal.jurisdiction },
+      { label: "URL", value: deal.url || deal.siteStatus },
+      { label: "Live Suppliers", value: deal.otherLiveSuppliers },
+      { label: "Integration Team", value: deal.integrationTeam },
+      { label: "Products", value: deal.productsPotential || deal.productsCurrent },
+      { label: "Integration Request", value: deal.integrationRequest },
+    ]),
+  ];
+}
+
+function buildRequestPackStatusItem(label, fields) {
+  const items = Array.isArray(fields) ? fields : [];
+  const completedItems = items.filter((item) => cleanText(item.value));
+  const missingItems = items.filter((item) => !cleanText(item.value)).map((item) => item.label);
+  const totalCount = items.length;
+  const completedCount = completedItems.length;
+  const value = `${completedCount}/${totalCount} ready`;
+  const note = missingItems.length ? `Missing: ${missingItems.slice(0, 2).join(", ")}${missingItems.length > 2 ? "..." : ""}` : "Ready for internal handoff";
+  return { label, value, note };
+}
+
+function getStageOperationBlueprint(stage) {
+  return STAGE_OPERATION_BLUEPRINT[cleanText(stage)] || STAGE_OPERATION_BLUEPRINT.Lead;
+}
+
+function getStageDocumentActionLabel(kind) {
+  return (
+    {
+      legal: "Start Legal Request",
+      proposal: "Create Business Proposal",
+      dd: "Create DD Request",
+      integration: "Create Integration Request",
+    }[cleanText(kind)] || "Create Workflow Document"
+  );
+}
+
+function getStageDocumentActionKinds() {
+  return ["legal", "proposal", "dd", "integration"];
+}
+
+function renderDealWorkflowDocumentButtons(deal, options = {}) {
+  const className = cleanText(options.className) || "icon-button";
+  const includeEdit = Boolean(options.includeEdit);
+  const editLabel = cleanText(options.editLabel) || "Edit";
+  const includeTask = Boolean(options.includeTask);
+  const includeCampaign = Boolean(options.includeCampaign);
+  const kinds = Array.isArray(options.kinds)
+    ? options.kinds.map((kind) => cleanText(kind)).filter(Boolean)
+    : getStageDocumentActionKinds();
+
+  const buttons = kinds.map((kind) => {
+    return `<button class="${escapeAttribute(className)}" data-action="create-${escapeAttribute(kind)}-request-from-deal" data-id="${escapeAttribute(
+      deal.id
+    )}">${escapeHtml(getStageDocumentActionLabel(kind))}</button>`;
+  });
+
+  if (includeTask) {
+    buttons.unshift(`<button class="${escapeAttribute(className)}" data-action="create-task-from-deal" data-id="${escapeAttribute(deal.id)}">Create Task</button>`);
+  }
+
+  if (includeCampaign) {
+    buttons.push(
+      `<button class="${escapeAttribute(className)}" data-action="create-campaign-from-deal" data-id="${escapeAttribute(deal.id)}">Create Campaign</button>`
+    );
+  }
+
+  if (includeEdit) {
+    buttons.push(`<button class="${escapeAttribute(className)}" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">${escapeHtml(editLabel)}</button>`);
+  }
+
+  return buttons.join("");
+}
+
+function buildOperationalRequirement(label, ready, note = "") {
+  return {
+    label,
+    ready: Boolean(ready),
+    note: cleanText(note),
+  };
+}
+
+function hasAnyText(...values) {
+  return values.some((value) => Boolean(cleanText(value)));
+}
+
+function hasAnyAmount(...values) {
+  return values.some((value) => Number(value || 0) > 0);
+}
+
+function isSignedAgreement(deal) {
+  return cleanText(deal.agreement) === "Signed";
+}
+
+function isGoLiveReadyStatus(status) {
+  return ["Legal Sign-Off", "Completed", "Live"].includes(cleanText(status));
+}
+
+function buildStageOperationalChecklist(stage, deal) {
+  const normalizedStage = cleanText(stage) || "Lead";
+  switch (normalizedStage) {
+    case "Lead":
+      return [
+        buildOperationalRequirement("Account identity", hasAnyText(deal.deal, deal.client, deal.operator), "Deal, client, or operator should be named."),
+        buildOperationalRequirement("Market assigned", hasAnyText(deal.market), "Market should be visible before qualification starts."),
+        buildOperationalRequirement("Owner assigned", hasAnyText(getDealOwner(deal)), "A clear KAM or owner is required."),
+        buildOperationalRequirement("Lead source logged", hasAnyText(deal.source), "Capture inbound, outbound, partner, or referral source."),
+        buildOperationalRequirement("Primary contact mapped", hasAnyText(deal.primaryContact, deal.decisionMaker), "At least one commercial contact should be known."),
+      ];
+    case "Qualified":
+      return [
+        buildOperationalRequirement("License status logged", hasAnyText(deal.licenseStatus, deal.companyLicense), "Regulatory or license context should be known."),
+        buildOperationalRequirement("Decision maker mapped", hasAnyText(deal.decisionMaker), "Commercial decision maker should be identified."),
+        buildOperationalRequirement("Product scope identified", hasAnyText(deal.productsPotential, deal.productsCurrent, deal.negotiatedProducts), "Products to sell should be clear."),
+        buildOperationalRequirement("Revenue potential estimated", hasAnyAmount(deal.revenuePotentialEur, deal.dealValue, deal.dealValueAlt), "Estimate the opportunity size."),
+        buildOperationalRequirement(
+          "Opportunity score completed",
+          Number(deal.opportunityScore || 0) > 0,
+          Number(deal.opportunityScore || 0) > 0 ? `Current score: ${Math.round(Number(deal.opportunityScore || 0))}` : "Score the account before preparing an offer."
+        ),
+      ];
+    case "Proposal":
+      return [
+        buildOperationalRequirement("Proposal request defined", hasAnyText(deal.proposalRequest), "Summarize what the client is asking for."),
+        buildOperationalRequirement("Products negotiated", hasAnyText(deal.negotiatedProducts, deal.productsPotential, deal.productsCurrent), "Product scope must be explicit."),
+        buildOperationalRequirement("Commercial schedule or terms", hasAnyText(deal.commercialSchedule, deal.commercialTerms), "Commercials must be ready to send."),
+        buildOperationalRequirement("Pricing and deductions base", hasAnyText(deal.pricingBase, deal.deductionTerms), "Pricing logic should be documented."),
+        buildOperationalRequirement("Proposal start date stamped", hasAnyText(deal.offerDate, deal.proposalValidUntil), "Use the proposal action to stamp the offer date and control validity."),
+      ];
+    case "Legal":
+      return [
+        buildOperationalRequirement(
+          "Client legal profile complete",
+          hasAnyText(deal.companyName) && hasAnyText(deal.companyRegistrationNumber) && hasAnyText(deal.companyRegisteredAddress),
+          "Company name, registration number, and registered address are required."
+        ),
+        buildOperationalRequirement(
+          "Representative and emails ready",
+          hasAnyText(deal.legalRepresentativeName, deal.companyLegalRepresentative) &&
+            hasAnyText(deal.invoiceEmail) &&
+            hasAnyText(deal.supportEmail) &&
+            hasAnyText(deal.managementEmail),
+          "Representative plus invoice, support, and management emails should be captured."
+        ),
+        buildOperationalRequirement(
+          "License and commercials attached",
+          hasAnyText(deal.companyLicense, deal.licenseStatus) && hasAnyText(deal.commercialSchedule, deal.commercialTerms),
+          "Legal should receive license context and agreed commercials."
+        ),
+        buildOperationalRequirement(
+          "Setup fee and deductions defined",
+          hasAnyText(deal.setupFeeStatus) && hasAnyText(deal.deductionsAllowed, deal.deductionTerms),
+          "Setup fee treatment and deductions allowed should be explicit."
+        ),
+        buildOperationalRequirement(
+          "Marketing or positioning commitments captured",
+          hasAnyText(deal.marketingCommitments, deal.liveGamesTopPosition, deal.slotsTopPosition),
+          "Commercial commitments should be reflected before contract drafting."
+        ),
+      ];
+    case "DD":
+      return [
+        buildOperationalRequirement("DD kickoff date set", hasAnyText(deal.ddDate), "Stamp the DD start date when the request is created."),
+        buildOperationalRequirement(
+          "DD contact mapped",
+          hasAnyText(deal.ddContactName) && hasAnyText(deal.ddContactEmail),
+          "Name and email should exist for the compliance owner."
+        ),
+        buildOperationalRequirement(
+          "License and company evidence ready",
+          hasAnyText(deal.companyLicense, deal.licenseStatus) && hasAnyText(deal.companyRegistrationNumber),
+          "License and company registration should be attached or logged."
+        ),
+        buildOperationalRequirement(
+          "Representative identification available",
+          hasAnyText(deal.legalRepresentativeId, deal.legalRepresentativeName, deal.companyLegalRepresentative),
+          "Representative name or ID should be visible for DD."
+        ),
+        buildOperationalRequirement("DD trace captured", hasAnyText(deal.ddTicket, deal.dd, deal.comments), "Use DD ticket or notes to track the request."),
+      ];
+    case "Integration":
+      return [
+        buildOperationalRequirement("Integration request defined", hasAnyText(deal.integrationRequest), "Technical scope should be written for delivery."),
+        buildOperationalRequirement("Jira ticket created", hasAnyText(deal.jira), "A Jira reference is expected when integration starts."),
+        buildOperationalRequirement(
+          "Technical contacts ready",
+          hasAnyText(deal.integrationTeam, deal.integrationEmail, deal.skype),
+          "Integration team, email, or chat should be available."
+        ),
+        buildOperationalRequirement("Website or environment mapped", hasAnyText(deal.url, deal.siteStatus), "Integration target URL should be visible."),
+        buildOperationalRequirement(
+          "Product scope locked",
+          hasAnyText(deal.negotiatedProducts, deal.productsPotential, deal.productsCurrent),
+          "Products and tables to activate should be explicit."
+        ),
+      ];
+    case "Legal Approval":
+      return [
+        buildOperationalRequirement("Agreement signed", isSignedAgreement(deal), "Commercial agreement should be signed."),
+        buildOperationalRequirement("Legal approved", cleanText(deal.legalStatus) === "Approved", "Legal status should be approved."),
+        buildOperationalRequirement("DD completed", cleanText(deal.ddStatus) === "Completed", "DD should be marked completed."),
+        buildOperationalRequirement("Integration completed", cleanText(deal.integrationStatus) === "Completed", "Integration should be completed."),
+        buildOperationalRequirement(
+          "Launch date visible",
+          hasAnyText(deal.liveDate, deal.liveSince) || isGoLiveReadyStatus(deal.goLiveStatus),
+          "Launch planning needs a date or sign-off status."
+        ),
+      ];
+    case "Go Live":
+      return [
+        buildOperationalRequirement("Go live sign-off confirmed", isGoLiveReadyStatus(deal.goLiveStatus), "Go live status should move beyond Not Started."),
+        buildOperationalRequirement("Live date recorded", hasAnyText(deal.liveDate, deal.liveSince), "Record launch date or live since."),
+        buildOperationalRequirement("Integration completed", cleanText(deal.integrationStatus) === "Completed", "Technical execution should be closed."),
+        buildOperationalRequirement(
+          "Operational support contact ready",
+          hasAnyText(deal.integrationEmail, deal.supportEmail, deal.managementEmail),
+          "An operational or support contact should exist for launch."
+        ),
+        buildOperationalRequirement("Launch follow-up logged", hasAnyText(deal.actionItems, deal.updates), "Document the first post-launch step."),
+      ];
+    case "Live":
+      return [
+        buildOperationalRequirement("Live since recorded", hasAnyText(deal.liveSince, deal.liveDate), "The account should have a live date."),
+        buildOperationalRequirement("Follow-up cadence active", hasAnyText(deal.lastFollowUp), "A recent follow-up date should exist."),
+        buildOperationalRequirement("Growth owner assigned", hasAnyText(getDealOwner(deal)), "The live account still needs a visible owner."),
+        buildOperationalRequirement("Growth next step logged", hasAnyText(deal.actionItems), "Capture the next growth move."),
+        buildOperationalRequirement(
+          "Growth plan or activation visible",
+          countLiveCampaignsForDeal(deal) > 0 || hasAnyText(deal.comments, deal.updates, deal.marketingCommitments),
+          "Use campaigns, notes, or commitments to frame the expansion plan."
+        ),
+      ];
+    case "Handover":
+      return [
+        buildOperationalRequirement("Handover date set", hasAnyText(deal.handover), "Record when the account moved to handover."),
+        buildOperationalRequirement("Live owner assigned", hasAnyText(getDealOwner(deal)), "Ownership should be explicit before transfer."),
+        buildOperationalRequirement(
+          "Account context documented",
+          hasAnyText(deal.statusText, deal.otherInfo, deal.entityInfo),
+          "Summarize the operating context for the receiving team."
+        ),
+        buildOperationalRequirement(
+          "Key contacts documented",
+          hasAnyText(deal.primaryContact, deal.decisionMaker, deal.supportEmail, deal.managementEmail),
+          "The receiving team should inherit contact visibility."
+        ),
+        buildOperationalRequirement(
+          "Future opportunities logged",
+          hasAnyText(deal.productsPotential, deal.otherInfo, deal.comments),
+          "Expansion notes should survive the transfer."
+        ),
+      ];
+    default:
+      return [];
+  }
+}
+
+function buildStageOperationalRecommendation(stage, deal, checklist, blueprint) {
+  const missing = checklist.filter((item) => !item.ready);
+  if (cleanText(stage) === "Proposal" && !cleanText(deal.offerDate)) {
+    return "Issue the business proposal to stamp the proposal start date and activate the validity window.";
+  }
+  if (cleanText(stage) === "Legal" && cleanText(deal.legalStatus) === "Not Started") {
+    return "Start the legal request so contract review begins with the agreed commercials and client profile already attached.";
+  }
+  if (cleanText(stage) === "DD" && !cleanText(deal.ddDate)) {
+    return "Create the DD request to formally stamp DD start and route compliance ownership.";
+  }
+  if (cleanText(stage) === "Integration" && !cleanText(deal.integrationDate)) {
+    return "Create the integration request to start delivery, stamp the date, and align Jira ownership.";
+  }
+  if (cleanText(stage) === "Live" && hasStaleFollowUp(deal)) {
+    return "Refresh live-account follow-up now so the active client does not drift without growth control.";
+  }
+  if (missing.length > 0) {
+    const labels = missing.slice(0, 2).map((item) => item.label.toLowerCase());
+    return `Complete ${labels.join(" and ")} before moving this account to ${blueprint.nextStage}.`;
+  }
+  if (cleanText(stage) === "Handover") {
+    return "The account is ready for transfer closeout and future-growth visibility.";
+  }
+  return `This account is operationally ready to move from ${stage} to ${blueprint.nextStage}.`;
+}
+
+function buildDealOperationalGuide(deal) {
+  const stage = cleanText(deal.stage) || "Lead";
+  const blueprint = getStageOperationBlueprint(stage);
+  const checklist = buildStageOperationalChecklist(stage, deal);
+  const readyCount = checklist.filter((item) => item.ready).length;
+  const missingItems = checklist.filter((item) => !item.ready);
+  const readyToAdvance = checklist.length > 0 && missingItems.length === 0;
+  const followUpGap = cleanText(deal.lastFollowUp) ? daysSince(deal.lastFollowUp) : null;
+  const blocked = isBlockedDeal(deal);
+  const toneClass = blocked ? "is-blocked" : readyToAdvance ? "is-ready" : "is-progress";
+  return {
+    deal,
+    stage,
+    blueprint,
+    checklist,
+    readyCount,
+    totalCount: checklist.length,
+    missingItems,
+    readyToAdvance,
+    followUpGap,
+    taskCount: countOpenTasksForDeal(deal),
+    liveCampaignCount: countLiveCampaignsForDeal(deal),
+    toneClass,
+    primaryActionKind: blueprint.primaryActionKind,
+    primaryActionLabel: blueprint.primaryActionKind ? getStageDocumentActionLabel(blueprint.primaryActionKind) : "",
+    recommendation: buildStageOperationalRecommendation(stage, deal, checklist, blueprint),
+  };
+}
+
+function renderOperationalChecklistItems(items) {
+  if (!items.length) {
+    return '<div class="empty-state">No operational requirements are mapped for this stage yet.</div>';
+  }
+
+  return items
+    .map((item) => {
+      return `
+        <article class="operational-check ${item.ready ? "is-ready" : "is-missing"}">
+          <span>${escapeHtml(item.ready ? "Ready" : "Missing")}</span>
+          <strong>${escapeHtml(item.label)}</strong>
+          ${item.note ? `<small>${escapeHtml(item.note)}</small>` : ""}
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function renderDealWorkflowGuideFromForm() {
+  if (!dealForm || !elements.dealWorkflowGuide || !elements.dealWorkflowStageBadge) {
+    return;
+  }
+
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const guide = buildDealOperationalGuide(draft);
+  const badgeTone = guide.toneClass === "is-ready" ? "success" : guide.toneClass === "is-blocked" ? "blocked" : "info";
+
+  elements.dealWorkflowStageBadge.className = `pill ${badgeTone}`;
+  elements.dealWorkflowStageBadge.textContent = `${guide.stage} Stage`;
+  elements.dealWorkflowGuide.innerHTML = `
+    <article class="operational-guide-card ${guide.toneClass}">
+      <div class="operational-guide-head">
+        <div class="operational-guide-copy">
+          <span class="operational-guide-kicker">Stage objective</span>
+          <strong>${escapeHtml(guide.blueprint.objective)}</strong>
+          <p>${escapeHtml(guide.recommendation)}</p>
+        </div>
+        <span class="pill ${badgeTone}">${guide.readyCount}/${guide.totalCount} ready</span>
+      </div>
+      <div class="operational-guide-metrics">
+        <article class="operational-guide-metric">
+          <span>Current owner</span>
+          <strong>${escapeHtml(getDealOwner(draft) || guide.blueprint.ownerHint)}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Next stage</span>
+          <strong>${escapeHtml(guide.blueprint.nextStage)}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Open tasks</span>
+          <strong>${escapeHtml(String(guide.taskCount))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Follow-up gap</span>
+          <strong>${guide.followUpGap === null ? "No date" : `${guide.followUpGap}d`}</strong>
+        </article>
+      </div>
+      <div class="operational-checklist">
+        ${renderOperationalChecklistItems(guide.checklist)}
+      </div>
+      <div class="operational-guide-actions">
+        ${getStageDocumentActionKinds()
+          .map((kind) => {
+            const variant = kind === guide.primaryActionKind ? "button-primary" : "button-ghost";
+            return `<button type="button" class="button ${variant} button-small" data-stage-doc-action="${escapeAttribute(kind)}">${escapeHtml(
+              getStageDocumentActionLabel(kind)
+            )}</button>`;
+          })
+          .join("")}
+        <button type="button" class="button button-ghost button-small" data-stage-prefill-task="true">Create Follow-up Task</button>
+      </div>
+    </article>
+  `;
+}
+
+function buildPipelineOperationalSummary(stage, deals) {
+  const stageDeals = deals.filter((deal) => deal.stage === stage);
+  const guides = stageDeals.map((deal) => buildDealOperationalGuide(deal));
+  const readyCount = guides.filter((guide) => guide.readyToAdvance).length;
+  const blockedCount = stageDeals.filter((deal) => isBlockedDeal(deal)).length;
+  const staleCount = stageDeals.filter((deal) => hasStaleFollowUp(deal)).length;
+  const openTasks = sumValues(stageDeals.map((deal) => countOpenTasksForDeal(deal)));
+  const missingMap = new Map();
+
+  guides.forEach((guide) => {
+    guide.missingItems.forEach((item) => {
+      missingMap.set(item.label, (missingMap.get(item.label) || 0) + 1);
+    });
+  });
+
+  const commonGaps = Array.from(missingMap.entries())
+    .map(([label, count]) => ({ label, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, 4);
+  const blueprint = getStageOperationBlueprint(stage);
+  const readinessRatio = stageDeals.length > 0 ? readyCount / stageDeals.length : 0;
+  const toneClass = blockedCount > 0 ? "is-blocked" : readinessRatio >= 0.7 ? "is-ready" : "is-progress";
+  const recommendation = commonGaps.length
+    ? `Before pushing more deals to ${blueprint.nextStage}, clean ${commonGaps[0].label.toLowerCase()} across the visible ${stage} accounts.`
+    : `Most visible ${stage} accounts are ready to move into ${blueprint.nextStage}.`;
+
+  return {
+    stage,
+    blueprint,
+    stageDeals,
+    readyCount,
+    blockedCount,
+    staleCount,
+    openTasks,
+    commonGaps,
+    toneClass,
+    recommendation,
+  };
+}
+
+function resolvePipelineOperationalFocusStage(deals) {
+  if (cleanText(ui.filters.stage) && ui.filters.stage !== "All") {
+    return ui.filters.stage;
+  }
+
+  if (ui.editingDealId) {
+    const activeDeal = deals.find((deal) => deal.id === ui.editingDealId);
+    if (activeDeal?.stage) {
+      return activeDeal.stage;
+    }
+  }
+
+  const stageCounts = STAGE_ORDER.map((stage) => ({
+    stage,
+    count: deals.filter((deal) => deal.stage === stage).length,
+  })).filter((entry) => entry.count > 0);
+
+  return stageCounts.sort((left, right) => right.count - left.count || getStageRank(left.stage) - getStageRank(right.stage))[0]?.stage || "Lead";
+}
+
+function renderPipelineOperatingGuide(deals) {
+  if (!elements.pipelineOperatingGuide || !elements.pipelineOperatingStageChip) {
+    return;
+  }
+
+  if (!deals.length) {
+    elements.pipelineOperatingStageChip.textContent = "Focus: No stage";
+    elements.pipelineOperatingGuide.innerHTML = '<div class="empty-state">No stage operating guidance is available because no deals match the current filters.</div>';
+    return;
+  }
+
+  const focusStage = resolvePipelineOperationalFocusStage(deals);
+  const summary = buildPipelineOperationalSummary(focusStage, deals);
+  const badgeTone = summary.toneClass === "is-ready" ? "success" : summary.toneClass === "is-blocked" ? "blocked" : "info";
+
+  elements.pipelineOperatingStageChip.textContent = `Focus: ${focusStage} · ${summary.stageDeals.length} accounts`;
+  elements.pipelineOperatingGuide.innerHTML = `
+    <article class="operational-guide-card ${summary.toneClass}">
+      <div class="operational-guide-head">
+        <div class="operational-guide-copy">
+          <span class="operational-guide-kicker">Stage objective</span>
+          <strong>${escapeHtml(summary.blueprint.objective)}</strong>
+          <p>${escapeHtml(summary.recommendation)}</p>
+        </div>
+        <span class="pill ${badgeTone}">${summary.readyCount}/${summary.stageDeals.length} ready</span>
+      </div>
+      <div class="operational-guide-metrics">
+        <article class="operational-guide-metric">
+          <span>Accounts in stage</span>
+          <strong>${escapeHtml(String(summary.stageDeals.length))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Ready to advance</span>
+          <strong>${escapeHtml(String(summary.readyCount))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Stale follow-up</span>
+          <strong>${escapeHtml(String(summary.staleCount))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Open tasks</span>
+          <strong>${escapeHtml(String(summary.openTasks))}</strong>
+        </article>
+      </div>
+      <div class="operational-guide-list-grid">
+        <section class="operational-guide-list">
+          <span>Common gaps</span>
+          ${
+            summary.commonGaps.length
+              ? `<ul>${summary.commonGaps
+                  .map((item) => `<li>${escapeHtml(item.label)} · ${escapeHtml(String(item.count))}</li>`)
+                  .join("")}</ul>`
+              : "<p>Visible accounts are not showing common blockers at this stage.</p>"
+          }
+        </section>
+        <section class="operational-guide-list">
+          <span>Execution move</span>
+          <p>${escapeHtml(summary.recommendation)}</p>
+          <small>${escapeHtml(
+            summary.blueprint.primaryActionKind
+              ? `Primary document: ${getStageDocumentActionLabel(summary.blueprint.primaryActionKind)}`
+              : `Next stage in the workflow: ${summary.blueprint.nextStage}`
+          )}</small>
+        </section>
+      </div>
+      <div class="operational-guide-actions">
+        <button type="button" class="button button-primary button-small" data-action="open-stage-funnel" data-stage="${escapeAttribute(
+          focusStage
+        )}">Open ${escapeHtml(focusStage)} List</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderDealOperationalPulse(deal) {
+  const guide = buildDealOperationalGuide(deal);
+  const badgeTone = guide.toneClass === "is-ready" ? "success" : guide.toneClass === "is-blocked" ? "blocked" : "info";
+  const missingPreview = guide.missingItems.slice(0, 2).map((item) => item.label).join(" · ");
+
+  return `
+    <div class="deal-operational-pulse ${guide.toneClass}">
+      <div class="deal-operational-pulse-head">
+        <span>Operational next move</span>
+        <strong>${escapeHtml(guide.blueprint.nextStage)}</strong>
+      </div>
+      <p>${escapeHtml(guide.recommendation)}</p>
+      <div class="pill-row is-compact">
+        <span class="pill ${badgeTone}">${escapeHtml(`${guide.readyCount}/${guide.totalCount} ready`)}</span>
+        ${
+          guide.primaryActionKind
+            ? `<span class="pill neutral">${escapeHtml(getStageDocumentActionLabel(guide.primaryActionKind))}</span>`
+            : `<span class="pill neutral">${escapeHtml(`Next: ${guide.blueprint.nextStage}`)}</span>`
+        }
+      </div>
+      <small>${escapeHtml(missingPreview ? `Missing: ${missingPreview}` : `Ready to move into ${guide.blueprint.nextStage}.`)}</small>
+    </div>
+  `;
+}
+
+function buildTaskPrefillFromSnapshot(deal) {
+  const guide = buildDealOperationalGuide(deal);
+  const existsInState = state.deals.some((item) => item.id === deal.id);
+  return normalizeTask({
+    ...createEmptyTask(),
+    title: `${guide.stage} follow-up ${deal.client || deal.operator || deal.deal || "account"}`,
+    scopeType: "Deal",
+    dealId: existsInState ? deal.id : "",
+    deal: deal.deal,
+    client: deal.client,
+    operator: deal.operator,
+    market: deal.market,
+    jiraTicket: deal.jira,
+    owner: getDealOwner(deal),
+    nextStep: guide.recommendation,
+    notes: composeDealStateLabel(deal) || deal.statusText || deal.comments,
+  });
+}
+
 function getLeadDeals(deals = getScopedDeals()) {
   return deals.filter((deal) => !isInactiveDeal(deal) && (deal.leadFlag || ["Lead", "Qualified"].includes(deal.stage)));
 }
@@ -7840,6 +9097,477 @@ function appendTraceLog(currentValue, entry) {
   const timestamp = new Date().toISOString().slice(0, 10);
   const item = `${timestamp} ${traceEntry}`;
   return existing ? `${existing} | ${item}` : item;
+}
+
+function buildBriefValue(...values) {
+  const resolved = values.map((value) => cleanText(value)).find(Boolean);
+  return resolved || "TBC";
+}
+
+function buildNegotiatedProductsValue(deal) {
+  return buildBriefValue(deal.negotiatedProducts, deal.productsPotential, deal.productsCurrent);
+}
+
+function buildDocumentClientName(deal) {
+  return buildBriefValue(deal.documentClientName, deal.companyName, deal.client, deal.operator, deal.deal);
+}
+
+function getProposalValidityDays(deal) {
+  const days = toNullableNumber(deal.proposalValidityDays);
+  return days && days > 0 ? days : 30;
+}
+
+function addDaysToIsoDate(value, days) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) {
+    return "";
+  }
+  const date = new Date(`${normalized}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function getProposalIssueDate(deal) {
+  return normalizeDateInput(deal.offerDate) || new Date().toISOString().slice(0, 10);
+}
+
+function getProposalValidUntil(deal) {
+  return normalizeDateInput(deal.proposalValidUntil) || addDaysToIsoDate(getProposalIssueDate(deal), getProposalValidityDays(deal));
+}
+
+function buildProposalValidityText(deal) {
+  const days = getProposalValidityDays(deal);
+  const validUntil = getProposalValidUntil(deal);
+  const monthHint = days >= 28 && days <= 31 ? " (1 month)" : "";
+  return validUntil ? `${days} days${monthHint} · valid until ${formatDate(validUntil)}` : `${days} days${monthHint} from issue date`;
+}
+
+function parseCommercialScheduleRows(value) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split("|").map((part) => cleanText(part));
+      if (parts.length >= 4) {
+        return {
+          product: parts[0],
+          tier: parts[1],
+          commercial: parts[2],
+          notes: parts.slice(3).join(" | "),
+        };
+      }
+      if (parts.length === 3) {
+        return {
+          product: parts[0],
+          tier: parts[1],
+          commercial: parts[2],
+          notes: "",
+        };
+      }
+      if (parts.length === 2) {
+        return {
+          product: parts[0],
+          tier: "",
+          commercial: parts[1],
+          notes: "",
+        };
+      }
+      return {
+        product: parts[0] || "",
+        tier: "",
+        commercial: "",
+        notes: "",
+      };
+    })
+    .filter((row) => row.product || row.commercial || row.notes);
+}
+
+function buildCommercialScheduleBriefLines(deal) {
+  const rows = parseCommercialScheduleRows(deal.commercialSchedule);
+  if (!rows.length) {
+    return [];
+  }
+  return rows.map((row) => {
+    const parts = [row.product, row.tier, row.commercial, row.notes].filter(Boolean);
+    return `- ${parts.join(" | ")}`;
+  });
+}
+
+function buildLegalRequestBrief(deal) {
+  const scheduleLines = buildCommercialScheduleBriefLines(deal);
+  return [
+    "New Service Agreement Request",
+    "",
+    `Deal: ${buildBriefValue(deal.deal)}`,
+    `Client / Company Name: ${buildDocumentClientName(deal)}`,
+    `Market: ${buildBriefValue(deal.market)}`,
+    `Type: ${buildBriefValue(deal.type)}`,
+    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
+    `Company registration number: ${buildBriefValue(deal.companyRegistrationNumber)}`,
+    `Company registered address: ${buildBriefValue(deal.companyRegisteredAddress)}`,
+    `Company legal representative: ${buildBriefValue(deal.companyLegalRepresentative, deal.legalRepresentativeName, deal.decisionMaker)}`,
+    `Company license: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
+    "",
+    `Email address for invoices: ${buildBriefValue(deal.invoiceEmail)}`,
+    `Email address for customer support: ${buildBriefValue(deal.supportEmail)}`,
+    `Email address for management: ${buildBriefValue(deal.managementEmail)}`,
+    "",
+    `DD Contact Name: ${buildBriefValue(deal.ddContactName)}`,
+    `DD Contact Email: ${buildBriefValue(deal.ddContactEmail)}`,
+    "",
+    "Legal Representative",
+    `Full name: ${buildBriefValue(deal.legalRepresentativeName, deal.companyLegalRepresentative)}`,
+    `ID: ${buildBriefValue(deal.legalRepresentativeId)}`,
+    `Address: ${buildBriefValue(deal.legalRepresentativeAddress)}`,
+    `Email: ${buildBriefValue(deal.legalRepresentativeEmail)}`,
+    "",
+    `Primary Contact: ${buildBriefValue(deal.primaryContact)}`,
+    `Decision Maker: ${buildBriefValue(deal.decisionMaker)}`,
+    `Website: ${buildBriefValue(deal.url, deal.siteStatus)}`,
+    "",
+    "Client Commercials Agreed",
+    `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Pricing base: ${buildBriefValue(deal.pricingBase)}`,
+    `Deduction terms: ${buildBriefValue(deal.deductionTerms)}`,
+    `Setup fee status: ${buildBriefValue(deal.setupFeeStatus)}`,
+    `Setup fee amount (EUR): ${buildBriefValue(deal.setupFeeAmount)}`,
+    `Marketing commitments: ${buildBriefValue(deal.marketingCommitments)}`,
+    `Live games top position: ${buildBriefValue(deal.liveGamesTopPosition)}`,
+    `Slots top position: ${buildBriefValue(deal.slotsTopPosition)}`,
+    `Bonus cap: ${buildBriefValue(deal.bonusCap)}`,
+    `Gaming tax: ${buildBriefValue(deal.gamingTax)}`,
+    `Withholding: ${buildBriefValue(deal.withholdingTax)}`,
+    `Advance payment: ${buildBriefValue(deal.advancePayment)}`,
+    `Credit notes: ${buildBriefValue(deal.creditNotes)}`,
+    `Deductions allowed: ${buildBriefValue(deal.deductionsAllowed)}`,
+    "",
+    ...(scheduleLines.length ? ["Commercial schedule:", ...scheduleLines, ""] : []),
+    `Commercial Summary: ${buildBriefValue(deal.statusText, deal.comments)}`,
+  ].join("\n");
+}
+
+function buildIntegrationRequestBrief(deal) {
+  return [
+    `New Client ${buildDocumentClientName(deal)} Integration Request`,
+    "",
+    `Hello team, please start supporting a new integration client ${buildDocumentClientName(deal)}.`,
+    "",
+    "Client Background",
+    `Client Type: ${buildBriefValue(deal.type)}`,
+    `URL: ${buildBriefValue(deal.url, deal.siteStatus)}`,
+    `Client based: ${buildBriefValue(deal.clientBased, deal.jurisdiction)}`,
+    `Name: ${buildDocumentClientName(deal)}`,
+    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
+    `Market: ${buildBriefValue(deal.market)}`,
+    `Platform: ${buildBriefValue(deal.platform)}`,
+    `Other live suppliers: ${buildBriefValue(deal.otherLiveSuppliers)}`,
+    `Potential: ${buildBriefValue(deal.priorityClass, deal.targetPriority)}`,
+    `Priority: ${buildBriefValue(deal.targetPriority)}`,
+    `KAM: ${buildBriefValue(deal.kam)}`,
+    `License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
+    `Integration team: ${buildBriefValue(deal.integrationTeam)}`,
+    `Products: ${buildNegotiatedProductsValue(deal)}`,
+    `Teams group: ${buildBriefValue(deal.teamsGroup)}`,
+    "",
+    `Integration request: ${buildBriefValue(deal.integrationRequest)}`,
+    `Integration email: ${buildBriefValue(deal.integrationEmail)}`,
+    `Integration chat: ${buildBriefValue(deal.skype)}`,
+    `Jira ticket: ${buildBriefValue(deal.jira)}`,
+    "",
+    `Other info: ${buildBriefValue(deal.otherInfo, deal.entityInfo, deal.comments)}`,
+  ].join("\n");
+}
+
+function buildDdRequestBrief(deal) {
+  return [
+    "Due Diligence Request",
+    "",
+    `Deal: ${buildBriefValue(deal.deal)}`,
+    `Client / Company Name: ${buildDocumentClientName(deal)}`,
+    `Market: ${buildBriefValue(deal.market)}`,
+    `Stage: ${buildBriefValue(deal.stage)}`,
+    `DD Initiated: ${buildBriefValue(deal.ddDate || new Date().toISOString().slice(0, 10))}`,
+    "",
+    "Corporate and Licensing",
+    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
+    `Company Registration Number: ${buildBriefValue(deal.companyRegistrationNumber)}`,
+    `Company Registered Address: ${buildBriefValue(deal.companyRegisteredAddress)}`,
+    `Company License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
+    "",
+    "DD Contacts",
+    `DD Contact Name: ${buildBriefValue(deal.ddContactName)}`,
+    `DD Contact Email: ${buildBriefValue(deal.ddContactEmail)}`,
+    `Legal Representative: ${buildBriefValue(deal.legalRepresentativeName, deal.companyLegalRepresentative)}`,
+    `Legal Representative Email: ${buildBriefValue(deal.legalRepresentativeEmail)}`,
+    "",
+    "Commercial Context",
+    `Products in scope: ${buildNegotiatedProductsValue(deal)}`,
+    `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Deductions allowed: ${buildBriefValue(deal.deductionsAllowed, deal.deductionTerms)}`,
+    `Notes: ${buildBriefValue(deal.statusText, deal.comments, deal.actionItems)}`,
+  ].join("\n");
+}
+
+function buildProposalRequestBrief(deal) {
+  const scheduleLines = buildCommercialScheduleBriefLines(deal);
+  return [
+    "Proposal Request",
+    "",
+    `Deal: ${buildBriefValue(deal.deal)}`,
+    `Client: ${buildDocumentClientName(deal)}`,
+    `Market: ${buildBriefValue(deal.market)}`,
+    `Segment: ${buildBriefValue(deal.segment, deal.type)}`,
+    `Platform: ${buildBriefValue(deal.platform)}`,
+    `Proposal validity: ${buildProposalValidityText(deal)}`,
+    `Requested products: ${buildNegotiatedProductsValue(deal)}`,
+    `Proposal request: ${buildBriefValue(deal.proposalRequest)}`,
+    `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Pricing base: ${buildBriefValue(deal.pricingBase)}`,
+    `Activation requirements: ${buildBriefValue(deal.activationRequirements)}`,
+    `Revenue potential EUR: ${buildBriefValue(deal.revenuePotentialEur || deal.dealValue)}`,
+    `Deal value EUR: ${buildBriefValue(deal.dealValue)}`,
+    "",
+    ...(scheduleLines.length ? ["Commercial schedule:", ...scheduleLines, ""] : []),
+    `Strategic fit: ${buildBriefValue(deal.strategicFit)}`,
+    `Status summary: ${buildBriefValue(deal.statusText, deal.comments)}`,
+  ].join("\n");
+}
+
+function buildNegotiationBrief(deal) {
+  const scheduleLines = buildCommercialScheduleBriefLines(deal);
+  return [
+    "What Is Being Negotiated",
+    "",
+    `Client: ${buildDocumentClientName(deal)}`,
+    `Products in scope: ${buildNegotiatedProductsValue(deal)}`,
+    `Proposal scope: ${buildBriefValue(deal.proposalRequest)}`,
+    `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Pricing base (GGR/NGR): ${buildBriefValue(deal.pricingBase)}`,
+    `Deduction terms: ${buildBriefValue(deal.deductionTerms)}`,
+    `Activation requirements: ${buildBriefValue(deal.activationRequirements)}`,
+    `Negotiation scope: ${buildBriefValue(deal.negotiationScope)}`,
+    "",
+    ...(scheduleLines.length ? ["Commercial schedule:", ...scheduleLines, ""] : []),
+    `Other live suppliers: ${buildBriefValue(deal.otherLiveSuppliers)}`,
+    `Notes: ${buildBriefValue(deal.comments, deal.otherInfo, deal.updates)}`,
+  ].join("\n");
+}
+
+function buildDealBriefFilename(deal, kind) {
+  const safeDeal = normalizeSearchText(deal.deal || deal.documentClientName || deal.client || deal.companyName || "deal")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "deal";
+  const suffixMap = {
+    legal: "new-service-agreement-request",
+    proposal: "commercial-proposal",
+    dd: "dd-request",
+    integration: "integration-request",
+    negotiation: "negotiation-brief",
+  };
+  return `${safeDeal}-${suffixMap[kind] || `${kind}-brief`}.txt`;
+}
+
+function getDealBriefTemplate(kind, deal) {
+  const templates = {
+    legal: {
+      label: "Legal brief",
+      exportLabel: "New Service Agreement Request",
+      content: buildLegalRequestBrief(deal),
+    },
+    proposal: {
+      label: "Proposal brief",
+      exportLabel: "Business Proposal",
+      content: buildProposalRequestBrief(deal),
+    },
+    dd: {
+      label: "DD brief",
+      exportLabel: "DD Request",
+      content: buildDdRequestBrief(deal),
+    },
+    integration: {
+      label: "Integration brief",
+      exportLabel: "Integration Request",
+      content: buildIntegrationRequestBrief(deal),
+    },
+    negotiation: {
+      label: "Negotiation brief",
+      exportLabel: "Negotiation Brief",
+      content: buildNegotiationBrief(deal),
+    },
+  };
+  return templates[kind] || null;
+}
+
+async function copyDealBrief(kind) {
+  if (!dealForm) {
+    return;
+  }
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const deal = buildDealDraftFromForm(existingDeal);
+  const template = getDealBriefTemplate(kind, deal);
+  if (!template) {
+    return;
+  }
+
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard unavailable");
+    }
+    await navigator.clipboard.writeText(template.content);
+    setBanner(`${template.label} copied for ${deal.deal || deal.client || "draft client"}.`, "success");
+  } catch (error) {
+    downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
+    setBanner(`${template.label} downloaded because clipboard access was not available.`, "warn");
+  }
+}
+
+function exportDealBrief(kind) {
+  if (!dealForm) {
+    return;
+  }
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const deal = buildDealDraftFromForm(existingDeal);
+  const template = getDealBriefTemplate(kind, deal);
+  if (!template) {
+    return;
+  }
+  downloadBlob(buildDealBriefFilename(deal, kind), template.content, "text/plain;charset=utf-8");
+  setBanner(`${template.exportLabel} exported for ${deal.deal || deal.client || "draft client"}.`, "success");
+}
+
+function getStageRank(stage) {
+  const index = STAGE_ORDER.indexOf(stage);
+  return index >= 0 ? index : -1;
+}
+
+function shouldAdvanceStage(currentStage, targetStage) {
+  return getStageRank(targetStage) > getStageRank(currentStage);
+}
+
+function applyDocumentStageAction(kind, draft) {
+  const config = DOCUMENT_STAGE_ACTIONS[kind];
+  if (!config) {
+    return normalizeDeal(draft);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const nextDraft = { ...draft };
+
+  if (shouldAdvanceStage(nextDraft.stage, config.targetStage)) {
+    nextDraft.stage = config.targetStage;
+  } else if (!cleanText(nextDraft.stage)) {
+    nextDraft.stage = config.targetStage;
+  }
+
+  if (config.dateField && !cleanText(nextDraft[config.dateField])) {
+    nextDraft[config.dateField] = today;
+  }
+
+  if (config.statusField) {
+    const preserveValues = Array.isArray(config.preserveValues) ? config.preserveValues : ["Started", "In Progress", "Completed"];
+    if (!preserveValues.includes(cleanText(nextDraft[config.statusField]))) {
+      nextDraft[config.statusField] = config.statusValue;
+    }
+  }
+
+  if (config.flagField) {
+    nextDraft[config.flagField] = true;
+  }
+
+  if (kind === "proposal" && !cleanText(nextDraft.proposalValidUntil)) {
+    nextDraft.proposalValidUntil = addDaysToIsoDate(nextDraft.offerDate || today, getProposalValidityDays(nextDraft));
+  }
+
+  nextDraft.lastFollowUp = normalizeDateInput(nextDraft.lastFollowUp) || today;
+  nextDraft.updates = appendTraceLog(nextDraft.updates, `${config.actionLabel} created`);
+  return normalizeDeal(nextDraft);
+}
+
+async function persistPreparedDeal(draft, actionLabel) {
+  if (!draft.deal.trim()) {
+    setBanner("El campo Deal es obligatorio.", "danger");
+    return null;
+  }
+
+  const exists = state.deals.some((deal) => deal.id === draft.id);
+  if (exists) {
+    state.deals = state.deals.map((deal) => (deal.id === draft.id ? draft : deal));
+  } else {
+    state.deals = [draft, ...state.deals];
+  }
+
+  const saved = await persistState();
+  ui.editingDealId = draft.id;
+  renderAll();
+  fillDealForm(draft);
+  setBanner(buildExcelBanner(saved ? `${actionLabel} created and stage started for ${draft.deal}.` : `${actionLabel} created in memory for ${draft.deal}.`), saved ? "success" : "warn");
+  return draft;
+}
+
+function buildDocumentDealDraft(sourceDeal = null) {
+  if (sourceDeal) {
+    return normalizeDeal(sourceDeal);
+  }
+  if (!dealForm) {
+    return null;
+  }
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  return buildDealDraftFromForm(existingDeal);
+}
+
+async function prepareDealForDocument(kind, sourceDeal = null) {
+  const draft = buildDocumentDealDraft(sourceDeal);
+  if (!draft) {
+    return null;
+  }
+
+  const prepared = applyDocumentStageAction(kind, draft);
+  const config = DOCUMENT_STAGE_ACTIONS[kind];
+  return persistPreparedDeal(prepared, config?.actionLabel || getDealBriefTemplate(kind, prepared)?.exportLabel || "Document");
+}
+
+async function exportDealDocx(kind, sourceDeal = null) {
+  const deal = (await prepareDealForDocument(kind, sourceDeal)) || null;
+  if (!deal) {
+    return;
+  }
+  const template = getDealBriefTemplate(kind, deal);
+  if (!template) {
+    return;
+  }
+
+  if (!serverMeta.ready) {
+    setBanner("Stage saved, but Word export requires the local SalesRep server because it uses your local proposal template. Start `./start-server.sh` and retry.", "warn");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_EXPORT_DOCX_URL}?kind=${encodeURIComponent(kind)}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/json",
+      },
+      body: JSON.stringify({ deal }),
+    });
+
+    if (!response.ok) {
+      const payload = await safeReadJson(response);
+      throw new Error(payload?.error || `No pude generar el documento Word (${response.status}).`);
+    }
+
+    const blob = await response.blob();
+    const filename = getDownloadFilename(response.headers.get("Content-Disposition")) || buildDealBriefFilename(deal, kind).replace(/\.txt$/i, ".docx");
+    triggerBlobDownload(blob, filename);
+    setBanner(`${template.exportLabel} exported in Word for ${deal.deal || deal.client || "draft client"}.`, "success");
+  } catch (error) {
+    setBanner(`No pude exportar el Word. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."}`, "danger");
+  }
 }
 
 function compareTasks(left, right) {
@@ -8128,6 +9856,21 @@ function buildModuleFlowItems() {
       pillClass: scopedDeals.length > 0 ? "success" : "blocked",
       tone: scopedDeals.length > 0 ? "is-good" : "is-danger",
       cta: "Open Funnel",
+    },
+    {
+      view: "requests",
+      title: "Proposals & Requests",
+      description: "Issue commercial proposals, legal requests, DD packages, integration requests, and final legal approval from one operating hub.",
+      metricLabel: "Active request lanes",
+      metricValue: `${REQUEST_HUB_DEFINITIONS.filter((item) => getRequestHubDeals(scopedDeals, item.key).length > 0).length}`,
+      nextAction:
+        scopedDeals.length > 0
+          ? "Use the hub to start the right request without hunting through the funnel for the correct document action."
+          : "Load or create accounts first so request workflows can activate.",
+      status: scopedDeals.length > 0 ? "Ready" : "Needs setup",
+      pillClass: scopedDeals.length > 0 ? "success" : "blocked",
+      tone: scopedDeals.length > 0 ? "is-good" : "is-danger",
+      cta: "Open Requests",
     },
     {
       view: "tasks",
@@ -8601,6 +10344,16 @@ function normalizeDateInput(value) {
 
 function cleanText(value) {
   return String(value ?? "").replace(/\u00a0/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function cleanMultilineText(value) {
+  return String(value ?? "")
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\s+/g, " "))
+    .filter((line, index, lines) => line || (index > 0 && index < lines.length - 1))
+    .join("\n")
+    .trim();
 }
 
 function normalizeSearchText(value) {

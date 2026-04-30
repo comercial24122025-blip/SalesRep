@@ -115,10 +115,11 @@
           <button class="view-tab" data-view-trigger="admin">1. Setup</button>
           <button class="view-tab" data-view-trigger="crm">2. Intelligence</button>
           <button class="view-tab" data-view-trigger="pipeline">3. Funnel</button>
-          <button class="view-tab" data-view-trigger="tasks">4. Tasks & Jira</button>
-          <button class="view-tab" data-view-trigger="campaigns">5. Growth & Handover</button>
-          <button class="view-tab" data-view-trigger="targets">6. Targets & Forecast</button>
-          <button class="view-tab" data-view-trigger="catalogue">7. KPIs</button>
+          <button class="view-tab" data-view-trigger="requests">4. Proposals & Requests</button>
+          <button class="view-tab" data-view-trigger="tasks">5. Tasks & Jira</button>
+          <button class="view-tab" data-view-trigger="campaigns">6. Growth & Handover</button>
+          <button class="view-tab" data-view-trigger="targets">7. Targets & Forecast</button>
+          <button class="view-tab" data-view-trigger="catalogue">8. KPIs</button>
         </nav>
       </section>
 
@@ -606,6 +607,17 @@
                   </label>
                 </div>
 
+                <div class="form-section stage-guide-section">
+                  <div class="form-section-head">
+                    <div>
+                      <h3>Operational Stage Guide</h3>
+                      <p class="form-note">Use the current stage to understand what is required, what is missing, and which action should formally start the next part of the workflow.</p>
+                    </div>
+                    <span id="deal-workflow-stage-badge" class="pill neutral">Lead Stage</span>
+                  </div>
+                  <div id="deal-workflow-guide" class="deal-workflow-guide"></div>
+                </div>
+
                 <div class="form-section">
                   <h3>Target Mapping & Opportunity Scoring</h3>
                   <div class="form-grid form-grid-3">
@@ -708,6 +720,10 @@
                     <label>
                       Offer Date
                       <input name="offerDate" type="date" />
+                    </label>
+                    <label>
+                      DD Date
+                      <input name="ddDate" type="date" />
                     </label>
                     <label>
                       Integration Date
@@ -840,6 +856,222 @@
                 </div>
 
                 <div class="form-section">
+                  <h3>Client Requests &amp; Negotiation Pack</h3>
+                  <p class="form-note">Use this block to prepare structured internal handoffs for Legal, Proposal, Integration, and commercial negotiation. Core client type, market, platform, KAM, license status, and product scope are inherited from the deal header above.</p>
+
+                  <div class="form-subsection">
+                    <h4>Legal &amp; DD intake</h4>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        Company Name
+                        <input name="companyName" type="text" placeholder="Legal company name" />
+                      </label>
+                      <label>
+                        Company Registration Number
+                        <input name="companyRegistrationNumber" type="text" placeholder="Registration / tax number" />
+                      </label>
+                      <label>
+                        Company License
+                        <input name="companyLicense" type="text" placeholder="License number or status" />
+                      </label>
+                      <label class="full-span">
+                        Company Registered Address
+                        <textarea name="companyRegisteredAddress" rows="2" placeholder="Full registered address"></textarea>
+                      </label>
+                      <label>
+                        Company Legal Representative
+                        <input name="companyLegalRepresentative" type="text" placeholder="Representative named in legal docs" />
+                      </label>
+                      <label>
+                        Invoice Email
+                        <input name="invoiceEmail" type="email" placeholder="finance@client.com" />
+                      </label>
+                      <label>
+                        Support Email
+                        <input name="supportEmail" type="email" placeholder="support@client.com" />
+                      </label>
+                      <label>
+                        Management Email
+                        <input name="managementEmail" type="email" placeholder="management@client.com" />
+                      </label>
+                      <label>
+                        DD Contact Name
+                        <input name="ddContactName" type="text" placeholder="Compliance / DD owner" />
+                      </label>
+                      <label>
+                        DD Contact Email
+                        <input name="ddContactEmail" type="email" placeholder="dd@client.com" />
+                      </label>
+                      <label>
+                        Legal Representative Name
+                        <input name="legalRepresentativeName" type="text" placeholder="Full name" />
+                      </label>
+                      <label>
+                        Legal Representative ID
+                        <input name="legalRepresentativeId" type="text" placeholder="Passport / ID / tax ID" />
+                      </label>
+                      <label class="full-span">
+                        Legal Representative Address
+                        <textarea name="legalRepresentativeAddress" rows="2" placeholder="Address used for legal identification"></textarea>
+                      </label>
+                      <label>
+                        Legal Representative Email
+                        <input name="legalRepresentativeEmail" type="email" placeholder="legal.rep@client.com" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-subsection">
+                    <h4>Proposal &amp; negotiation scope</h4>
+                    <div class="form-grid form-grid-2">
+                      <label>
+                        Document Client / Operator Name
+                        <input name="documentClientName" type="text" placeholder="Name to show in proposal, legal, and integration docs" />
+                      </label>
+                      <label>
+                        Proposal Validity (Days)
+                        <input name="proposalValidityDays" type="number" min="1" step="1" placeholder="30" />
+                      </label>
+                      <label>
+                        Proposal Valid Until
+                        <input name="proposalValidUntil" type="date" />
+                      </label>
+                      <label class="full-span">
+                        Proposal Request
+                        <textarea name="proposalRequest" rows="3" placeholder="What the client is requesting in the proposal round"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Negotiated Products
+                        <textarea name="negotiatedProducts" rows="2" placeholder="Evolution, Ezugi, slots, premium tables, branded tables, tips, etc."></textarea>
+                      </label>
+                      <label class="full-span">
+                        Activation Requirements
+                        <textarea name="activationRequirements" rows="3" placeholder="What is required to activate new or premium games not included in contract?"></textarea>
+                      </label>
+                      <label>
+                        Pricing Base
+                        <input name="pricingBase" type="text" placeholder="Ex. GGR, NGR, fixed fee, hybrid" />
+                      </label>
+                      <label>
+                        Deduction Terms
+                        <input name="deductionTerms" type="text" placeholder="Discounts, taxes, withholding, special deductions" />
+                      </label>
+                      <label class="full-span">
+                        Commercial Terms
+                        <textarea name="commercialTerms" rows="4" placeholder="Tiered %, premium %, growth table fee, high-stake fee, first-person % ..."></textarea>
+                      </label>
+                      <label class="full-span">
+                        Commercial Schedule
+                        <textarea name="commercialSchedule" rows="6" placeholder="One row per line using | separators&#10;Evolution Generic | EUR 0-2M | 12% of GGR | B2C&#10;Evolution Premium | As per premium schedule | 1%-5% | Premium tables"></textarea>
+                        <span class="field-help">Flexible per client and proposal. Use columns like Product | Tier / Volume | Commercial | Notes.</span>
+                      </label>
+                      <label class="full-span">
+                        Negotiation Scope
+                        <textarea name="negotiationScope" rows="3" placeholder="Exclusivity, top positioning, deductions, branded content, escalation path, missing clauses"></textarea>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-subsection">
+                    <h4>New service agreement terms</h4>
+                    <div class="form-grid form-grid-2">
+                      <label>
+                        Setup Fee Status
+                        <select name="setupFeeStatus">
+                          <option value="">Select status</option>
+                          <option>Not Waived</option>
+                          <option>Waived</option>
+                          <option>Partially Waived</option>
+                          <option>TBC</option>
+                        </select>
+                      </label>
+                      <label>
+                        Setup Fee Amount (EUR)
+                        <input name="setupFeeAmount" type="number" min="0" step="0.01" placeholder="0.00" />
+                      </label>
+                      <label class="full-span">
+                        Marketing Commitments
+                        <textarea name="marketingCommitments" rows="3" placeholder="Promotional support, launch commitments, visibility, traffic, CRM pushes, banners, campaigns"></textarea>
+                      </label>
+                      <label>
+                        Live Games Top Position
+                        <input name="liveGamesTopPosition" type="text" placeholder="L1, L2, L3 or agreed placement" />
+                      </label>
+                      <label>
+                        Slots Top Position
+                        <input name="slotsTopPosition" type="text" placeholder="L1, L2, L3 or agreed placement" />
+                      </label>
+                      <label class="full-span">
+                        Deductions Allowed
+                        <textarea name="deductionsAllowed" rows="3" placeholder="Summary of all deductions allowed under the agreement"></textarea>
+                      </label>
+                      <label>
+                        Bonus Cap
+                        <input name="bonusCap" type="text" placeholder="Allowed cap or rule" />
+                      </label>
+                      <label>
+                        Gaming Tax
+                        <input name="gamingTax" type="text" placeholder="Tax treatment per market" />
+                      </label>
+                      <label>
+                        Withholding
+                        <input name="withholdingTax" type="text" placeholder="Withholding treatment" />
+                      </label>
+                      <label>
+                        Advance Payment
+                        <input name="advancePayment" type="text" placeholder="Amount, timing, or waived" />
+                      </label>
+                      <label class="full-span">
+                        Credit Notes
+                        <textarea name="creditNotes" rows="2" placeholder="Allowed credit notes, approval path, limits"></textarea>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-subsection">
+                    <h4>Integration kickoff brief</h4>
+                    <div class="form-grid form-grid-2">
+                      <label>
+                        Client Based
+                        <input name="clientBased" type="text" placeholder="Country / base of operations" />
+                      </label>
+                      <label>
+                        Other Live Suppliers
+                        <input name="otherLiveSuppliers" type="text" placeholder="Existing live casino suppliers" />
+                      </label>
+                      <label>
+                        Integration Team
+                        <input name="integrationTeam" type="text" placeholder="Internal team or named contacts" />
+                      </label>
+                      <label>
+                        Teams Group
+                        <input name="teamsGroup" type="text" placeholder="Teams / Slack / shared integration group" />
+                      </label>
+                      <label class="full-span">
+                        Integration Request
+                        <textarea name="integrationRequest" rows="4" placeholder="Technical setup, product activation, teams involved, API scope, launch dependencies"></textarea>
+                      </label>
+                      <label class="full-span">
+                        Other Info
+                        <textarea name="otherInfo" rows="3" placeholder="Extra commercial or operational context for internal handoff"></textarea>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-actions request-brief-actions">
+                    <button type="button" id="open-requests-module-button" class="button button-ghost">Open Requests Hub</button>
+                    <button type="button" id="copy-legal-brief-button" class="button button-ghost">Copy Legal Brief</button>
+                    <button type="button" id="copy-proposal-brief-button" class="button button-ghost">Copy Proposal Brief</button>
+                    <button type="button" id="copy-integration-brief-button" class="button button-ghost">Copy Integration Brief</button>
+                    <button type="button" id="copy-negotiation-brief-button" class="button button-ghost">Copy Negotiation Brief</button>
+                    <button type="button" id="export-contract-request-button" class="button button-secondary">Start Legal Request</button>
+                    <button type="button" id="export-commercial-proposal-button" class="button button-secondary">Create Business Proposal</button>
+                    <button type="button" id="export-dd-request-button" class="button button-secondary">Create DD Request</button>
+                    <button type="button" id="export-integration-request-button" class="button button-secondary">Create Integration Request</button>
+                  </div>
+                </div>
+
+                <div class="form-section">
                   <h3>Context</h3>
                   <div class="form-grid form-grid-2">
                     <label>
@@ -941,6 +1173,14 @@
 
               <div id="pipeline-stage-strip" class="stage-strip"></div>
 
+              <div class="pipeline-operating-shell">
+                <div class="subpanel-head">
+                  <h3>Stage Operating Guide</h3>
+                  <span id="pipeline-operating-stage-chip" class="chip">Focus: Lead</span>
+                </div>
+                <div id="pipeline-operating-guide" class="pipeline-operating-guide"></div>
+              </div>
+
               <div class="filter-grid">
                 <label class="pipeline-finder-field">
                   Search Pipeline Deals
@@ -1005,6 +1245,57 @@
                   <tbody id="deal-table-body"></tbody>
                 </table>
               </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view="requests">
+          <div class="dashboard-layout requests-layout">
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Document workflow</p>
+                  <h2>Proposals &amp; Requests Hub</h2>
+                </div>
+                <div class="head-actions">
+                  <span id="requests-summary" class="chip">0 request lanes</span>
+                  <button id="requests-open-pipeline" type="button" class="button button-ghost button-small">Open Funnel</button>
+                </div>
+              </div>
+              <div id="requests-kpi-grid" class="forecast-grid"></div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Current working deal</p>
+                  <h2>Active Request Launcher</h2>
+                </div>
+                <span id="requests-focus-chip" class="chip">Focus: All</span>
+              </div>
+              <div id="requests-active-deal" class="requests-active-deal"></div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Request coverage</p>
+                  <h2>Request Lanes</h2>
+                </div>
+                <span class="chip">Legal, Commercial, DD, Integration, Legal Approval</span>
+              </div>
+              <div id="requests-focus-grid" class="request-focus-grid"></div>
+            </section>
+
+            <section class="panel panel-wide">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Client worklist</p>
+                  <h2>Accounts Ready for Action</h2>
+                </div>
+                <span class="chip">Use each lane to create or continue the right request</span>
+              </div>
+              <div id="requests-board" class="requests-board"></div>
             </section>
           </div>
         </section>
