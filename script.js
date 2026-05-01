@@ -747,6 +747,7 @@ const elements = {
   loadingOverlayTitle: document.getElementById("loading-overlay-title"),
   loadingOverlayCopy: document.getElementById("loading-overlay-copy"),
   companyProfileShell: document.getElementById("company-profile-shell"),
+  companyProfileTitle: document.getElementById("company-profile-title"),
   companyProfileBody: document.getElementById("company-profile-body"),
   companyProfileClose: document.getElementById("company-profile-close"),
   openRequestsModuleButton: document.getElementById("open-requests-module-button"),
@@ -786,6 +787,7 @@ const ui = {
     selectedDealId: null,
   },
   companyProfileDealId: null,
+  companyProfileEditMode: false,
   pipelinePreset: null,
   taskPreset: null,
   campaignPreset: null,
@@ -1353,9 +1355,31 @@ function bindEvents() {
       closeCompanyProfile();
       return;
     }
+    const companyProfileAction = event.target.closest("[data-company-profile-action]");
+    if (companyProfileAction) {
+      event.preventDefault();
+      const action = cleanText(companyProfileAction.dataset.companyProfileAction);
+      if (action === "edit-profile") {
+        ui.companyProfileEditMode = true;
+        renderCompanyProfileDrawer();
+      }
+      if (action === "cancel-edit") {
+        ui.companyProfileEditMode = false;
+        renderCompanyProfileDrawer();
+      }
+      return;
+    }
     if (event.target.closest("[data-action]")) {
       void handleDealAction(event);
     }
+  });
+  elements.companyProfileBody?.addEventListener("submit", (event) => {
+    const form = event.target.closest("#company-profile-form");
+    if (!form) {
+      return;
+    }
+    event.preventDefault();
+    void saveCompanyProfileForm(form);
   });
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
@@ -5180,6 +5204,224 @@ function openCompanyFinderBestMatch() {
   openCompanyProfileById(suggestion.dealId, { syncSearch: false });
 }
 
+const COMPANY_PROFILE_EDIT_SECTIONS = [
+  {
+    title: "Identity & Legal",
+    description: "Keep the company master data aligned for legal, proposal, and request workflows.",
+    fields: [
+      { name: "companyName", label: "Company Name" },
+      { name: "documentClientName", label: "Document Client Name" },
+      { name: "client", label: "Client Name" },
+      { name: "operator", label: "Operator Name" },
+      { name: "legalEntity", label: "Legal Entity" },
+      { name: "groupName", label: "Group Name" },
+      { name: "clientBased", label: "Client Based" },
+      { name: "url", label: "Website URL", type: "url", placeholder: "https://example.com" },
+      { name: "companyRegistrationNumber", label: "Registration Number" },
+      { name: "companyLicense", label: "Company License / License Status" },
+      { name: "companyRegisteredAddress", label: "Registered Address", textarea: true, rows: 3, fullSpan: true },
+    ],
+  },
+  {
+    title: "Contacts & Compliance",
+    description: "These values feed the internal Legal, DD, and Legal Signoff requests.",
+    fields: [
+      { name: "primaryContact", label: "Primary Contact" },
+      { name: "decisionMaker", label: "Decision Maker" },
+      { name: "invoiceEmail", label: "Invoice Email", type: "email" },
+      { name: "supportEmail", label: "Support Email", type: "email" },
+      { name: "managementEmail", label: "Management Email", type: "email" },
+      { name: "ddContactName", label: "DD Contact Name" },
+      { name: "ddContactEmail", label: "DD Contact Email", type: "email" },
+      { name: "companyLegalRepresentative", label: "Company Legal Representative" },
+      { name: "legalRepresentativeName", label: "Legal Representative Full Name" },
+      { name: "legalRepresentativeId", label: "Legal Representative ID" },
+      { name: "legalRepresentativeEmail", label: "Legal Representative Email", type: "email" },
+      { name: "legalRepresentativeAddress", label: "Legal Representative Address", textarea: true, rows: 3, fullSpan: true },
+    ],
+  },
+  {
+    title: "Delivery & Commercial Context",
+    description: "Keep integration contacts and company context in one editable profile.",
+    fields: [
+      { name: "integrationEmail", label: "Integration Email", type: "email" },
+      { name: "integrationTeam", label: "Integration Team" },
+      { name: "teamsGroup", label: "Teams / Chat Group" },
+      { name: "otherLiveSuppliers", label: "Other Live Suppliers" },
+      { name: "currentCompetitors", label: "Current Competitors" },
+      { name: "productsCurrent", label: "Current Products", textarea: true, rows: 3, fullSpan: true },
+      { name: "productsPotential", label: "Potential Products", textarea: true, rows: 3, fullSpan: true },
+    ],
+  },
+];
+
+function getCompanyProfileMergedValue(deals, ...fieldNames) {
+  for (const fieldName of fieldNames) {
+    for (const deal of deals) {
+      const value = cleanText(deal?.[fieldName]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return "";
+}
+
+function buildCompanyProfileSource(primaryDeal, relatedDeals = []) {
+  const uniqueDeals = Array.from(new Map([primaryDeal, ...relatedDeals].filter(Boolean).map((deal) => [deal.id, deal])).values());
+  return {
+    companyName: getCompanyProfileMergedValue(uniqueDeals, "companyName"),
+    documentClientName: getCompanyProfileMergedValue(uniqueDeals, "documentClientName"),
+    client: getCompanyProfileMergedValue(uniqueDeals, "client"),
+    operator: getCompanyProfileMergedValue(uniqueDeals, "operator"),
+    legalEntity: getCompanyProfileMergedValue(uniqueDeals, "legalEntity"),
+    groupName: getCompanyProfileMergedValue(uniqueDeals, "groupName"),
+    clientBased: getCompanyProfileMergedValue(uniqueDeals, "clientBased"),
+    url: getCompanyProfileMergedValue(uniqueDeals, "url"),
+    companyRegistrationNumber: getCompanyProfileMergedValue(uniqueDeals, "companyRegistrationNumber"),
+    companyLicense: getCompanyProfileMergedValue(uniqueDeals, "companyLicense", "licenseStatus"),
+    companyRegisteredAddress: getCompanyProfileMergedValue(uniqueDeals, "companyRegisteredAddress"),
+    primaryContact: getCompanyProfileMergedValue(uniqueDeals, "primaryContact"),
+    decisionMaker: getCompanyProfileMergedValue(uniqueDeals, "decisionMaker"),
+    invoiceEmail: getCompanyProfileMergedValue(uniqueDeals, "invoiceEmail"),
+    supportEmail: getCompanyProfileMergedValue(uniqueDeals, "supportEmail"),
+    managementEmail: getCompanyProfileMergedValue(uniqueDeals, "managementEmail"),
+    ddContactName: getCompanyProfileMergedValue(uniqueDeals, "ddContactName"),
+    ddContactEmail: getCompanyProfileMergedValue(uniqueDeals, "ddContactEmail"),
+    companyLegalRepresentative: getCompanyProfileMergedValue(uniqueDeals, "companyLegalRepresentative", "legalRepresentativeName"),
+    legalRepresentativeName: getCompanyProfileMergedValue(uniqueDeals, "legalRepresentativeName", "companyLegalRepresentative"),
+    legalRepresentativeId: getCompanyProfileMergedValue(uniqueDeals, "legalRepresentativeId"),
+    legalRepresentativeEmail: getCompanyProfileMergedValue(uniqueDeals, "legalRepresentativeEmail"),
+    legalRepresentativeAddress: getCompanyProfileMergedValue(uniqueDeals, "legalRepresentativeAddress"),
+    integrationEmail: getCompanyProfileMergedValue(uniqueDeals, "integrationEmail"),
+    integrationTeam: getCompanyProfileMergedValue(uniqueDeals, "integrationTeam"),
+    teamsGroup: getCompanyProfileMergedValue(uniqueDeals, "teamsGroup"),
+    otherLiveSuppliers: getCompanyProfileMergedValue(uniqueDeals, "otherLiveSuppliers"),
+    currentCompetitors: getCompanyProfileMergedValue(uniqueDeals, "currentCompetitors"),
+    productsCurrent: getCompanyProfileMergedValue(uniqueDeals, "productsCurrent"),
+    productsPotential: getCompanyProfileMergedValue(uniqueDeals, "productsPotential"),
+  };
+}
+
+function renderCompanyProfileSummaryActions(activeDeal) {
+  if (ui.companyProfileEditMode) {
+    return [
+      '<button type="submit" form="company-profile-form" class="button button-primary button-small">Save Profile</button>',
+      '<button type="button" class="button button-ghost button-small" data-company-profile-action="cancel-edit">Cancel Edit</button>',
+      `<button type="button" class="button button-secondary button-small" data-action="edit-deal" data-id="${escapeAttribute(activeDeal.id)}">Open Deal Workspace</button>`,
+    ].join("");
+  }
+
+  return [
+    '<button type="button" class="button button-primary button-small" data-company-profile-action="edit-profile">Edit Profile</button>',
+    renderDealWorkflowDocumentButtons(activeDeal, {
+      className: "button button-secondary button-small",
+      kinds: ["proposal", "legal", "dd", "integration", "signoff"],
+      includeEdit: true,
+      editLabel: "Open Deal Workspace",
+    }),
+  ].join("");
+}
+
+function renderCompanyProfileEditField(field, source) {
+  const value = cleanText(source?.[field.name]);
+  const className = field.fullSpan ? ' class="full-span"' : "";
+  if (field.textarea) {
+    return `
+      <label${className}>
+        ${escapeHtml(field.label)}
+        <textarea name="${escapeAttribute(field.name)}" rows="${Number(field.rows) || 3}" placeholder="${escapeAttribute(field.placeholder || "")}">${escapeHtml(value)}</textarea>
+      </label>
+    `;
+  }
+  return `
+    <label${className}>
+      ${escapeHtml(field.label)}
+      <input
+        name="${escapeAttribute(field.name)}"
+        type="${escapeAttribute(field.type || "text")}"
+        value="${escapeAttribute(value)}"
+        placeholder="${escapeAttribute(field.placeholder || "")}"
+      />
+    </label>
+  `;
+}
+
+function renderCompanyProfileEditForm(source, relatedDeals) {
+  const relatedCount = Array.isArray(relatedDeals) ? relatedDeals.length : 0;
+  return `
+    <form id="company-profile-form" class="company-profile-edit-form">
+      <section class="company-profile-section company-profile-edit-shell">
+        <div class="subpanel-head">
+          <div>
+            <h3>Edit Company Profile</h3>
+            <p class="form-note">Changes will update the shared company profile across ${relatedCount || 1} related account${relatedCount === 1 ? "" : "s"}.</p>
+          </div>
+          <span class="chip">Profile sync</span>
+        </div>
+        <div class="company-profile-edit-stack">
+          ${COMPANY_PROFILE_EDIT_SECTIONS.map(
+            (section) => `
+              <article class="company-profile-card company-profile-edit-card">
+                <div class="subpanel-head">
+                  <div>
+                    <h3>${escapeHtml(section.title)}</h3>
+                    <p class="form-note">${escapeHtml(section.description)}</p>
+                  </div>
+                </div>
+                <div class="form-grid form-grid-2">
+                  ${section.fields.map((field) => renderCompanyProfileEditField(field, source)).join("")}
+                </div>
+              </article>
+            `
+          ).join("")}
+        </div>
+      </section>
+    </form>
+  `;
+}
+
+async function saveCompanyProfileForm(form) {
+  const anchorDeal = state.deals.find((item) => item.id === ui.companyProfileDealId);
+  if (!anchorDeal) {
+    return;
+  }
+
+  const relatedDeals = getCompanyProfileDeals(anchorDeal);
+  const relatedIds = new Set((relatedDeals.length ? relatedDeals : [anchorDeal]).map((item) => item.id));
+  const formData = new FormData(form);
+  const patch = {};
+
+  COMPANY_PROFILE_EDIT_SECTIONS.forEach((section) => {
+    section.fields.forEach((field) => {
+      patch[field.name] = formData.get(field.name) || "";
+    });
+  });
+
+  if (!hasAnyText(patch.companyName, patch.documentClientName, patch.client, patch.operator)) {
+    setBanner("Company Profile needs at least one company-facing name before it can be saved.", "danger");
+    return;
+  }
+
+  state.deals = state.deals.map((deal) => (relatedIds.has(deal.id) ? normalizeDeal({ ...deal, ...patch }) : deal));
+  ui.companyProfileEditMode = false;
+  const saved = await persistState();
+  renderAll();
+
+  if (ui.editingDealId && relatedIds.has(ui.editingDealId)) {
+    const openDeal = state.deals.find((deal) => deal.id === ui.editingDealId);
+    if (openDeal) {
+      fillDealForm(openDeal);
+    }
+  }
+
+  openCompanyProfileById(anchorDeal.id, { scroll: false });
+  setBanner(
+    buildExcelBanner(saved ? `Company profile updated across ${relatedIds.size} related account${relatedIds.size === 1 ? "" : "s"}.` : "Company profile updated in browser storage only."),
+    saved ? "success" : "warn"
+  );
+}
+
 function renderCompanyProfileDrawer() {
   const deal = state.deals.find((item) => item.id === ui.companyProfileDealId);
   if (!deal) {
@@ -5190,6 +5432,7 @@ function renderCompanyProfileDrawer() {
   try {
     const relatedDeals = getCompanyProfileDeals(deal);
     const activeDeal = relatedDeals[0] || deal;
+    const source = buildCompanyProfileSource(activeDeal, relatedDeals);
     const contacts = collectCompanyContactRows(relatedDeals.length ? relatedDeals : [deal]);
     const websites = uniqueValues((relatedDeals.length ? relatedDeals : [deal]).map((item) => item.url));
     const markets = uniqueValues((relatedDeals.length ? relatedDeals : [deal]).map((item) => item.market));
@@ -5198,32 +5441,30 @@ function renderCompanyProfileDrawer() {
     const openCount = relatedDeals.filter((item) => !isInactiveDeal(item)).length;
     const forecastValue = sumValues(relatedDeals.map((item) => getForecastValue(item)));
     const companyInfoRows = [
-      { label: "Company", value: getCompanyProfileLabel(activeDeal) },
-      { label: "Legal Entity", value: activeDeal.legalEntity || activeDeal.companyName },
-      { label: "Registration", value: activeDeal.companyRegistrationNumber },
-      { label: "License", value: activeDeal.companyLicense || activeDeal.licenseStatus },
+      { label: "Company", value: source.companyName || source.documentClientName || getCompanyProfileLabel(activeDeal) },
+      { label: "Legal Entity", value: source.legalEntity || source.companyName },
+      { label: "Registration", value: source.companyRegistrationNumber },
+      { label: "License", value: source.companyLicense },
       { label: "Primary Market", value: activeDeal.market },
       { label: "Segment", value: activeDeal.segment || activeDeal.type },
       { label: "Owner", value: owners.join(" · ") || getDealOwner(activeDeal) },
-      { label: "Registered Address", value: activeDeal.companyRegisteredAddress },
+      { label: "Registered Address", value: source.companyRegisteredAddress },
     ].filter((row) => cleanText(row.value));
 
     showCompanyProfilePanel();
+    if (elements.companyProfileTitle) {
+      elements.companyProfileTitle.textContent = source.companyName || source.documentClientName || getCompanyProfileLabel(activeDeal);
+    }
     elements.companyProfileBody.innerHTML = `
     <section class="company-profile-summary">
       <div class="company-profile-summary-copy">
         <span class="company-profile-kicker">${escapeHtml(markets.join(" · ") || "No market assigned")}</span>
-        <strong>${escapeHtml(getCompanyProfileLabel(activeDeal))}</strong>
+        <strong>${escapeHtml(source.companyName || source.documentClientName || getCompanyProfileLabel(activeDeal))}</strong>
         <p>${escapeHtml(buildDealContextLine(activeDeal) || activeDeal.statusText || "No commercial summary is currently logged for this company.")}</p>
+        <small class="company-profile-summary-note">This company profile is the shared reference used by internal requests, proposal exports, and related account views.</small>
       </div>
       <div class="company-profile-summary-actions">
-        ${renderDealWorkflowDocumentButtons(activeDeal, {
-          className: "button button-secondary button-small",
-          kinds: ["proposal", "legal", "dd", "integration", "signoff"],
-          includeTask: true,
-          includeEdit: true,
-          editLabel: "Open Deal Workspace",
-        })}
+        ${renderCompanyProfileSummaryActions(activeDeal)}
       </div>
     </section>
 
@@ -5234,75 +5475,81 @@ function renderCompanyProfileDrawer() {
       ${renderForecastMetric("Forecast", formatCompactCurrency(forecastValue), formatCurrency(forecastValue))}
     </section>
 
-    <section class="company-profile-grid">
-      <article class="company-profile-card">
-        <div class="subpanel-head">
-          <h3>Company Snapshot</h3>
-          <span class="chip">${escapeHtml(`${markets.length || 1} market${markets.length === 1 ? "" : "s"}`)}</span>
-        </div>
-        <dl class="company-profile-list">
-          ${companyInfoRows
-            .map(
-              (row) => `
-                <div>
-                  <dt>${escapeHtml(row.label)}</dt>
-                  <dd>${escapeHtml(row.value)}</dd>
-                </div>
-              `
-            )
-            .join("")}
-        </dl>
-        ${
-          websites.length
-            ? `
-              <div class="company-profile-links">
-                ${websites
+    ${
+      ui.companyProfileEditMode
+        ? renderCompanyProfileEditForm(source, relatedDeals)
+        : `
+          <section class="company-profile-grid">
+            <article class="company-profile-card">
+              <div class="subpanel-head">
+                <h3>Company Snapshot</h3>
+                <span class="chip">${escapeHtml(`${markets.length || 1} market${markets.length === 1 ? "" : "s"}`)}</span>
+              </div>
+              <dl class="company-profile-list">
+                ${companyInfoRows
                   .map(
-                    (url) => `
-                      <a class="tracking-link" href="${escapeAttribute(url)}" target="_blank" rel="noreferrer">
-                        <span>Website</span>
-                        <strong>${escapeHtml(url)}</strong>
-                      </a>
+                    (row) => `
+                      <div>
+                        <dt>${escapeHtml(row.label)}</dt>
+                        <dd>${escapeHtml(row.value)}</dd>
+                      </div>
                     `
                   )
                   .join("")}
-              </div>
-            `
-            : ""
-        }
-      </article>
+              </dl>
+              ${
+                websites.length
+                  ? `
+                    <div class="company-profile-links">
+                      ${websites
+                        .map(
+                          (url) => `
+                            <a class="tracking-link" href="${escapeAttribute(url)}" target="_blank" rel="noreferrer">
+                              <span>Website</span>
+                              <strong>${escapeHtml(url)}</strong>
+                            </a>
+                          `
+                        )
+                        .join("")}
+                    </div>
+                  `
+                  : ""
+              }
+            </article>
 
-      <article class="company-profile-card">
-        <div class="subpanel-head">
-          <h3>Contacts & Emails</h3>
-          <span class="chip">${escapeHtml(`${contacts.length} contact${contacts.length === 1 ? "" : "s"}`)}</span>
-        </div>
-        ${
-          contacts.length
-            ? `
-              <div class="company-contact-list">
-                ${contacts
-                  .map(
-                    (contact) => `
-                      <article class="company-contact-card">
-                        <span>${escapeHtml(contact.role)}</span>
-                        <strong>${escapeHtml(contact.name)}</strong>
-                        ${
-                          contact.email
-                            ? `<a href="mailto:${escapeAttribute(contact.email)}">${escapeHtml(contact.email)}</a>`
-                            : `<small>${escapeHtml(contact.market || "Email not logged")}</small>`
-                        }
-                        ${contact.market ? `<small>${escapeHtml(contact.market)}</small>` : ""}
-                      </article>
-                    `
-                  )
-                  .join("")}
+            <article class="company-profile-card">
+              <div class="subpanel-head">
+                <h3>Contacts & Emails</h3>
+                <span class="chip">${escapeHtml(`${contacts.length} contact${contacts.length === 1 ? "" : "s"}`)}</span>
               </div>
-            `
-            : '<div class="empty-state">No contacts or emails have been logged for this company yet.</div>'
-        }
-      </article>
-    </section>
+              ${
+                contacts.length
+                  ? `
+                    <div class="company-contact-list">
+                      ${contacts
+                        .map(
+                          (contact) => `
+                            <article class="company-contact-card">
+                              <span>${escapeHtml(contact.role)}</span>
+                              <strong>${escapeHtml(contact.name)}</strong>
+                              ${
+                                contact.email
+                                  ? `<a href="mailto:${escapeAttribute(contact.email)}">${escapeHtml(contact.email)}</a>`
+                                  : `<small>${escapeHtml(contact.market || "Email not logged")}</small>`
+                              }
+                              ${contact.market ? `<small>${escapeHtml(contact.market)}</small>` : ""}
+                            </article>
+                          `
+                        )
+                        .join("")}
+                    </div>
+                  `
+                  : '<div class="empty-state">No contacts or emails have been logged for this company yet.</div>'
+              }
+            </article>
+          </section>
+        `
+    }
 
     <section class="company-profile-section">
       <div class="subpanel-head">
@@ -5339,10 +5586,13 @@ function renderCompanyProfileDrawer() {
           .join("")}
       </div>
     </section>
-  `;
+    `;
   } catch (error) {
     console.error("Company profile render failed", error);
     showCompanyProfilePanel();
+    if (elements.companyProfileTitle) {
+      elements.companyProfileTitle.textContent = "Company Profile";
+    }
     elements.companyProfileBody.innerHTML = `
       <section class="company-profile-section">
         <div class="empty-state">
@@ -5364,6 +5614,7 @@ function openCompanyProfileById(id, options = {}) {
     return;
   }
 
+  ui.companyProfileEditMode = false;
   ui.companyProfileDealId = id;
   ui.companyFinder.selectedDealId = id;
   if (options.syncSearch !== false) {
@@ -5392,11 +5643,15 @@ function hideCompanyProfilePanel() {
   }
   elements.companyProfileShell.hidden = true;
   elements.companyProfileShell.setAttribute("aria-hidden", "true");
+  if (elements.companyProfileTitle) {
+    elements.companyProfileTitle.textContent = "Company Profile";
+  }
   elements.companyProfileBody.innerHTML = "";
 }
 
 function closeCompanyProfile() {
   ui.companyProfileDealId = null;
+  ui.companyProfileEditMode = false;
   ui.companyFinder.activeIndex = -1;
   ui.companyFinder.isOpen = false;
   hideCompanyProfilePanel();
@@ -11288,20 +11543,7 @@ function buildDealBriefFilename(deal, kind) {
 }
 
 function buildWordCompatibleFilename(deal, kind) {
-  return buildDealBriefFilename(deal, kind).replace(/\.txt$/i, ".rtf");
-}
-
-function escapeRtfText(value) {
-  return String(value || "")
-    .replace(/\\/g, "\\\\")
-    .replace(/{/g, "\\{")
-    .replace(/}/g, "\\}")
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/[^\x00-\x7F]/g, (char) => {
-      const code = char.charCodeAt(0);
-      return `\\u${code > 32767 ? code - 65536 : code}?`;
-    });
+  return buildDealBriefFilename(deal, kind).replace(/\.txt$/i, ".doc");
 }
 
 function isRtfHeadingLine(line, index) {
@@ -11318,49 +11560,116 @@ function isRtfHeadingLine(line, index) {
   return /^[A-Z][A-Za-z0-9/&\- ]+$/.test(text);
 }
 
-function buildWordCompatibleRtf(kind, deal, template) {
+function buildWordCompatibleHtml(kind, deal, template) {
   const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "SalesRep Request");
-  const client = cleanText(buildDocumentClientName(deal));
+  const subtitle = [buildDocumentClientName(deal), cleanText(deal.market), new Date().toLocaleDateString("en-US")].filter(Boolean).join(" · ");
   const lines = String(template?.content || "").split("\n");
-  const body = lines
-    .map((line, index) => {
-      const trimmed = cleanText(line);
-      if (!trimmed) {
-        return "\\pard\\sa90\\par";
-      }
+  const blocks = [];
 
-      const escaped = escapeRtfText(trimmed);
-      if (index === 0) {
-        return `\\pard\\qc\\sa180\\b\\fs34 ${escaped}\\b0\\par`;
-      }
-      if (isRtfHeadingLine(trimmed, index)) {
-        return `\\pard\\sa120\\b\\fs24 ${escaped}\\b0\\par`;
-      }
-      return `\\pard\\sa80\\fs22 ${escaped}\\par`;
-    })
-    .join("\n");
+  lines.forEach((line, index) => {
+    const trimmed = cleanText(line);
+    if (!trimmed) {
+      blocks.push('<div class="doc-spacer"></div>');
+      return;
+    }
 
-  const subtitle = escapeRtfText([client, cleanText(deal.market), new Date().toLocaleDateString("en-US")].filter(Boolean).join(" · "));
-  const docTitle = escapeRtfText(title);
+    if (index === 0) {
+      return;
+    }
 
-  return [
-    "{\\rtf1\\ansi\\deff0",
-    "{\\fonttbl{\\f0 Calibri;}}",
-    "{\\colortbl;\\red22\\green26\\blue31;\\red68\\green114\\blue196;\\red93\\green102\\blue115;}",
-    "\\viewkind4\\uc1",
-    `\\pard\\qc\\sa180\\b\\cf1\\fs36 ${docTitle}\\b0\\par`,
-    subtitle ? `\\pard\\qc\\sa140\\b\\cf2\\fs22 ${subtitle}\\b0\\par` : "",
-    "\\pard\\qc\\sa160\\i\\cf3\\fs20 Word-compatible export generated from SalesRep\\i0\\par",
-    body,
-    "}",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    if (isRtfHeadingLine(trimmed, index)) {
+      blocks.push(`<h2>${escapeHtml(trimmed)}</h2>`);
+      return;
+    }
+
+    const labelMatch = trimmed.match(/^([^:]{1,72}):\s*(.*)$/);
+    if (labelMatch) {
+      const [, label, value] = labelMatch;
+      blocks.push(
+        `<p><strong>${escapeHtml(`${cleanText(label)}:`)}</strong> ${escapeHtml(cleanText(value) || "Not provided")}</p>`
+      );
+      return;
+    }
+
+    blocks.push(`<p>${escapeHtml(trimmed)}</p>`);
+  });
+
+  return `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="ProgId" content="Word.Document" />
+    <meta name="Generator" content="SalesRep" />
+    <meta name="Originator" content="SalesRep" />
+    <title>${escapeHtml(title)}</title>
+    <style>
+      @page {
+        size: A4;
+        margin: 1in;
+      }
+      body {
+        font-family: Calibri, Arial, sans-serif;
+        color: #161a1f;
+        line-height: 1.42;
+        font-size: 11pt;
+      }
+      .doc-shell {
+        max-width: 7.3in;
+      }
+      .doc-kicker {
+        margin: 0 0 8pt;
+        color: #4472c4;
+        font-size: 9pt;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.4pt;
+      }
+      h1 {
+        margin: 0 0 10pt;
+        font-size: 24pt;
+        line-height: 1.1;
+      }
+      .doc-subtitle {
+        margin: 0 0 16pt;
+        color: #5d6674;
+        font-size: 10pt;
+      }
+      h2 {
+        margin: 18pt 0 8pt;
+        font-size: 14pt;
+        color: #161a1f;
+      }
+      p {
+        margin: 0 0 7pt;
+      }
+      strong {
+        font-weight: 700;
+      }
+      .doc-spacer {
+        height: 8pt;
+      }
+      .doc-footer {
+        margin-top: 18pt;
+        color: #7d8794;
+        font-size: 9pt;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="doc-shell">
+      <p class="doc-kicker">SalesRep Request Export</p>
+      <h1>${escapeHtml(title)}</h1>
+      ${subtitle ? `<p class="doc-subtitle">${escapeHtml(subtitle)}</p>` : ""}
+      ${blocks.join("\n")}
+      <p class="doc-footer">Generated from SalesRep as a Word-compatible document.</p>
+    </div>
+  </body>
+</html>`;
 }
 
 function downloadWordCompatibleRequest(kind, deal, template) {
-  const rtf = buildWordCompatibleRtf(kind, deal, template);
-  downloadBlob(buildWordCompatibleFilename(deal, kind), rtf, "application/rtf;charset=utf-8");
+  const html = buildWordCompatibleHtml(kind, deal, template);
+  downloadBlob(buildWordCompatibleFilename(deal, kind), html, "application/msword;charset=utf-8");
 }
 
 function getDealBriefTemplate(kind, deal) {
@@ -11539,7 +11848,7 @@ async function exportDealDocx(kind, sourceDeal = null) {
 
   if (!serverMeta.ready) {
     downloadWordCompatibleRequest(kind, deal, template);
-    setBanner("Stage saved and a Word-compatible request file was exported. Full DOCX with your template still requires the local SalesRep server.", "success");
+    setBanner("Stage saved and a Word request file was exported. Full DOCX with your template still requires the local SalesRep server.", "success");
     return;
   }
 
@@ -11565,7 +11874,7 @@ async function exportDealDocx(kind, sourceDeal = null) {
   } catch (error) {
     downloadWordCompatibleRequest(kind, deal, template);
     setBanner(
-      `No pude exportar el DOCX. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."} Se exportó un archivo Word-compatible como fallback.`,
+      `No pude exportar el DOCX. ${error?.message || "Verifica que el servidor local siga activo y que la plantilla exista."} Se exportó un archivo Word como fallback.`,
       "warn"
     );
   }

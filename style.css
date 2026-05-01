@@ -3447,9 +3447,15 @@ button.stage-card {
   overflow-wrap: anywhere;
 }
 
+.company-profile-summary-note {
+  color: var(--ink-faint);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .company-profile-summary-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
   align-content: start;
 }
@@ -3521,6 +3527,32 @@ button.stage-card {
 .company-contact-card {
   display: grid;
   gap: 4px;
+}
+
+.company-profile-edit-shell,
+.company-profile-edit-form,
+.company-profile-edit-stack,
+.company-profile-edit-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.company-profile-edit-shell {
+  padding: 20px;
+}
+
+.company-profile-edit-card .subpanel-head {
+  align-items: start;
+}
+
+.company-profile-edit-card .form-note {
+  margin: 4px 0 0;
+}
+
+.company-profile-edit-card textarea,
+.company-profile-edit-card input {
+  width: 100%;
 }
 
 .company-contact-card span {
