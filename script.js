@@ -1021,7 +1021,7 @@ function bindEvents() {
   });
 
   document.getElementById("reload-excel-button").addEventListener("click", async () => {
-    setLoadingState(true, "Refreshing workbook", "Reloading SalesRep from the local Excel control file.");
+    setLoadingState(true, "Refreshing workbook", "Reloading Spazio from the local Excel control file.");
     try {
       await hydrateFromExcel();
       renderAll();
@@ -2673,7 +2673,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-admin",
       fullName: "LATAM Workspace Admin",
-      email: "admin@salesrep.local",
+      email: "admin@spazio.local",
       role: "Administrator",
       status: "Active",
       team: "Revenue Operations",
@@ -2682,7 +2682,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-manager",
       fullName: "Commercial Manager",
-      email: "manager@salesrep.local",
+      email: "manager@spazio.local",
       role: "Sales Manager",
       status: "Active",
       team: "Commercial",
@@ -2691,7 +2691,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-ops",
       fullName: "Integration Ops",
-      email: "ops@salesrep.local",
+      email: "ops@spazio.local",
       role: "Revenue Ops",
       status: "Active",
       team: "Operations",
@@ -2702,10 +2702,10 @@ function createDefaultUsers() {
 
 function createDefaultWorkspace(year = new Date().getFullYear()) {
   return normalizeWorkspace({
-    workspaceName: "SalesRep LATAM",
+    workspaceName: "Spazio LATAM",
     organizationName: "Evolution LATAM",
     adminName: "LATAM Workspace Admin",
-    adminEmail: "admin@salesrep.local",
+    adminEmail: "admin@spazio.local",
     subscriptionPlan: "Enterprise",
     crmModel: "New + Existing Accounts",
     fiscalYear: year,
@@ -3047,10 +3047,10 @@ function normalizeWorkspace(input) {
   const year = new Date().getFullYear();
   const source = input && typeof input === "object" ? input : {};
   return {
-    workspaceName: cleanText(source.workspaceName) || "SalesRep LATAM",
+    workspaceName: cleanText(source.workspaceName) || "Spazio LATAM",
     organizationName: cleanText(source.organizationName) || "Evolution LATAM",
     adminName: cleanText(source.adminName) || "LATAM Workspace Admin",
-    adminEmail: cleanText(source.adminEmail) || "admin@salesrep.local",
+    adminEmail: cleanText(source.adminEmail) || "admin@spazio.local",
     subscriptionPlan: cleanText(source.subscriptionPlan) || "Enterprise",
     crmModel: cleanText(source.crmModel) || "New + Existing Accounts",
     fiscalYear: toNullableNumber(source.fiscalYear) || year,
@@ -3441,7 +3441,7 @@ function renderAll() {
   renderCompanyProfileDrawer();
 }
 
-function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing SalesRep from the local Excel workspace.") {
+function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing Spazio from the local Excel workspace.") {
   ui.isHydrating = Boolean(isLoading);
   document.body.classList.toggle("app-loading", ui.isHydrating);
   elements.loadingOverlay.classList.toggle("is-visible", ui.isHydrating);
@@ -5269,7 +5269,7 @@ function openCompanyFinderBestMatch() {
 function createNewAccountFromCompanyQuery(query) {
   const normalizedQuery = cleanText(query);
   if (!normalizedQuery) {
-    setBanner("Type a company name first so SalesRep can prefill a new account workspace.", "warn");
+    setBanner("Type a company name first so Spazio can prefill a new account workspace.", "warn");
     return;
   }
 
@@ -5304,7 +5304,7 @@ function createNewAccountFromCompanyQuery(query) {
   ui.companyFinder.selectedDealId = null;
   renderCompanyFinder(normalizedQuery);
   window.scrollTo({ top: 0, behavior: "smooth" });
-  setBanner(`New account workspace prepared for ${normalizedQuery}. Complete the deal form to create the company in SalesRep.`, "success");
+  setBanner(`New account workspace prepared for ${normalizedQuery}. Complete the deal form to create the company in Spazio.`, "success");
 }
 
 const COMPANY_PROFILE_EDIT_SECTIONS = [
@@ -12103,7 +12103,7 @@ function isRtfHeadingLine(line, index) {
 }
 
 function buildWordCompatibleHtml(kind, deal, template) {
-  const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "SalesRep Request");
+  const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "Spazio Request");
   const subtitle = [buildDocumentClientName(deal), cleanText(deal.market), new Date().toLocaleDateString("en-US")].filter(Boolean).join(" · ");
   const lines = String(template?.content || "").split("\n");
   const blocks = [];
@@ -12141,8 +12141,8 @@ function buildWordCompatibleHtml(kind, deal, template) {
   <head>
     <meta charset="utf-8" />
     <meta name="ProgId" content="Word.Document" />
-    <meta name="Generator" content="SalesRep" />
-    <meta name="Originator" content="SalesRep" />
+    <meta name="Generator" content="Spazio" />
+    <meta name="Originator" content="Spazio" />
     <title>${escapeHtml(title)}</title>
     <style>
       @page {
@@ -12199,11 +12199,11 @@ function buildWordCompatibleHtml(kind, deal, template) {
   </head>
   <body>
     <div class="doc-shell">
-      <p class="doc-kicker">SalesRep Request Export</p>
+      <p class="doc-kicker">Spazio Request Export</p>
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<p class="doc-subtitle">${escapeHtml(subtitle)}</p>` : ""}
       ${blocks.join("\n")}
-      <p class="doc-footer">Generated from SalesRep as a Word-compatible document.</p>
+      <p class="doc-footer">Generated from Spazio as a Word-compatible document.</p>
     </div>
   </body>
 </html>`;
@@ -12390,7 +12390,7 @@ async function exportDealDocx(kind, sourceDeal = null) {
 
   if (!serverMeta.ready) {
     downloadWordCompatibleRequest(kind, deal, template);
-    setBanner("Stage saved and a Word request file was exported. Full DOCX with your template still requires the local SalesRep server.", "success");
+    setBanner("Stage saved and a Word request file was exported. Full DOCX with your template still requires the local Spazio server.", "success");
     return;
   }
 
@@ -12824,7 +12824,7 @@ function getWorkflowCurrentAndNext() {
 }
 
 async function resetDemoState() {
-  setLoadingState(true, "Reloading reference workbook", "Refreshing SalesRep from your Excel reference files.");
+  setLoadingState(true, "Reloading reference workbook", "Refreshing Spazio from your Excel reference files.");
   try {
     const response = await fetch(API_RESET_DEMO_URL, {
       method: "POST",
@@ -12954,7 +12954,7 @@ async function uploadExcelWorkbook(file) {
     setBanner("This upload requires a modern Excel workbook (.xlsx or .xlsm). Please resave the file and try again.", "danger");
     return;
   }
-  setLoadingState(true, "Importing Excel", `Loading ${safeName} into SalesRep and rebuilding the local workbook.`);
+  setLoadingState(true, "Importing Excel", `Loading ${safeName} into Spazio and rebuilding the local workbook.`);
 
   try {
     const response = await fetch(`${API_UPLOAD_URL}?filename=${encodeURIComponent(safeName)}`, {
@@ -13047,7 +13047,7 @@ function buildUploadSummary(payload) {
     return `Source workbook imported: ${filename}. Refreshed ${deals} deals and ${targets} targets while preserving tasks, campaigns, users, and workspace settings.${mappingNote}${warningNote}`;
   }
 
-  return `Excel imported: ${filename}. SalesRep data has been refreshed.`;
+  return `Excel imported: ${filename}. Spazio data has been refreshed.`;
 }
 
 function buildExportFilename(baseName, extension) {

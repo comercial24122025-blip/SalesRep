@@ -124,6 +124,13 @@ body.app-loading {
   text-align: center;
 }
 
+.loading-overlay-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 4px;
+  filter: drop-shadow(0 12px 24px rgba(10, 132, 255, 0.18));
+}
+
 .loading-overlay-kicker {
   font-size: 0.76rem;
   font-weight: 700;
@@ -180,6 +187,24 @@ body.app-loading {
   display: grid;
   gap: 10px;
   max-width: 880px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.brand-lockup-mark {
+  width: 74px;
+  height: 74px;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 14px 28px rgba(10, 132, 255, 0.12));
+}
+
+.brand-lockup-copy {
+  display: grid;
+  gap: 6px;
 }
 
 .hero-tenant {
@@ -246,7 +271,7 @@ h1 {
   font-size: clamp(2.4rem, 5vw, 4.6rem);
   line-height: 0.96;
   letter-spacing: -0.04em;
-  max-width: 11ch;
+  max-width: 12ch;
 }
 
 h2 {
@@ -3841,6 +3866,10 @@ button.stage-card {
     grid-template-columns: 1fr;
   }
 
+  .brand-lockup {
+    align-items: flex-start;
+  }
+
   .hero-actions {
     justify-content: flex-start;
   }
@@ -3851,6 +3880,11 @@ button.stage-card {
 }
 
 @media (max-width: 960px) {
+  .brand-lockup {
+    flex-direction: column;
+    gap: 14px;
+  }
+
   .filter-grid,
   .form-grid-2,
   .form-grid-3,
