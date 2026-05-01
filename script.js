@@ -9,6 +9,28 @@ const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
 const BROWSER_STATE_STORAGE_KEY = "salesrep-published-state-v1";
+const DEAL_FORM_AUTOSAVE_STORAGE_KEY = "salesrep-deal-autosave-v1";
+const DEAL_FORM_AUTOSAVE_DELAY_MS = 450;
+const DEAL_FORM_SECTION_DEFS = [
+  ["deal-section-core", "Core"],
+  ["deal-section-scoring", "Scoring"],
+  ["deal-section-timeline", "Timeline"],
+  ["deal-section-status", "Status"],
+  ["deal-section-requests", "Requests"],
+  ["deal-section-context", "Context"],
+];
+const COMMERCIAL_BUILDER_FIELD_IDS = [
+  "commercial-builder-product",
+  "commercial-builder-model",
+  "commercial-builder-base",
+  "commercial-builder-structure",
+  "commercial-builder-rate",
+  "commercial-builder-fixed-fee",
+  "commercial-builder-volume-from",
+  "commercial-builder-volume-to",
+  "commercial-builder-volume-unit",
+  "commercial-builder-notes",
+];
 const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"];
 const ALL_STAGES = [...STAGE_ORDER];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -596,6 +618,7 @@ const taskForm = document.getElementById("task-form");
 const campaignForm = document.getElementById("campaign-form");
 const workspaceForm = document.getElementById("workspace-form");
 const userForm = document.getElementById("user-form");
+const DEAL_FORM_SECTION_FIELD_MAP = buildDealFormSectionFieldMap();
 
 const viewTabs = Array.from(document.querySelectorAll("[data-view-trigger]"));
 const views = Array.from(document.querySelectorAll("[data-view]"));
@@ -683,6 +706,11 @@ const elements = {
   dealWorkflowStageBadge: document.getElementById("deal-workflow-stage-badge"),
   dealFormTitle: document.getElementById("deal-form-title"),
   dealSubmitButton: document.getElementById("deal-submit-button"),
+  dealAutosaveBadge: document.getElementById("deal-autosave-badge"),
+  dealAutosaveCopy: document.getElementById("deal-autosave-copy"),
+  dealAutosaveSections: document.getElementById("deal-autosave-sections"),
+  restoreDealDraftButton: document.getElementById("restore-deal-draft-button"),
+  discardDealDraftButton: document.getElementById("discard-deal-draft-button"),
   pipelineOperatingGuide: document.getElementById("pipeline-operating-guide"),
   pipelineOperatingStageChip: document.getElementById("pipeline-operating-stage-chip"),
   targetFormTitle: document.getElementById("target-form-title"),
@@ -764,6 +792,10 @@ const ui = {
   kpiSearch: "",
   isHydrating: true,
   companyAssistKey: "",
+  dealAutosaveStatus: "idle",
+  dealAutosaveSavedAt: "",
+  dealAutosaveBaseline: null,
+  dealAutosaveRestored: false,
 };
 
 let state = {
@@ -783,6 +815,7 @@ let state = {
 };
 
 let derived = createDerivedState();
+let dealAutosaveTimer = 0;
 
 const serverMeta = {
   workbookPath: "",
@@ -1035,9 +1068,17 @@ function bindEvents() {
 
   dealForm.addEventListener("submit", handleDealSubmit);
   document.getElementById("deal-cancel-button").addEventListener("click", () => {
+    clearActiveDealAutosave(true);
     ui.editingDealId = null;
     resetDealForm();
-    setBanner("Deal form cleared.", "default");
+    setBanner("Deal form cleared and autosave draft discarded.", "default");
+  });
+  elements.restoreDealDraftButton?.addEventListener("click", () => {
+    restoreActiveDealAutosave();
+  });
+  elements.discardDealDraftButton?.addEventListener("click", () => {
+    clearActiveDealAutosave(true);
+    setBanner("Draft autosave discarded for this deal workspace.", "default");
   });
   document.getElementById("copy-legal-brief-button").addEventListener("click", () => {
     void copyDealBrief("legal");
@@ -1093,6 +1134,7 @@ function bindEvents() {
       maybeHydrateDealFormFromCompanyMatch();
     }
   });
+  renderDealAutosaveState();
   syncCommercialBuilderUi();
 
   targetForm.addEventListener("submit", handleTargetSubmit);
@@ -1541,6 +1583,374 @@ function clearBrowserStateCache() {
   } catch {
     // Ignore localStorage cleanup issues in restricted browser contexts.
   }
+}
+
+function buildDealFormSectionFieldMap() {
+  if (!dealForm) {
+    return {};
+  }
+
+  const mapping = {};
+  DEAL_FORM_SECTION_DEFS.forEach(([sectionId]) => {
+    const section = document.getElementById(sectionId);
+    if (!section) {
+      return;
+    }
+    section.querySelectorAll("input[name], select[name], textarea[name]").forEach((field) => {
+      if (field.name && !mapping[field.name]) {
+        mapping[field.name] = sectionId;
+      }
+    });
+  });
+
+  COMMERCIAL_BUILDER_FIELD_IDS.forEach((fieldId) => {
+    mapping[fieldId] = "deal-section-requests";
+  });
+
+  return mapping;
+}
+
+function readDealAutosaveStore() {
+  try {
+    const raw = window.localStorage.getItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    return parsed && typeof parsed === "object" && parsed.drafts && typeof parsed.drafts === "object" ? parsed : { drafts: {} };
+  } catch {
+    return { drafts: {} };
+  }
+}
+
+function writeDealAutosaveStore(payload) {
+  try {
+    window.localStorage.setItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY, JSON.stringify(payload));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getActiveDealAutosaveKey() {
+  return ui.editingDealId ? `deal:${ui.editingDealId}` : "deal:new";
+}
+
+function getDealAutosaveEntry(key = getActiveDealAutosaveKey()) {
+  return readDealAutosaveStore().drafts?.[key] || null;
+}
+
+function clonePlainObject(value) {
+  return value ? JSON.parse(JSON.stringify(value)) : {};
+}
+
+function captureDealFormSnapshot() {
+  if (!dealForm) {
+    return {};
+  }
+
+  const snapshot = {};
+  Array.from(dealForm.elements).forEach((field) => {
+    if (!field?.name || field.disabled) {
+      return;
+    }
+    if (field.type === "submit" || field.type === "button" || field.type === "reset") {
+      return;
+    }
+    snapshot[field.name] = field.type === "checkbox" ? Boolean(field.checked) : field.value ?? "";
+  });
+
+  COMMERCIAL_BUILDER_FIELD_IDS.forEach((fieldId) => {
+    const field = document.getElementById(fieldId);
+    if (field) {
+      snapshot[fieldId] = field.value ?? "";
+    }
+  });
+
+  return snapshot;
+}
+
+function sectionFieldNames(sectionId) {
+  return Object.entries(DEAL_FORM_SECTION_FIELD_MAP)
+    .filter(([, mappedSectionId]) => mappedSectionId === sectionId)
+    .map(([fieldName]) => fieldName);
+}
+
+function getSectionSnapshot(snapshot, sectionId) {
+  const data = {};
+  sectionFieldNames(sectionId).forEach((fieldName) => {
+    data[fieldName] = snapshot[fieldName];
+  });
+  return data;
+}
+
+function snapshotsEqual(left = {}, right = {}) {
+  const keys = new Set([...Object.keys(left || {}), ...Object.keys(right || {})]);
+  for (const key of keys) {
+    if ((left || {})[key] !== (right || {})[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function buildDealAutosaveEntry(snapshot, previousEntry = null) {
+  const now = new Date().toISOString();
+  const sections = {};
+
+  DEAL_FORM_SECTION_DEFS.forEach(([sectionId, label]) => {
+    const data = getSectionSnapshot(snapshot, sectionId);
+    const previousSection = previousEntry?.sections?.[sectionId];
+    const changed = !previousSection || !snapshotsEqual(data, previousSection.data || {});
+    sections[sectionId] = {
+      label,
+      updatedAt: changed ? now : previousSection.updatedAt || now,
+      data,
+    };
+  });
+
+  return {
+    key: getActiveDealAutosaveKey(),
+    dealId: ui.editingDealId || "",
+    mode: ui.editingDealId ? "edit" : "new",
+    savedAt: now,
+    summary: {
+      deal: cleanText(snapshot.deal),
+      client: cleanText(snapshot.client),
+      operator: cleanText(snapshot.operator),
+    },
+    sections,
+  };
+}
+
+function setDealAutosaveBaseline(snapshot = captureDealFormSnapshot()) {
+  ui.dealAutosaveBaseline = clonePlainObject(snapshot);
+  ui.dealAutosaveStatus = "idle";
+  ui.dealAutosaveSavedAt = "";
+  ui.dealAutosaveRestored = false;
+  renderDealAutosaveState();
+}
+
+function applyDealFormSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return;
+  }
+
+  Object.entries(snapshot).forEach(([fieldName, value]) => {
+    const field = dealForm.elements[fieldName] || document.getElementById(fieldName);
+    if (!field) {
+      return;
+    }
+    if (field.type === "checkbox") {
+      field.checked = Boolean(value);
+      return;
+    }
+    field.value = value ?? "";
+  });
+
+  syncCommercialBuilderUi();
+  syncDealScoringPreview();
+}
+
+function activeDealAutosaveHasChanges() {
+  return !snapshotsEqual(captureDealFormSnapshot(), ui.dealAutosaveBaseline || {});
+}
+
+function saveDealAutosaveNow() {
+  window.clearTimeout(dealAutosaveTimer);
+  dealAutosaveTimer = 0;
+
+  if (!dealForm || ui.isHydrating) {
+    return;
+  }
+
+  const snapshot = captureDealFormSnapshot();
+  const baseline = ui.dealAutosaveBaseline || {};
+  const key = getActiveDealAutosaveKey();
+
+  if (snapshotsEqual(snapshot, baseline)) {
+    const store = readDealAutosaveStore();
+    if (store.drafts[key]) {
+      delete store.drafts[key];
+      writeDealAutosaveStore(store);
+    }
+    ui.dealAutosaveStatus = "idle";
+    ui.dealAutosaveSavedAt = "";
+    renderDealAutosaveState();
+    return;
+  }
+
+  const store = readDealAutosaveStore();
+  const entry = buildDealAutosaveEntry(snapshot, store.drafts[key]);
+  store.drafts[key] = entry;
+
+  if (writeDealAutosaveStore(store)) {
+    ui.dealAutosaveStatus = "saved";
+    ui.dealAutosaveSavedAt = entry.savedAt;
+  } else {
+    ui.dealAutosaveStatus = "error";
+  }
+  renderDealAutosaveState();
+}
+
+function scheduleDealAutosave(options = {}) {
+  if (!dealForm || ui.isHydrating) {
+    return;
+  }
+
+  ui.dealAutosaveStatus = "saving";
+  renderDealAutosaveState();
+  window.clearTimeout(dealAutosaveTimer);
+
+  if (options.immediate) {
+    saveDealAutosaveNow();
+    return;
+  }
+
+  dealAutosaveTimer = window.setTimeout(() => {
+    saveDealAutosaveNow();
+  }, DEAL_FORM_AUTOSAVE_DELAY_MS);
+}
+
+function clearDealAutosaveEntry(key) {
+  const store = readDealAutosaveStore();
+  if (!store.drafts[key]) {
+    return;
+  }
+  delete store.drafts[key];
+  try {
+    if (Object.keys(store.drafts).length === 0) {
+      window.localStorage.removeItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY);
+      return;
+    }
+  } catch {
+    // Ignore restricted localStorage contexts.
+  }
+  writeDealAutosaveStore(store);
+}
+
+function clearActiveDealAutosave(restoreBaseline = false) {
+  window.clearTimeout(dealAutosaveTimer);
+  dealAutosaveTimer = 0;
+  clearDealAutosaveEntry(getActiveDealAutosaveKey());
+  ui.dealAutosaveStatus = "idle";
+  ui.dealAutosaveSavedAt = "";
+  ui.dealAutosaveRestored = false;
+  if (restoreBaseline && ui.dealAutosaveBaseline) {
+    applyDealFormSnapshot(ui.dealAutosaveBaseline);
+  }
+  renderDealAutosaveState();
+}
+
+function restoreActiveDealAutosave() {
+  const entry = getDealAutosaveEntry();
+  if (!entry) {
+    setBanner("No draft autosave is available for this deal workspace.", "warn");
+    return;
+  }
+
+  const mergedSnapshot = {};
+  Object.values(entry.sections || {}).forEach((section) => {
+    Object.assign(mergedSnapshot, section.data || {});
+  });
+
+  applyDealFormSnapshot(mergedSnapshot);
+  ui.dealAutosaveRestored = true;
+  ui.dealAutosaveStatus = "saved";
+  ui.dealAutosaveSavedAt = entry.savedAt || "";
+  renderDealAutosaveState();
+  setBanner(`Draft restored for ${entry.summary?.deal || entry.summary?.client || "this deal workspace"}.`, "success");
+}
+
+function maybeRestoreActiveDealAutosave() {
+  const entry = getDealAutosaveEntry();
+  if (!entry) {
+    renderDealAutosaveState();
+    return false;
+  }
+
+  const shouldAutoRestore = Boolean(ui.editingDealId) || !activeDealAutosaveHasChanges();
+  if (!shouldAutoRestore) {
+    renderDealAutosaveState();
+    return false;
+  }
+
+  const mergedSnapshot = {};
+  Object.values(entry.sections || {}).forEach((section) => {
+    Object.assign(mergedSnapshot, section.data || {});
+  });
+  applyDealFormSnapshot(mergedSnapshot);
+  ui.dealAutosaveRestored = true;
+  ui.dealAutosaveStatus = "saved";
+  ui.dealAutosaveSavedAt = entry.savedAt || "";
+  renderDealAutosaveState();
+  return true;
+}
+
+function formatAutosaveTimestamp(value) {
+  if (!value) {
+    return "";
+  }
+
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(timestamp);
+}
+
+function renderDealAutosaveState() {
+  if (!elements.dealAutosaveBadge || !elements.dealAutosaveCopy || !elements.dealAutosaveSections) {
+    return;
+  }
+
+  const entry = getDealAutosaveEntry();
+  const hasDraft = Boolean(entry);
+  const currentSnapshot = captureDealFormSnapshot();
+  const baseline = ui.dealAutosaveBaseline || {};
+  const hasPendingChanges = !snapshotsEqual(currentSnapshot, baseline);
+
+  let badgeText = "Autosave ready";
+  let badgeClass = "pill neutral";
+  let copyText = "Drafts are saved in this browser by section while you work on the deal.";
+
+  if (ui.dealAutosaveStatus === "saving") {
+    badgeText = "Autosaving…";
+    badgeClass = "pill info";
+    copyText = "Section updates are being written to this browser draft.";
+  } else if (ui.dealAutosaveStatus === "error") {
+    badgeText = "Autosave unavailable";
+    badgeClass = "pill neutral";
+    copyText = "This browser blocked draft autosave. Keep an eye on manual save for this deal.";
+  } else if (hasDraft) {
+    badgeText = ui.dealAutosaveSavedAt ? `Saved ${formatAutosaveTimestamp(ui.dealAutosaveSavedAt)}` : "Draft saved";
+    badgeClass = "pill success";
+    copyText = ui.dealAutosaveRestored
+      ? "The current deal form includes a restored browser draft, grouped by section."
+      : "A browser draft exists for this deal workspace. Restore it or continue from the live form.";
+  } else if (hasPendingChanges) {
+    badgeText = "Draft pending";
+    badgeClass = "pill info";
+    copyText = "Changes are different from the current baseline and will autosave shortly.";
+  }
+
+  elements.dealAutosaveBadge.className = badgeClass;
+  elements.dealAutosaveBadge.textContent = badgeText;
+  elements.dealAutosaveCopy.textContent = copyText;
+  elements.restoreDealDraftButton.disabled = !hasDraft;
+  elements.discardDealDraftButton.disabled = !hasDraft && !hasPendingChanges;
+
+  elements.dealAutosaveSections.innerHTML = DEAL_FORM_SECTION_DEFS.map(([sectionId, label]) => {
+    const currentSection = getSectionSnapshot(currentSnapshot, sectionId);
+    const baselineSection = getSectionSnapshot(baseline, sectionId);
+    const entrySection = entry?.sections?.[sectionId];
+    const changedNow = !snapshotsEqual(currentSection, baselineSection);
+    const sectionSaved = entrySection && !snapshotsEqual(entrySection.data || {}, baselineSection);
+    const stateLabel = ui.dealAutosaveStatus === "saving" && changedNow ? "Saving…" : sectionSaved ? `Saved ${formatAutosaveTimestamp(entrySection.updatedAt)}` : changedNow ? "Pending" : "Ready";
+    const pillClass = ui.dealAutosaveStatus === "saving" && changedNow ? "deal-autosave-pill is-active" : sectionSaved ? "deal-autosave-pill is-saved" : "deal-autosave-pill is-empty";
+    return `<div class="${pillClass}"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(stateLabel)}</span></div>`;
+  }).join("");
 }
 
 function createDefaultState() {
@@ -6044,6 +6454,7 @@ async function handleDealSubmit(event) {
 
   const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
   const draft = buildDealDraftFromForm(existingDeal);
+  const autosaveKey = getActiveDealAutosaveKey();
 
   if (!draft.deal.trim()) {
     setBanner("El campo Deal es obligatorio.", "danger");
@@ -6057,6 +6468,10 @@ async function handleDealSubmit(event) {
   }
 
   const saved = await persistState();
+  clearDealAutosaveEntry(autosaveKey);
+  ui.dealAutosaveStatus = "idle";
+  ui.dealAutosaveSavedAt = "";
+  ui.dealAutosaveRestored = false;
   ui.editingDealId = null;
   resetDealForm();
   renderAll();
@@ -7434,7 +7849,7 @@ function prefillCampaignFromDeal(deal) {
   setBanner(`Campaign draft prepared from ${deal.deal}.`, "default");
 }
 
-function fillDealForm(deal) {
+function fillDealForm(deal, options = {}) {
   const fields = [
     "deal",
     "client",
@@ -7591,13 +8006,19 @@ function fillDealForm(deal) {
   ui.companyAssistKey = getCompanyProfileKey(deal);
   resetCommercialBuilder();
   syncDealScoringPreview();
+  setDealAutosaveBaseline();
+  if (options.autoRestore ?? Boolean(ui.editingDealId)) {
+    maybeRestoreActiveDealAutosave();
+  } else {
+    renderDealAutosaveState();
+  }
 }
 
 function resetDealForm() {
   const draft = createEmptyDeal();
-  dealForm.reset();
-  fillDealForm(draft);
   ui.editingDealId = null;
+  dealForm.reset();
+  fillDealForm(draft, { autoRestore: true });
   ui.companyAssistKey = "";
   elements.dealFormTitle.textContent = "New Deal";
   elements.dealSubmitButton.textContent = "Save Deal";
@@ -7810,6 +8231,7 @@ function maybeHydrateDealFormFromCompanyMatch() {
   if (filledCount > 0) {
     ui.companyAssistKey = profileKey;
     syncDealScoringPreview();
+    scheduleDealAutosave({ immediate: true });
     setBanner(`Company context loaded from ${profile.title}. ${filledCount} field${filledCount === 1 ? "" : "s"} prefilled.`, "success");
   }
 }
@@ -8995,6 +9417,7 @@ function buildCrmOwnerRows(deals) {
 
 function handleDealScoringInput() {
   syncDealScoringPreview();
+  scheduleDealAutosave();
 }
 
 function handleDealAssistAction(event) {
@@ -9023,12 +9446,14 @@ function handleDealAssistAction(event) {
   const presetButton = event.target.closest("[data-commercial-preset]");
   if (presetButton) {
     applyCommercialBuilderPreset(presetButton.dataset.commercialPreset);
+    scheduleDealAutosave({ immediate: true });
     return;
   }
 
   const actionButton = event.target.closest("[data-commercial-action]");
   if (actionButton) {
     applyCommercialBuilderAction(actionButton.dataset.commercialAction);
+    scheduleDealAutosave({ immediate: true });
   }
 }
 
@@ -11758,13 +12183,17 @@ function buildUploadSummary(payload) {
   const deals = Number(counts.deals || 0);
   const targets = Number(counts.targets || 0);
   const intel = Number(counts.marketIntel || 0);
+  const sheetMatches = meta.sheetMatches && typeof meta.sheetMatches === "object" ? Object.values(meta.sheetMatches).filter(Boolean) : [];
+  const warnings = Array.isArray(meta.warnings) ? meta.warnings.filter(Boolean) : [];
+  const mappingNote = sheetMatches.length ? ` Auto-mapped sheets: ${sheetMatches.join(", ")}.` : "";
+  const warningNote = warnings.length ? ` Review: ${warnings[0]}.` : "";
 
   if (mode === "salesrep-workbook") {
-    return `Excel imported: ${filename}. Loaded ${deals} deals, ${targets} targets, and ${intel} market intelligence records.`;
+    return `Excel imported: ${filename}. Loaded ${deals} deals, ${targets} targets, and ${intel} market intelligence records.${warningNote}`;
   }
 
   if (mode === "opportunities-source") {
-    return `Source workbook imported: ${filename}. Refreshed ${deals} deals and ${targets} targets while preserving tasks, campaigns, users, and workspace settings.`;
+    return `Source workbook imported: ${filename}. Refreshed ${deals} deals and ${targets} targets while preserving tasks, campaigns, users, and workspace settings.${mappingNote}${warningNote}`;
   }
 
   return `Excel imported: ${filename}. SalesRep data has been refreshed.`;

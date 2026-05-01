@@ -915,7 +915,11 @@ button.stat-card {
 .deal-form-toolbar,
 .deal-form-segments,
 .quick-fill-strip,
-.commercial-builder {
+.commercial-builder,
+.deal-autosave-shell,
+.deal-autosave-sections,
+.deal-autosave-summary,
+.deal-autosave-actions {
   display: grid;
   gap: 12px;
 }
@@ -925,6 +929,73 @@ button.stat-card {
   border-radius: 22px;
   background: rgba(244, 248, 252, 0.82);
   border: 1px solid rgba(218, 228, 239, 0.9);
+}
+
+.deal-autosave-shell {
+  padding-top: 4px;
+  border-top: 1px solid rgba(210, 221, 233, 0.9);
+}
+
+.deal-autosave-summary {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.deal-autosave-summary .form-note {
+  margin: 6px 0 0;
+}
+
+.deal-autosave-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.deal-autosave-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.deal-autosave-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(218, 228, 239, 0.92);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.deal-autosave-pill strong {
+  color: var(--ink);
+  font-size: 0.76rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.deal-autosave-pill span {
+  color: var(--ink-faint);
+}
+
+.deal-autosave-pill.is-saved {
+  background: rgba(233, 248, 238, 0.9);
+  border-color: rgba(84, 189, 123, 0.22);
+}
+
+.deal-autosave-pill.is-active {
+  background: rgba(232, 242, 255, 0.92);
+  border-color: rgba(42, 151, 255, 0.24);
+}
+
+.deal-autosave-pill.is-empty {
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .deal-form-segments,

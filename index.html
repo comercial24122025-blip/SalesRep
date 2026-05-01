@@ -582,6 +582,19 @@
                     <button type="button" class="button button-ghost button-small" data-fill-field="market" data-fill-value="Mexico">Mexico</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="platform" data-fill-value="BetConstruct">BetConstruct</button>
                   </div>
+                  <div class="deal-autosave-shell" aria-label="Deal autosave status">
+                    <div class="deal-autosave-summary">
+                      <div>
+                        <span id="deal-autosave-badge" class="pill neutral">Autosave ready</span>
+                        <p id="deal-autosave-copy" class="form-note">Drafts are saved in this browser by section while you work on the deal.</p>
+                      </div>
+                      <div class="deal-autosave-actions">
+                        <button type="button" id="restore-deal-draft-button" class="button button-ghost button-small">Restore Draft</button>
+                        <button type="button" id="discard-deal-draft-button" class="button button-ghost button-small">Discard Draft</button>
+                      </div>
+                    </div>
+                    <div id="deal-autosave-sections" class="deal-autosave-sections"></div>
+                  </div>
                 </div>
 
                 <div id="deal-section-core" class="form-section">
