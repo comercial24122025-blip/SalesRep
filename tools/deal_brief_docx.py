@@ -26,7 +26,7 @@ KIND_CONFIG = {
     },
     "proposal": {
         "title": "Commercial Proposal",
-        "subtitle": "Client-ready commercial brief generated from SalesRep",
+        "subtitle": "Standard Evolution commercial proposal prepared from Spazio",
         "filename_suffix": "commercial-proposal",
     },
     "dd": {
@@ -45,6 +45,40 @@ KIND_CONFIG = {
         "filename_suffix": "legal-signoff-request",
     },
 }
+
+EVOLUTION_GROUP_PARAGRAPHS = [
+    "The Evolution Group is a leading provider of online gaming content, bringing together premium live casino, RNG, slots, and branded content under one commercial relationship.",
+    "Evolution offers the widest range of Live Casino games with one-of-a-kind innovations, immersive classic tables, award-winning game shows, and a multi-studio footprint that supports regulated and growth markets across LATAM and beyond.",
+    "To complement the core live casino proposition, the Group also provides access to premium RNG and slot content from leading studios, creating a broader casino solution for operators looking to scale player acquisition, retention, and wallet share.",
+]
+
+EVOLUTION_BRAND_SECTIONS = [
+    (
+        "Evolution",
+        [
+            "Evolution provides the core live casino proposition, including roulette, blackjack, baccarat, game shows, and native-table options aligned to market preferences and localization needs.",
+            "For LATAM opportunities, Evolution can also support native environments, premium tables, and dedicated positioning opportunities depending on the agreed commercial structure.",
+        ],
+    ),
+    (
+        "Ezugi",
+        [
+            "Ezugi complements the live casino offering with additional live tables and regional depth across multiple jurisdictions, helping operators broaden table variety and player coverage.",
+        ],
+    ),
+    (
+        "NetEnt and Red Tiger",
+        [
+            "NetEnt and Red Tiger add premium slot and branded content to the commercial package, with proven top-performing titles, regular launches, and access to enhanced promotional mechanics where applicable.",
+        ],
+    ),
+    (
+        "Big Time Gaming and Nolimit City",
+        [
+            "Big Time Gaming and Nolimit City extend the content stack with high-recognition mechanics, distinctive math models, and high-engagement slots that can strengthen the broader casino proposition.",
+        ],
+    ),
+]
 
 
 def clean(value) -> str:
@@ -179,8 +213,8 @@ def clear_body_preserve_layout(doc: Document) -> None:
 def set_document_meta(doc: Document, title: str, client_name: str) -> None:
     doc.core_properties.title = title
     doc.core_properties.subject = client_name
-    doc.core_properties.category = "SalesRep Brief"
-    doc.core_properties.comments = "Generated from SalesRep"
+    doc.core_properties.category = "Spazio Brief"
+    doc.core_properties.comments = "Generated from Spazio"
 
 
 def add_title_block(doc: Document, kind: str, deal: dict) -> None:
@@ -404,7 +438,26 @@ def add_proposal_content(doc: Document, deal: dict) -> None:
         first_value(
             deal.get("proposalRequest"),
             deal.get("statusText"),
-            "This document summarizes the commercial scope, client needs, and proposed commercial framework for the opportunity.",
+            f"This commercial proposal outlines the Evolution standard offering, commercials, and implementation scope for {document_client_name(deal)}.",
+        ),
+    )
+
+    add_heading(doc, "About the Evolution Group", 1)
+    for paragraph in EVOLUTION_GROUP_PARAGRAPHS:
+        add_text_block(doc, paragraph)
+
+    add_heading(doc, "About our brands", 1)
+    for title, paragraphs in EVOLUTION_BRAND_SECTIONS:
+        add_heading(doc, title, 2)
+        for paragraph in paragraphs:
+            add_text_block(doc, paragraph)
+
+    add_heading(doc, "Our Commercial Proposal", 1)
+    add_text_block(
+        doc,
+        first_value(
+            deal.get("negotiationScope"),
+            "The commercial proposal below reflects the requested scope, pricing structure, positioning commitments, and operational assumptions currently in discussion.",
         ),
     )
 
@@ -414,11 +467,17 @@ def add_proposal_content(doc: Document, deal: dict) -> None:
     add_kv_paragraph(doc, "Revenue Potential EUR", first_value(deal.get("revenuePotentialEur"), deal.get("dealValue")))
     add_kv_paragraph(doc, "Website", first_value(deal.get("url"), deal.get("siteStatus")))
     add_kv_paragraph(doc, "Proposal Validity", proposal_validity_text(deal))
+    add_kv_paragraph(doc, "Market", first_value(deal.get("market")))
+    add_kv_paragraph(doc, "Commercial Owner", first_value(deal.get("kam")))
 
+    add_heading(doc, "Our Offering and Pricing", 1)
     add_heading(doc, "Requested Offering", 2)
     add_kv_paragraph(doc, "Requested Products", first_value(deal.get("negotiatedProducts"), deal.get("productsPotential"), deal.get("productsCurrent")))
     add_kv_paragraph(doc, "Other Live Suppliers", first_value(deal.get("otherLiveSuppliers")))
     add_kv_paragraph(doc, "Activation Requirements", first_value(deal.get("activationRequirements")))
+    add_kv_paragraph(doc, "Marketing Commitments", first_value(deal.get("marketingCommitments")))
+    add_kv_paragraph(doc, "Live Games Positioning", first_value(deal.get("liveGamesTopPosition")))
+    add_kv_paragraph(doc, "Slots Positioning", first_value(deal.get("slotsTopPosition")))
 
     add_heading(doc, "Commercial Terms and Pricing", 2)
     add_section_table(
@@ -428,9 +487,24 @@ def add_proposal_content(doc: Document, deal: dict) -> None:
             ("Pricing Base", first_value(deal.get("pricingBase"))),
             ("Deduction Terms", first_value(deal.get("deductionTerms"))),
             ("Negotiation Scope", first_value(deal.get("negotiationScope"))),
+            ("Setup Fee Status", first_value(deal.get("setupFeeStatus"))),
+            ("Setup Fee Amount", first_value(deal.get("setupFeeAmount"))),
         ],
     )
     add_commercial_schedule_table(doc, schedule_rows)
+
+    add_heading(doc, "Deductions and Financial Conditions", 2)
+    add_section_table(
+        doc,
+        [
+            ("Deductions Allowed", first_value(deal.get("deductionsAllowed"))),
+            ("Bonus Cap", first_value(deal.get("bonusCap"))),
+            ("Gaming Tax", first_value(deal.get("gamingTax"))),
+            ("Withholding", first_value(deal.get("withholdingTax"))),
+            ("Advance Payment", first_value(deal.get("advancePayment"))),
+            ("Credit Notes", first_value(deal.get("creditNotes"))),
+        ],
+    )
 
     add_heading(doc, "Implementation Dependencies", 2)
     add_kv_paragraph(doc, "Integration Request", first_value(deal.get("integrationRequest")))
@@ -438,11 +512,24 @@ def add_proposal_content(doc: Document, deal: dict) -> None:
     add_kv_paragraph(doc, "Jira", first_value(deal.get("jira")))
     add_kv_paragraph(doc, "Next Actions", first_value(deal.get("actionItems"), deal.get("updates")))
 
+    add_heading(doc, "Appendices Available on Request", 2)
+    add_text_block(doc, "Appendix 1: Evolution Generic Games Offering")
+    add_text_block(doc, "Appendix 2: NetEnt and Red Tiger branded and premium slots")
+    add_text_block(doc, "Appendix 3: Ezugi generic and premium content")
+    add_text_block(doc, "Appendix 4: LATAM package")
+
     add_heading(doc, "Closing", 2)
     add_text_block(
         doc,
-        "We look forward to progressing this opportunity and aligning the commercial proposal with the client’s technical and legal readiness.",
+        "We trust this proposal aligns with the opportunity in scope and provides a strong commercial foundation to move the discussion forward.",
     )
+    add_text_block(
+        doc,
+        "We remain committed to supporting the implementation process with the required legal, technical, and commercial coordination to help deliver a successful launch.",
+    )
+    add_text_block(doc, "Kind regards,")
+    add_text_block(doc, first_value(deal.get("kam"), "Evolution LATAM Commercial Team"))
+    add_text_block(doc, "Evolution LATAM")
 
 
 def add_dd_content(doc: Document, deal: dict) -> None:

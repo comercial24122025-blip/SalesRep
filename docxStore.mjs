@@ -9,23 +9,27 @@ const __dirname = path.dirname(__filename);
 
 const PYTHON = "/Users/erickmendez/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3";
 const SCRIPT = path.join(__dirname, "tools", "deal_brief_docx.py");
-const TEMPLATE_PATH = "/Users/erickmendez/Documents/Documents - Erick’s MacBook Air/Props/Commercial Proposal Blockotech - April 2026.docx";
+const TEMPLATE_PATHS = {
+  default: "/Users/erickmendez/Documents/Documents - Erick’s MacBook Air/Props/Commercial Proposal Blockotech - April 2026.docx",
+  proposal: path.join(__dirname, "templates", "evolution-commercial-proposal-standard.docx"),
+};
 
 export async function buildDealBriefDocx(kind, deal) {
   const safeKind = normalizeDocxKind(kind);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "salesrep-docx-"));
   const payloadPath = path.join(tmpDir, "deal.json");
   const outputPath = path.join(tmpDir, buildOutputFilename(deal, safeKind));
+  const templatePath = resolveTemplatePath(safeKind);
 
   await fs.writeFile(payloadPath, JSON.stringify({ deal: deal || {} }), "utf8");
 
   try {
-    await runPython([SCRIPT, safeKind, payloadPath, outputPath, TEMPLATE_PATH]);
+    await runPython([SCRIPT, safeKind, payloadPath, outputPath, templatePath]);
     const content = await fs.readFile(outputPath);
     return {
       content,
       filename: path.basename(outputPath),
-      templatePath: TEMPLATE_PATH,
+      templatePath,
     };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
@@ -53,6 +57,10 @@ function buildOutputFilename(deal, kind) {
     signoff: "legal-signoff-request",
   };
   return `${source}-${suffixMap[kind] || kind}.docx`;
+}
+
+function resolveTemplatePath(kind) {
+  return TEMPLATE_PATHS[kind] || TEMPLATE_PATHS.default;
 }
 
 function runPython(args) {
