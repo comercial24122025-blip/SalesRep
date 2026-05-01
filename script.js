@@ -718,7 +718,7 @@ const elements = {
   loadingOverlay: document.getElementById("app-loading-overlay"),
   loadingOverlayTitle: document.getElementById("loading-overlay-title"),
   loadingOverlayCopy: document.getElementById("loading-overlay-copy"),
-  companyProfileModal: document.getElementById("company-profile-modal"),
+  companyProfileShell: document.getElementById("company-profile-shell"),
   companyProfileBody: document.getElementById("company-profile-body"),
   companyProfileClose: document.getElementById("company-profile-close"),
   openRequestsModuleButton: document.getElementById("open-requests-module-button"),
@@ -1169,7 +1169,12 @@ function bindEvents() {
     renderViewState();
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
-  elements.companyProfileModal?.addEventListener("click", (event) => {
+  elements.companyProfileClose?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCompanyProfile();
+  });
+  elements.companyProfileBody?.addEventListener("click", (event) => {
     if (event.target.closest("[data-company-profile-close]")) {
       event.preventDefault();
       closeCompanyProfile();
@@ -1179,23 +1184,6 @@ function bindEvents() {
       void handleDealAction(event);
     }
   });
-  elements.companyProfileClose?.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    closeCompanyProfile();
-  });
-  document.addEventListener(
-    "click",
-    (event) => {
-      if (!event.target?.closest?.("[data-company-profile-close]")) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      closeCompanyProfile();
-    },
-    true
-  );
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
     openWorkflowModule(getWorkflowCurrentAndNext().current.view);
@@ -4653,7 +4641,7 @@ function openCompanyFinderBestMatch() {
 function renderCompanyProfileDrawer() {
   const deal = state.deals.find((item) => item.id === ui.companyProfileDealId);
   if (!deal) {
-    hideCompanyProfileModal();
+    hideCompanyProfilePanel();
     return;
   }
 
@@ -4678,7 +4666,7 @@ function renderCompanyProfileDrawer() {
       { label: "Registered Address", value: activeDeal.companyRegisteredAddress },
     ].filter((row) => cleanText(row.value));
 
-    showCompanyProfileModal();
+    showCompanyProfilePanel();
     elements.companyProfileBody.innerHTML = `
     <section class="company-profile-summary">
       <div class="company-profile-summary-copy">
@@ -4812,7 +4800,7 @@ function renderCompanyProfileDrawer() {
   `;
   } catch (error) {
     console.error("Company profile render failed", error);
-    showCompanyProfileModal();
+    showCompanyProfilePanel();
     elements.companyProfileBody.innerHTML = `
       <section class="company-profile-section">
         <div class="empty-state">
@@ -4841,26 +4829,27 @@ function openCompanyProfileById(id, options = {}) {
   }
   renderCompanyFinder(elements.companySearch.value.trim());
   renderCompanyProfileDrawer();
+  if (options.scroll !== false) {
+    window.requestAnimationFrame(() => {
+      elements.companyProfileShell?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }
 }
 
-function showCompanyProfileModal() {
-  if (!elements.companyProfileModal) {
+function showCompanyProfilePanel() {
+  if (!elements.companyProfileShell) {
     return;
   }
-  elements.companyProfileModal.hidden = false;
-  elements.companyProfileModal.style.display = "grid";
-  elements.companyProfileModal.style.pointerEvents = "auto";
-  elements.companyProfileModal.setAttribute("aria-hidden", "false");
+  elements.companyProfileShell.hidden = false;
+  elements.companyProfileShell.setAttribute("aria-hidden", "false");
 }
 
-function hideCompanyProfileModal() {
-  if (!elements.companyProfileModal) {
+function hideCompanyProfilePanel() {
+  if (!elements.companyProfileShell) {
     return;
   }
-  elements.companyProfileModal.hidden = true;
-  elements.companyProfileModal.style.display = "none";
-  elements.companyProfileModal.style.pointerEvents = "none";
-  elements.companyProfileModal.setAttribute("aria-hidden", "true");
+  elements.companyProfileShell.hidden = true;
+  elements.companyProfileShell.setAttribute("aria-hidden", "true");
   elements.companyProfileBody.innerHTML = "";
 }
 
@@ -4868,7 +4857,7 @@ function closeCompanyProfile() {
   ui.companyProfileDealId = null;
   ui.companyFinder.activeIndex = -1;
   ui.companyFinder.isOpen = false;
-  hideCompanyProfileModal();
+  hideCompanyProfilePanel();
   renderCompanyFinder(elements.companySearch?.value?.trim() || "");
 }
 
