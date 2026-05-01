@@ -1184,6 +1184,18 @@ function bindEvents() {
     event.stopPropagation();
     closeCompanyProfile();
   });
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!event.target?.closest?.("[data-company-profile-close]")) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      closeCompanyProfile();
+    },
+    true
+  );
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
     openWorkflowModule(getWorkflowCurrentAndNext().current.view);
@@ -4832,12 +4844,22 @@ function openCompanyProfileById(id, options = {}) {
 }
 
 function showCompanyProfileModal() {
+  if (!elements.companyProfileModal) {
+    return;
+  }
   elements.companyProfileModal.hidden = false;
+  elements.companyProfileModal.style.display = "grid";
+  elements.companyProfileModal.style.pointerEvents = "auto";
   elements.companyProfileModal.setAttribute("aria-hidden", "false");
 }
 
 function hideCompanyProfileModal() {
+  if (!elements.companyProfileModal) {
+    return;
+  }
   elements.companyProfileModal.hidden = true;
+  elements.companyProfileModal.style.display = "none";
+  elements.companyProfileModal.style.pointerEvents = "none";
   elements.companyProfileModal.setAttribute("aria-hidden", "true");
   elements.companyProfileBody.innerHTML = "";
 }

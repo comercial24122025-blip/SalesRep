@@ -3315,6 +3315,10 @@ button.stage-card {
   justify-items: end;
 }
 
+.company-profile-modal[hidden] {
+  display: none !important;
+}
+
 .company-profile-backdrop {
   position: absolute;
   inset: 0;
