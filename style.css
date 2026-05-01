@@ -3330,6 +3330,8 @@ button.stage-card {
   width: min(540px, 100%);
   height: 100%;
   overflow: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
   padding: 22px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 248, 251, 0.94)),
@@ -3354,9 +3356,12 @@ button.stage-card {
 .company-profile-section {
   display: grid;
   gap: 14px;
+  min-width: 0;
 }
 
 .company-profile-summary {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: start;
   padding: 18px;
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.82);
@@ -3375,17 +3380,27 @@ button.stage-card {
 .company-profile-summary-copy strong {
   font-size: 1.45rem;
   letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
 }
 
 .company-profile-summary-copy p {
   margin: 0;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .company-profile-summary-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  align-content: start;
+}
+
+.company-profile-summary-actions .button,
+.company-profile-summary-actions .icon-button {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
 }
 
 .company-profile-metrics,
@@ -3406,6 +3421,7 @@ button.stage-card {
 .company-profile-card,
 .company-account-card,
 .company-contact-card {
+  min-width: 0;
   padding: 16px;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.78);
@@ -3437,6 +3453,7 @@ button.stage-card {
 .company-contact-card small {
   margin: 0;
   color: var(--ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .company-contact-list {
@@ -3458,12 +3475,15 @@ button.stage-card {
 
 .company-contact-card strong {
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .company-contact-card a {
   color: var(--accent-strong);
   font-weight: 700;
   text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .company-contact-card a:hover,
@@ -3473,9 +3493,9 @@ button.stage-card {
 }
 
 .company-account-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 12px;
 }
 
@@ -3483,6 +3503,14 @@ button.stage-card {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   color: var(--ink-soft);
   font-size: 0.86rem;
+}
+
+.company-account-meta span,
+.company-profile-links .tracking-link,
+.company-profile-links .tracking-link strong,
+.company-profile-links .tracking-link span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .table-tracking {
@@ -3597,6 +3625,11 @@ button.stage-card {
   .company-profile-metrics,
   .company-profile-grid,
   .company-account-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .company-profile-summary,
+  .company-profile-summary-actions {
     grid-template-columns: 1fr;
   }
 
