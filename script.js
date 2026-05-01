@@ -1171,6 +1171,7 @@ function bindEvents() {
   });
   elements.companyProfileModal?.addEventListener("click", (event) => {
     if (event.target.closest("[data-company-profile-close]")) {
+      event.preventDefault();
       closeCompanyProfile();
       return;
     }
@@ -1178,7 +1179,11 @@ function bindEvents() {
       void handleDealAction(event);
     }
   });
-  elements.companyProfileClose?.addEventListener("click", closeCompanyProfile);
+  elements.companyProfileClose?.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    closeCompanyProfile();
+  });
   elements.moduleFlowGrid.addEventListener("click", handleModuleFlowAction);
   elements.workflowOpenCurrent.addEventListener("click", () => {
     openWorkflowModule(getWorkflowCurrentAndNext().current.view);
@@ -4636,35 +4641,33 @@ function openCompanyFinderBestMatch() {
 function renderCompanyProfileDrawer() {
   const deal = state.deals.find((item) => item.id === ui.companyProfileDealId);
   if (!deal) {
-    elements.companyProfileModal.hidden = true;
-    elements.companyProfileModal.setAttribute("aria-hidden", "true");
-    elements.companyProfileBody.innerHTML = "";
+    hideCompanyProfileModal();
     return;
   }
 
-  const relatedDeals = getCompanyProfileDeals(deal);
-  const contacts = collectCompanyContactRows(relatedDeals);
-  const websites = uniqueValues(relatedDeals.map((item) => item.url));
-  const markets = uniqueValues(relatedDeals.map((item) => item.market));
-  const owners = uniqueValues(relatedDeals.map((item) => getDealOwner(item)));
-  const liveCount = relatedDeals.filter((item) => isLiveAccountStage(item.stage)).length;
-  const openCount = relatedDeals.filter((item) => !isInactiveDeal(item)).length;
-  const forecastValue = sumValues(relatedDeals.map((item) => getForecastValue(item)));
-  const activeDeal = relatedDeals[0];
-  const companyInfoRows = [
-    { label: "Company", value: getCompanyProfileLabel(activeDeal) },
-    { label: "Legal Entity", value: activeDeal.legalEntity || activeDeal.companyName },
-    { label: "Registration", value: activeDeal.companyRegistrationNumber },
-    { label: "License", value: activeDeal.companyLicense || activeDeal.licenseStatus },
-    { label: "Primary Market", value: activeDeal.market },
-    { label: "Segment", value: activeDeal.segment || activeDeal.type },
-    { label: "Owner", value: owners.join(" · ") || getDealOwner(activeDeal) },
-    { label: "Registered Address", value: activeDeal.companyRegisteredAddress },
-  ].filter((row) => cleanText(row.value));
+  try {
+    const relatedDeals = getCompanyProfileDeals(deal);
+    const activeDeal = relatedDeals[0] || deal;
+    const contacts = collectCompanyContactRows(relatedDeals.length ? relatedDeals : [deal]);
+    const websites = uniqueValues((relatedDeals.length ? relatedDeals : [deal]).map((item) => item.url));
+    const markets = uniqueValues((relatedDeals.length ? relatedDeals : [deal]).map((item) => item.market));
+    const owners = uniqueValues((relatedDeals.length ? relatedDeals : [deal]).map((item) => getDealOwner(item)));
+    const liveCount = relatedDeals.filter((item) => isLiveAccountStage(item.stage)).length;
+    const openCount = relatedDeals.filter((item) => !isInactiveDeal(item)).length;
+    const forecastValue = sumValues(relatedDeals.map((item) => getForecastValue(item)));
+    const companyInfoRows = [
+      { label: "Company", value: getCompanyProfileLabel(activeDeal) },
+      { label: "Legal Entity", value: activeDeal.legalEntity || activeDeal.companyName },
+      { label: "Registration", value: activeDeal.companyRegistrationNumber },
+      { label: "License", value: activeDeal.companyLicense || activeDeal.licenseStatus },
+      { label: "Primary Market", value: activeDeal.market },
+      { label: "Segment", value: activeDeal.segment || activeDeal.type },
+      { label: "Owner", value: owners.join(" · ") || getDealOwner(activeDeal) },
+      { label: "Registered Address", value: activeDeal.companyRegisteredAddress },
+    ].filter((row) => cleanText(row.value));
 
-  elements.companyProfileModal.hidden = false;
-  elements.companyProfileModal.setAttribute("aria-hidden", "false");
-  elements.companyProfileBody.innerHTML = `
+    showCompanyProfileModal();
+    elements.companyProfileBody.innerHTML = `
     <section class="company-profile-summary">
       <div class="company-profile-summary-copy">
         <span class="company-profile-kicker">${escapeHtml(markets.join(" · ") || "No market assigned")}</span>
@@ -4795,6 +4798,22 @@ function renderCompanyProfileDrawer() {
       </div>
     </section>
   `;
+  } catch (error) {
+    console.error("Company profile render failed", error);
+    showCompanyProfileModal();
+    elements.companyProfileBody.innerHTML = `
+      <section class="company-profile-section">
+        <div class="empty-state">
+          The company profile could not be rendered completely for this account. You can still close this panel and reopen the deal workspace.
+        </div>
+        <div class="row-actions">
+          <button type="button" class="button button-secondary button-small" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">Open Deal Workspace</button>
+          <button type="button" class="button button-ghost button-small" data-company-profile-close>Close Profile</button>
+        </div>
+      </section>
+    `;
+    setBanner("Company profile opened with fallback content because part of the profile could not be rendered.", "warn");
+  }
 }
 
 function openCompanyProfileById(id, options = {}) {
@@ -4812,9 +4831,23 @@ function openCompanyProfileById(id, options = {}) {
   renderCompanyProfileDrawer();
 }
 
+function showCompanyProfileModal() {
+  elements.companyProfileModal.hidden = false;
+  elements.companyProfileModal.setAttribute("aria-hidden", "false");
+}
+
+function hideCompanyProfileModal() {
+  elements.companyProfileModal.hidden = true;
+  elements.companyProfileModal.setAttribute("aria-hidden", "true");
+  elements.companyProfileBody.innerHTML = "";
+}
+
 function closeCompanyProfile() {
   ui.companyProfileDealId = null;
-  renderCompanyProfileDrawer();
+  ui.companyFinder.activeIndex = -1;
+  ui.companyFinder.isOpen = false;
+  hideCompanyProfileModal();
+  renderCompanyFinder(elements.companySearch?.value?.trim() || "");
 }
 
 function getCompanyProfileKey(deal) {
