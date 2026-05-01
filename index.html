@@ -1003,14 +1003,15 @@
                       <div class="form-section-head">
                         <div>
                           <h5>Commercial Builder</h5>
-                          <p class="form-note">Use quick presets for 12%, 11%, fixed fee, or tiered structures, then append the result into Commercial Terms or Commercial Schedule.</p>
+                          <p class="form-note">Capture revenue share models on GGR or NGR, either as one flat rate across all volume or tiered by volume band. Use one schedule row per band when the commercial is escalated by volume.</p>
                         </div>
                         <div class="quick-fill-strip">
                           <span>Presets</span>
                           <button type="button" class="button button-ghost button-small" data-commercial-preset="ggr-12">12% GGR</button>
                           <button type="button" class="button button-ghost button-small" data-commercial-preset="ngr-11">11% NGR</button>
                           <button type="button" class="button button-ghost button-small" data-commercial-preset="fixed-fee">Fixed Fee</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered">Tiered</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered-ggr">Tiered GGR</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered-ngr">Tiered NGR</button>
                           <button type="button" class="button button-ghost button-small" data-commercial-preset="premium-addon">Premium Add-on</button>
                         </div>
                       </div>
@@ -1020,17 +1021,16 @@
                           <input id="commercial-builder-product" type="text" placeholder="Evolution Generic" list="commercial-product-options" />
                         </label>
                         <label>
-                          Model
+                          Commercial Model
                           <select id="commercial-builder-model">
-                            <option>Revenue Share %</option>
+                            <option>Revenue Share</option>
                             <option>Fixed Fee</option>
-                            <option>Tiered</option>
                             <option>Premium Add-On</option>
                             <option>Hybrid</option>
                           </select>
                         </label>
                         <label>
-                          Base
+                          Revenue Base
                           <select id="commercial-builder-base">
                             <option>GGR</option>
                             <option>NGR</option>
@@ -1040,7 +1040,15 @@
                           </select>
                         </label>
                         <label>
-                          Rate / %
+                          Pricing Structure
+                          <select id="commercial-builder-structure">
+                            <option>Single Rate</option>
+                            <option>Tiered by Volume</option>
+                            <option>Custom</option>
+                          </select>
+                        </label>
+                        <label>
+                          Revenue Share Rate
                           <input id="commercial-builder-rate" type="text" placeholder="12%" />
                         </label>
                         <label>
@@ -1048,17 +1056,33 @@
                           <input id="commercial-builder-fixed-fee" type="number" min="0" step="0.01" placeholder="0.00" />
                         </label>
                         <label>
-                          Tier / Volume
-                          <input id="commercial-builder-tier" type="text" placeholder="EUR 0-2M / month 1-6 / L1" />
+                          Volume From
+                          <input id="commercial-builder-volume-from" type="text" placeholder="0" />
+                        </label>
+                        <label>
+                          Volume To
+                          <input id="commercial-builder-volume-to" type="text" placeholder="1000000 or open" />
+                        </label>
+                        <label>
+                          Volume Unit
+                          <select id="commercial-builder-volume-unit">
+                            <option>EUR</option>
+                            <option>USD</option>
+                            <option>Wager</option>
+                            <option>GGR</option>
+                            <option>NGR</option>
+                            <option>Other</option>
+                          </select>
                         </label>
                         <label class="full-span">
                           Builder Notes
-                          <input id="commercial-builder-notes" type="text" placeholder="Premium tables, branded content, high stake tables..." />
+                          <input id="commercial-builder-notes" type="text" placeholder="Ex. all volume, premium tables, branded content, high stake tables, setup waived..." />
                         </label>
                       </div>
+                      <p class="field-help">Examples: `12% of GGR across all volume` or `EUR 0-1,000,000 = 12% of GGR`, then `EUR 1,000,001-3,000,000 = 11% of GGR` as a second row.</p>
                       <div class="quick-fill-strip quick-fill-strip-subtle">
                         <span>Apply</span>
-                        <button type="button" class="button button-secondary button-small" data-commercial-action="append-terms">Add to Commercial Terms</button>
+                        <button type="button" class="button button-secondary button-small" data-commercial-action="append-terms">Add Commercial Summary</button>
                         <button type="button" class="button button-secondary button-small" data-commercial-action="append-schedule">Add Schedule Row</button>
                         <button type="button" class="button button-ghost button-small" data-commercial-action="clear-builder">Clear Builder</button>
                       </div>
@@ -1098,12 +1122,12 @@
                       </label>
                       <label class="full-span">
                         Commercial Terms
-                        <textarea name="commercialTerms" rows="4" placeholder="12% of GGR, 11% of NGR, premium add-on, fixed fee, high-stake fee..."></textarea>
+                        <textarea name="commercialTerms" rows="4" placeholder="12% of GGR across all volume&#10;11% of NGR across all volume&#10;Premium add-on 1%-5% as per premium schedule"></textarea>
                       </label>
                       <label class="full-span">
                         Commercial Schedule
-                        <textarea name="commercialSchedule" rows="6" placeholder="One row per line using | separators&#10;Evolution Generic | EUR 0-2M | 12% of GGR | B2C&#10;Evolution Premium | EUR 2M+ | 11% of NGR | Premium tables"></textarea>
-                        <span class="field-help">Recommended format: Product | Tier / Volume | Commercial | Notes. The Commercial Builder above can append rows for you.</span>
+                        <textarea name="commercialSchedule" rows="6" placeholder="One row per line using | separators&#10;Evolution Generic | EUR 0-1,000,000 | 12% of GGR | Revenue Share&#10;Evolution Generic | EUR 1,000,001-3,000,000 | 11% of GGR | Revenue Share"></textarea>
+                        <span class="field-help">Recommended format: Product | Volume / Tier | Commercial | Notes. Use one row per band when the commercial is tiered by volume.</span>
                       </label>
                       <label class="full-span">
                         Negotiation Scope

@@ -957,6 +957,12 @@ function bindEvents() {
   dealForm.addEventListener("input", handleDealScoringInput);
   dealForm.addEventListener("change", handleDealScoringInput);
   dealForm.addEventListener("click", handleDealAssistAction);
+  dealForm.addEventListener("change", (event) => {
+    if (event.target?.id?.startsWith("commercial-builder-")) {
+      syncCommercialBuilderUi();
+    }
+  });
+  syncCommercialBuilderUi();
 
   targetForm.addEventListener("submit", handleTargetSubmit);
   document.getElementById("target-cancel-button").addEventListener("click", () => {
@@ -8635,9 +8641,12 @@ function getCommercialBuilderElements() {
     product: document.getElementById("commercial-builder-product"),
     model: document.getElementById("commercial-builder-model"),
     base: document.getElementById("commercial-builder-base"),
+    structure: document.getElementById("commercial-builder-structure"),
     rate: document.getElementById("commercial-builder-rate"),
     fixedFee: document.getElementById("commercial-builder-fixed-fee"),
-    tier: document.getElementById("commercial-builder-tier"),
+    volumeFrom: document.getElementById("commercial-builder-volume-from"),
+    volumeTo: document.getElementById("commercial-builder-volume-to"),
+    volumeUnit: document.getElementById("commercial-builder-volume-unit"),
     notes: document.getElementById("commercial-builder-notes"),
   };
 }
@@ -8654,6 +8663,7 @@ function resetCommercialBuilder() {
       element.value = "";
     }
   });
+  syncCommercialBuilderUi();
 }
 
 function applyCommercialBuilderPreset(presetKey) {
@@ -8661,43 +8671,69 @@ function applyCommercialBuilderPreset(presetKey) {
   const presets = {
     "ggr-12": {
       product: "Evolution Generic",
-      model: "Revenue Share %",
+      model: "Revenue Share",
       base: "GGR",
+      structure: "Single Rate",
       rate: "12%",
-      tier: "EUR 0-2M",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
       notes: "",
     },
     "ngr-11": {
       product: "Evolution Generic",
-      model: "Revenue Share %",
+      model: "Revenue Share",
       base: "NGR",
+      structure: "Single Rate",
       rate: "11%",
-      tier: "EUR 0-2M",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
       notes: "",
     },
     "fixed-fee": {
       product: "Growth Tables",
       model: "Fixed Fee",
       base: "Monthly Fee",
+      structure: "Single Rate",
       rate: "",
       fixedFee: "0.15",
-      tier: "Per table",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
       notes: "Fixed fee",
     },
-    tiered: {
+    "tiered-ggr": {
       product: "Evolution Generic",
-      model: "Tiered",
+      model: "Revenue Share",
       base: "GGR",
+      structure: "Tiered by Volume",
       rate: "12%",
-      tier: "EUR 0-2M / 11% from EUR 2M onwards",
-      notes: "Tiered rev share",
+      volumeFrom: "0",
+      volumeTo: "1000000",
+      volumeUnit: "EUR",
+      notes: "Tier 1 revenue share",
+    },
+    "tiered-ngr": {
+      product: "Evolution Generic",
+      model: "Revenue Share",
+      base: "NGR",
+      structure: "Tiered by Volume",
+      rate: "11%",
+      volumeFrom: "0",
+      volumeTo: "1000000",
+      volumeUnit: "EUR",
+      notes: "Tier 1 revenue share",
     },
     "premium-addon": {
       product: "Evolution Premium",
       model: "Premium Add-On",
       base: "GGR",
+      structure: "Custom",
       rate: "1%-5%",
-      tier: "As per premium schedule",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
       notes: "Premium add-on",
     },
   };
@@ -8718,15 +8754,22 @@ function applyCommercialBuilderPreset(presetKey) {
         ? builder.model
         : key === "base"
         ? builder.base
+        : key === "structure"
+        ? builder.structure
         : key === "rate"
         ? builder.rate
-        : key === "tier"
-        ? builder.tier
+        : key === "volumeFrom"
+        ? builder.volumeFrom
+        : key === "volumeTo"
+        ? builder.volumeTo
+        : key === "volumeUnit"
+        ? builder.volumeUnit
         : builder.notes;
     if (element) {
       element.value = value;
     }
   });
+  syncCommercialBuilderUi();
 }
 
 function getCommercialBuilderSnapshot() {
@@ -8735,30 +8778,100 @@ function getCommercialBuilderSnapshot() {
     product: cleanText(builder.product?.value),
     model: cleanText(builder.model?.value),
     base: cleanText(builder.base?.value),
+    structure: cleanText(builder.structure?.value),
     rate: cleanText(builder.rate?.value),
     fixedFee: cleanText(builder.fixedFee?.value),
-    tier: cleanText(builder.tier?.value),
+    volumeFrom: cleanText(builder.volumeFrom?.value),
+    volumeTo: cleanText(builder.volumeTo?.value),
+    volumeUnit: cleanText(builder.volumeUnit?.value),
     notes: cleanText(builder.notes?.value),
   };
 }
 
+function syncCommercialBuilderUi() {
+  const builder = getCommercialBuilderElements();
+  const model = cleanText(builder.model?.value);
+  const structure = cleanText(builder.structure?.value);
+  const isFixedFee = model === "Fixed Fee";
+  const isTiered = structure === "Tiered by Volume";
+
+  if (builder.rate) {
+    builder.rate.disabled = isFixedFee;
+    builder.rate.placeholder = isFixedFee ? "Not required for fixed fee" : "12%";
+  }
+  if (builder.fixedFee) {
+    builder.fixedFee.disabled = !isFixedFee;
+    builder.fixedFee.placeholder = isFixedFee ? "0.00" : "Only for fixed fee";
+  }
+  if (builder.volumeFrom) {
+    builder.volumeFrom.disabled = isFixedFee;
+    builder.volumeFrom.placeholder = isTiered ? "0" : "Optional";
+  }
+  if (builder.volumeTo) {
+    builder.volumeTo.disabled = isFixedFee;
+    builder.volumeTo.placeholder = isTiered ? "1000000 or open" : "Optional";
+  }
+  if (builder.volumeUnit) {
+    builder.volumeUnit.disabled = isFixedFee;
+  }
+}
+
+function buildCommercialVolumeLabel(snapshot) {
+  const unit = snapshot.volumeUnit || "EUR";
+  const from = snapshot.volumeFrom;
+  const to = snapshot.volumeTo;
+  const hasRange = Boolean(from || to);
+  if (!hasRange) {
+    return snapshot.structure === "Tiered by Volume" ? `${unit} tier pending` : "All volume";
+  }
+  if (from && to) {
+    return `${unit} ${from}-${to}`;
+  }
+  if (from && !to) {
+    return `${unit} ${from}+`;
+  }
+  return `${unit} 0-${to}`;
+}
+
+function buildCommercialLabel(snapshot) {
+  if (snapshot.model === "Fixed Fee" || snapshot.fixedFee) {
+    return `EUR ${snapshot.fixedFee || "0"} fixed fee${snapshot.base ? ` (${snapshot.base})` : ""}`;
+  }
+
+  const rate = snapshot.rate || "TBC";
+  const base = snapshot.base || "GGR";
+  if (snapshot.model === "Premium Add-On") {
+    return `${rate} premium add-on on ${base}`;
+  }
+  if (snapshot.model === "Hybrid") {
+    return `${rate} hybrid on ${base}`;
+  }
+  return `${rate} of ${base}`;
+}
+
 function buildCommercialBuilderTerm(snapshot) {
   const product = snapshot.product || "Commercial Item";
-  const qualifier = snapshot.tier ? ` (${snapshot.tier})` : "";
+  const modelLabel = snapshot.model || "Commercial";
+  const volumeLabel = buildCommercialVolumeLabel(snapshot);
+  const commercialLabel = buildCommercialLabel(snapshot);
+
   if (snapshot.model === "Fixed Fee" || snapshot.fixedFee) {
-    return `${product}${qualifier}: EUR ${snapshot.fixedFee || "0"} fixed fee${snapshot.base ? ` (${snapshot.base})` : ""}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+    return `${product}: ${commercialLabel}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
   }
-  const rateBlock = snapshot.rate ? `${snapshot.rate} of ${snapshot.base || "GGR"}` : snapshot.base || snapshot.model || "Commercial structure";
-  return `${product}${qualifier}: ${rateBlock}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+
+  if (snapshot.structure === "Tiered by Volume" || snapshot.volumeFrom || snapshot.volumeTo) {
+    return `${product}: ${commercialLabel} for ${volumeLabel}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+  }
+
+  return `${product}: ${commercialLabel} across all volume${modelLabel !== "Revenue Share" ? ` · ${modelLabel}` : ""}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
 }
 
 function buildCommercialBuilderScheduleRow(snapshot) {
   const product = snapshot.product || "Commercial Item";
-  const commercial =
-    snapshot.model === "Fixed Fee" || snapshot.fixedFee
-      ? `EUR ${snapshot.fixedFee || "0"} fixed fee${snapshot.base ? ` (${snapshot.base})` : ""}`
-      : `${snapshot.rate || "TBC"}${snapshot.base ? ` of ${snapshot.base}` : ""}`;
-  return [product, snapshot.tier || snapshot.model || "Standard", commercial, snapshot.notes || ""].join(" | ");
+  const tier = buildCommercialVolumeLabel(snapshot);
+  const commercial = buildCommercialLabel(snapshot);
+  const notes = [snapshot.model && snapshot.model !== "Revenue Share" ? snapshot.model : "", snapshot.notes].filter(Boolean).join(" · ");
+  return [product, tier, commercial, notes].join(" | ");
 }
 
 function appendValueToTextarea(fieldName, nextLine) {
@@ -8780,6 +8893,11 @@ function applyCommercialBuilderAction(action) {
 
   if (!snapshot.product && !snapshot.rate && !snapshot.fixedFee) {
     setBanner("Define at least the product and rate or fixed fee before applying a commercial line.", "warn");
+    return;
+  }
+
+  if (snapshot.structure === "Tiered by Volume" && !snapshot.fixedFee && !snapshot.volumeFrom && !snapshot.volumeTo) {
+    setBanner("For tiered commercials, define at least one volume boundary before adding the schedule row.", "warn");
     return;
   }
 
