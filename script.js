@@ -52,6 +52,12 @@ const USER_STATUS_OPTIONS = ["Active", "Invited", "Suspended"];
 const CAMPAIGN_TYPE_OPTIONS = ["Activation", "Tournament", "Giveaway", "Progressive", "Free Spins", "Promo Bundle"];
 const CAMPAIGN_STATUS_OPTIONS = ["Planned", "Ready", "Live", "Paused", "Completed", "Cancelled"];
 const CAMPAIGN_PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
+const FOLLOW_UP_CADENCE_OPTIONS = ["Weekly", "Biweekly", "Monthly", "Custom"];
+const FOLLOW_UP_CADENCE_DAYS = {
+  Weekly: 7,
+  Biweekly: 14,
+  Monthly: 30,
+};
 const OPPORTUNITY_SCORE_WEIGHTS = {
   revenuePotentialScore: 0.3,
   strategicFitScore: 0.2,
@@ -469,6 +475,11 @@ const PIPELINE_CSV_COLUMNS = [
   ["Signing ETA", "signingEta"],
   ["Signed ETA", "signedEta"],
   ["Last Follow Up", "lastFollowUp"],
+  ["Follow-Up Cadence", "followUpCadence"],
+  ["Next Follow-Up Date", "nextFollowUpDate"],
+  ["Follow-Up Owner", "followUpOwner"],
+  ["Follow-Up Notes", "followUpNotes"],
+  ["Follow-Up Notifications Enabled", "followUpNotificationsEnabled"],
   ["New Traffic", "newTraffic"],
   ["Lead Flag", "leadFlag"],
   ["Signed Flag", "signedFlag"],
@@ -651,6 +662,7 @@ const elements = {
   companySearchStatus: document.getElementById("company-search-status"),
   companySearchSuggestions: document.getElementById("company-search-suggestions"),
   openCompanyProfile: document.getElementById("open-company-profile"),
+  createCompanyAccount: document.getElementById("create-company-account"),
   clearCompanySearch: document.getElementById("clear-company-search"),
   stageOverview: document.getElementById("stage-overview"),
   dashboardStageSummary: document.getElementById("dashboard-stage-summary"),
@@ -711,8 +723,12 @@ const elements = {
   dealAutosaveSections: document.getElementById("deal-autosave-sections"),
   restoreDealDraftButton: document.getElementById("restore-deal-draft-button"),
   discardDealDraftButton: document.getElementById("discard-deal-draft-button"),
+  dealIntakeAssistant: document.getElementById("deal-intake-assistant"),
+  dealFollowUpGuide: document.getElementById("deal-follow-up-guide"),
   pipelineOperatingGuide: document.getElementById("pipeline-operating-guide"),
   pipelineOperatingStageChip: document.getElementById("pipeline-operating-stage-chip"),
+  pipelineFollowUpSummary: document.getElementById("pipeline-follow-up-summary"),
+  pipelineFollowUpNotifications: document.getElementById("pipeline-follow-up-notifications"),
   targetFormTitle: document.getElementById("target-form-title"),
   targetSubmitButton: document.getElementById("target-submit-button"),
   targetSummaryTitle: document.getElementById("target-summary-title"),
@@ -847,6 +863,7 @@ const DEAL_FORM_ASSIST_LISTS = {
   integrationEmail: "deal-email-options",
   ddContactEmail: "deal-email-options",
   legalRepresentativeEmail: "deal-email-options",
+  followUpOwner: "deal-kam-options",
 };
 
 function resolveApiUrl(pathname) {
@@ -1200,6 +1217,9 @@ function bindEvents() {
   elements.openCompanyProfile.addEventListener("click", () => {
     openCompanyFinderBestMatch();
   });
+  elements.createCompanyAccount?.addEventListener("click", () => {
+    createNewAccountFromCompanyQuery(elements.companySearch?.value || "");
+  });
 
   elements.clearCompanySearch.addEventListener("click", () => {
     ui.companyFinder.isOpen = false;
@@ -1212,6 +1232,12 @@ function bindEvents() {
   });
 
   elements.companySearchSuggestions.addEventListener("pointerdown", (event) => {
+    const createButton = event.target.closest("[data-company-create]");
+    if (createButton) {
+      event.preventDefault();
+      createNewAccountFromCompanyQuery(createButton.dataset.companyCreate);
+      return;
+    }
     const button = event.target.closest("[data-company-finder-index]");
     if (!button) {
       return;
@@ -1222,6 +1248,12 @@ function bindEvents() {
   });
 
   elements.companySearchSuggestions.addEventListener("click", (event) => {
+    const createButton = event.target.closest("[data-company-create]");
+    if (createButton) {
+      event.preventDefault();
+      createNewAccountFromCompanyQuery(createButton.dataset.companyCreate);
+      return;
+    }
     const button = event.target.closest("[data-company-finder-index]");
     if (!button) {
       return;
@@ -2502,6 +2534,11 @@ function createEmptyDeal() {
     signedEta: "",
     liveSince: "",
     lastFollowUp: "",
+    followUpCadence: "Biweekly",
+    nextFollowUpDate: "",
+    followUpOwner: "",
+    followUpNotes: "",
+    followUpNotificationsEnabled: true,
     handover: "",
     brands: "",
     entityInfo: "",
@@ -2801,6 +2838,17 @@ function normalizeDeal(input) {
     status: cleanText(input.status),
     integration: cleanText(input.integration),
     dd: cleanText(input.dd),
+    signedEta: normalizeDateInput(input.signedEta),
+    liveSince: normalizeDateInput(input.liveSince),
+    lastFollowUp: normalizeDateInput(input.lastFollowUp),
+    followUpCadence: FOLLOW_UP_CADENCE_OPTIONS.includes(cleanText(input.followUpCadence)) ? cleanText(input.followUpCadence) : base.followUpCadence,
+    nextFollowUpDate: normalizeDateInput(input.nextFollowUpDate),
+    followUpOwner: cleanText(input.followUpOwner),
+    followUpNotes: cleanText(input.followUpNotes),
+    followUpNotificationsEnabled:
+      input.followUpNotificationsEnabled === false || cleanText(input.followUpNotificationsEnabled).toLowerCase() === "false"
+        ? false
+        : Boolean(input.followUpNotificationsEnabled ?? base.followUpNotificationsEnabled),
     brands: cleanText(input.brands),
     entityInfo: cleanText(input.entityInfo),
     url: cleanText(input.url),
@@ -4972,6 +5020,7 @@ function renderPipeline() {
   renderPipelineSummary(deals);
   renderPipelineStageStrip(deals);
   renderPipelineOperatingGuide(deals);
+  renderPipelineFollowUpNotifications(deals);
   renderPipelineBoard(deals);
   renderDealTable(deals);
 }
@@ -4989,6 +5038,13 @@ function renderCompanyFinder(query = elements.companySearch?.value || "") {
       ? `Open ${getCompanyProfileLabel(primaryDeal)}`
       : "Search a company to open the profile";
   }
+  if (elements.createCompanyAccount) {
+    const canCreate = Boolean(normalizedQuery) && !primarySuggestion;
+    elements.createCompanyAccount.disabled = !canCreate;
+    elements.createCompanyAccount.title = canCreate
+      ? `Create a new account prefilled with "${normalizedQuery}"`
+      : "Type a company name that does not already exist in the workspace";
+  }
   renderCompanySearchStatus(normalizedQuery);
 
   const showList = ui.companyFinder.isOpen && Boolean(normalizedQuery);
@@ -5002,7 +5058,13 @@ function renderCompanyFinder(query = elements.companySearch?.value || "") {
 
   if (ui.companyFinder.suggestions.length === 0) {
     elements.companySearchSuggestions.hidden = false;
-    elements.companySearchSuggestions.innerHTML = '<div class="finder-empty">No company or contact matched that search.</div>';
+    elements.companySearchSuggestions.innerHTML = `
+      <div class="finder-empty finder-empty-stack">
+        <strong>No company or contact matched that search.</strong>
+        <span>Promote the account into the funnel and capture the first commercial record now.</span>
+        <button type="button" class="button button-primary button-small finder-empty-action" data-company-create="${escapeAttribute(normalizedQuery)}">Create Account</button>
+      </div>
+    `;
     return;
   }
 
@@ -5047,7 +5109,7 @@ function renderCompanySearchStatus(query) {
   const suggestionCount = ui.companyFinder.suggestions.length;
   elements.companySearchStatus.textContent = suggestionCount
     ? `${suggestionCount} matching company profile${suggestionCount === 1 ? "" : "s"} found. Press Enter or use Open Profile to launch the best match.`
-    : "No company matched that search yet. Try operator name, contact name, website, or email.";
+    : `No company matched "${normalizedQuery}" yet. Use Create Account to open a new deal workspace with this company prefilled.`;
 }
 
 function buildCompanyFinderSuggestions(query) {
@@ -5192,7 +5254,7 @@ function selectCompanyFinderSuggestion(index) {
 function openCompanyFinderBestMatch() {
   const suggestion = getCompanyFinderPrimarySuggestion(elements.companySearch?.value || "");
   if (!suggestion) {
-    setBanner("No matching company profile is ready yet. Try company, operator, contact, website, or email.", "warn");
+    createNewAccountFromCompanyQuery(elements.companySearch?.value || "");
     return;
   }
 
@@ -5202,6 +5264,47 @@ function openCompanyFinderBestMatch() {
   elements.companySearch.value = suggestion.searchValue;
   renderCompanyFinder(suggestion.searchValue);
   openCompanyProfileById(suggestion.dealId, { syncSearch: false });
+}
+
+function createNewAccountFromCompanyQuery(query) {
+  const normalizedQuery = cleanText(query);
+  if (!normalizedQuery) {
+    setBanner("Type a company name first so SalesRep can prefill a new account workspace.", "warn");
+    return;
+  }
+
+  const existingMatch = getCompanyFinderPrimarySuggestion(normalizedQuery);
+  if (existingMatch) {
+    openCompanyProfileById(existingMatch.dealId, { syncSearch: false });
+    setBanner(`Company already exists in the workspace. Opened ${existingMatch.title} instead of creating a duplicate account.`, "default");
+    return;
+  }
+
+  const draft = normalizeDeal({
+    ...createEmptyDeal(),
+    deal: normalizedQuery,
+    client: normalizedQuery,
+    operator: normalizedQuery,
+    companyName: normalizedQuery,
+    documentClientName: normalizedQuery,
+    source: "Company Finder",
+    stage: "Lead",
+    followUpOwner: getActiveUser()?.fullName || "",
+  });
+
+  ui.activeView = "pipeline";
+  ui.editingDealId = null;
+  fillDealForm(draft, { autoRestore: false });
+  clearActiveDealAutosave(false);
+  ui.companyAssistKey = "";
+  renderViewState();
+  elements.companySearch.value = normalizedQuery;
+  ui.companyFinder.isOpen = false;
+  ui.companyFinder.activeIndex = -1;
+  ui.companyFinder.selectedDealId = null;
+  renderCompanyFinder(normalizedQuery);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  setBanner(`New account workspace prepared for ${normalizedQuery}. Complete the deal form to create the company in SalesRep.`, "success");
 }
 
 const COMPANY_PROFILE_EDIT_SECTIONS = [
@@ -6701,6 +6804,7 @@ function buildDealDraftFromForm(existingDeal) {
     integrationStartedFlag: formData.has("integrationStartedFlag"),
     integrationCompletedFlag: formData.has("integrationCompletedFlag"),
     goLiveFlag: formData.has("goLiveFlag"),
+    followUpNotificationsEnabled: formData.has("followUpNotificationsEnabled"),
   });
 }
 
@@ -7704,6 +7808,25 @@ async function handleDealAction(event) {
     }
     return;
   }
+  if (action === "mark-followed-up-today-from-deal") {
+    const sourceDeal = state.deals.find((item) => item.id === id);
+    if (sourceDeal) {
+      const today = new Date().toISOString().slice(0, 10);
+      const updatedDeal = normalizeDeal({
+        ...sourceDeal,
+        lastFollowUp: today,
+        nextFollowUpDate: addDaysToIsoDate(today, getFollowUpCadenceDays(resolveDealFollowUpCadence(sourceDeal))),
+        followUpOwner: cleanText(sourceDeal.followUpOwner) || getDealOwner(sourceDeal) || getActiveUser()?.fullName || "",
+        followUpNotificationsEnabled: sourceDeal.followUpNotificationsEnabled !== false,
+        updates: appendTraceLog(sourceDeal.updates, "Follow-up completed"),
+      });
+      state.deals = state.deals.map((item) => (item.id === id ? updatedDeal : item));
+      const saved = await persistState();
+      renderAll();
+      setBanner(buildExcelBanner(saved ? `Follow-up refreshed for ${updatedDeal.deal}.` : `Follow-up refreshed in browser storage for ${updatedDeal.deal}.`), saved ? "success" : "warn");
+    }
+    return;
+  }
   if (action === "open-company-profile") {
     openCompanyProfileById(id);
     return;
@@ -8160,6 +8283,10 @@ function fillDealForm(deal, options = {}) {
     "signedEta",
     "liveSince",
     "lastFollowUp",
+    "followUpCadence",
+    "nextFollowUpDate",
+    "followUpOwner",
+    "followUpNotes",
     "handover",
     "prospectDate",
     "offerDate",
@@ -8252,6 +8379,7 @@ function fillDealForm(deal, options = {}) {
     "integrationStartedFlag",
     "integrationCompletedFlag",
     "goLiveFlag",
+    "followUpNotificationsEnabled",
   ].forEach((field) => {
     dealForm.elements[field].checked = Boolean(deal[field]);
   });
@@ -8967,6 +9095,260 @@ function buildPipelineFinderSubtitle(deal, activeValue) {
   return parts.join(" · ") || cleanText(deal.source || "No additional context");
 }
 
+function getDefaultFollowUpCadence(stage) {
+  const normalizedStage = cleanText(stage);
+  if (["DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(normalizedStage)) {
+    return "Weekly";
+  }
+  if (["Lead", "Qualified", "Proposal", "Legal"].includes(normalizedStage)) {
+    return "Biweekly";
+  }
+  return "Monthly";
+}
+
+function getFollowUpCadenceDays(cadence) {
+  return FOLLOW_UP_CADENCE_DAYS[cleanText(cadence)] || 21;
+}
+
+function resolveDealFollowUpCadence(deal) {
+  const explicit = cleanText(deal?.followUpCadence);
+  return FOLLOW_UP_CADENCE_OPTIONS.includes(explicit) ? explicit : getDefaultFollowUpCadence(deal?.stage);
+}
+
+function getDealFollowUpState(deal) {
+  const cadence = resolveDealFollowUpCadence(deal);
+  const cadenceDays = getFollowUpCadenceDays(cadence);
+  const today = new Date().toISOString().slice(0, 10);
+  const lastFollowUp = normalizeDateInput(deal.lastFollowUp);
+  const owner = cleanText(deal.followUpOwner || getDealOwner(deal) || getActiveUser()?.fullName);
+  const explicitNext = normalizeDateInput(deal.nextFollowUpDate);
+  const recommendedNext = addDaysToIsoDate(lastFollowUp || today, cadenceDays);
+  const nextFollowUpDate = explicitNext || recommendedNext;
+  const notificationsEnabled = deal.followUpNotificationsEnabled !== false;
+  const daysToNext = nextFollowUpDate ? daysUntil(nextFollowUpDate) : Number.POSITIVE_INFINITY;
+  const daysSinceLastTouch = lastFollowUp ? daysSince(lastFollowUp) : null;
+  const hasAnchor = Boolean(lastFollowUp || explicitNext);
+
+  let statusKey = "on-track";
+  let toneClass = "is-ready";
+  let severity = 0;
+  let summary = `${cadence} cadence is active.`;
+
+  if (isInactiveDeal(deal)) {
+    statusKey = "inactive";
+    toneClass = "is-muted";
+    summary = "This account is inactive, so follow-up alerts are paused.";
+  } else if (!hasAnchor) {
+    statusKey = "missing";
+    toneClass = "is-progress";
+    severity = 2;
+    summary = "No follow-up date has been anchored yet. Set the first touchpoint and cadence.";
+  } else if (daysToNext < 0) {
+    statusKey = "overdue";
+    toneClass = "is-blocked";
+    severity = 3;
+    summary = `${cadence} follow-up is overdue by ${Math.abs(daysToNext)} day${Math.abs(daysToNext) === 1 ? "" : "s"}.`;
+  } else if (daysToNext <= 3) {
+    statusKey = "due-soon";
+    toneClass = "is-progress";
+    severity = 2;
+    summary = `${cadence} follow-up is due in ${daysToNext} day${daysToNext === 1 ? "" : "s"}.`;
+  } else if (daysSinceLastTouch !== null && daysSinceLastTouch > cadenceDays) {
+    statusKey = "stale";
+    toneClass = "is-progress";
+    severity = 2;
+    summary = `Last touchpoint is ${daysSinceLastTouch} days old and is already beyond the ${cadence.toLowerCase()} rhythm.`;
+  }
+
+  return {
+    cadence,
+    cadenceDays,
+    owner: owner || "Unassigned",
+    lastFollowUp,
+    nextFollowUpDate,
+    notificationsEnabled,
+    daysToNext,
+    daysSinceLastTouch,
+    statusKey,
+    toneClass,
+    severity,
+    summary,
+    recommendation:
+      statusKey === "missing"
+        ? "Set the next follow-up date and assign the owner before the deal leaves this workspace."
+        : statusKey === "overdue"
+        ? "Open the account, log today’s touchpoint, and refresh the next follow-up date."
+        : statusKey === "due-soon"
+        ? "Keep the planned touchpoint and use Create Follow-Up Plan to sequence the next cycle."
+        : "Cadence is healthy. Keep the next touchpoint visible and refresh it after every interaction.",
+  };
+}
+
+function renderDealIntakeAssistantFromForm() {
+  if (!dealForm || !elements.dealIntakeAssistant) {
+    return;
+  }
+
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const followUp = getDealFollowUpState(draft);
+  const steps = [
+    {
+      label: "Identity",
+      note: "Name the deal, client or operator, and assign the market.",
+      ready: hasAnyText(draft.deal) && hasAnyText(draft.client, draft.operator, draft.companyName) && hasAnyText(draft.market),
+    },
+    {
+      label: "Ownership",
+      note: "KAM, stage, source, and commercial model should be visible.",
+      ready: hasAnyText(getDealOwner(draft), draft.stage, draft.source, draft.type),
+    },
+    {
+      label: "Scope",
+      note: "Value, products, and request scope should explain what we are trying to close.",
+      ready: hasAnyAmount(draft.dealValue, draft.revenuePotentialEur) && hasAnyText(draft.productsPotential, draft.negotiatedProducts, draft.proposalRequest),
+    },
+    {
+      label: "Follow-Up",
+      note: "Every active account should leave this form with cadence, owner, and next date.",
+      ready: hasAnyText(followUp.cadence, followUp.owner) && hasAnyText(followUp.nextFollowUpDate),
+    },
+  ];
+  const readyCount = steps.filter((step) => step.ready).length;
+
+  elements.dealIntakeAssistant.innerHTML = `
+    <div class="deal-intake-head">
+      <div>
+        <span class="operational-guide-kicker">Capture assistant</span>
+        <strong>${escapeHtml(`${readyCount}/${steps.length} capture steps ready`)}</strong>
+      </div>
+      <span class="pill ${readyCount === steps.length ? "success" : readyCount >= 2 ? "info" : "neutral"}">${escapeHtml(followUp.cadence)}</span>
+    </div>
+    <div class="deal-intake-grid">
+      ${steps
+        .map(
+          (step) => `
+            <article class="deal-intake-card ${step.ready ? "is-ready" : "is-missing"}">
+              <span>${escapeHtml(step.ready ? "Ready" : "Pending")}</span>
+              <strong>${escapeHtml(step.label)}</strong>
+              <small>${escapeHtml(step.note)}</small>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderDealFollowUpGuideFromForm() {
+  if (!dealForm || !elements.dealFollowUpGuide) {
+    return;
+  }
+
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const followUp = getDealFollowUpState(draft);
+  const openTasks = existingDeal ? countOpenTasksForDeal(existingDeal) : 0;
+  const badgeTone = followUp.toneClass === "is-blocked" ? "blocked" : followUp.toneClass === "is-progress" ? "info" : "success";
+
+  elements.dealFollowUpGuide.innerHTML = `
+    <article class="follow-up-guide-card ${followUp.toneClass}">
+      <div class="follow-up-guide-head">
+        <div>
+          <span class="operational-guide-kicker">Cadence status</span>
+          <strong>${escapeHtml(followUp.summary)}</strong>
+          <p>${escapeHtml(followUp.recommendation)}</p>
+        </div>
+        <span class="pill ${badgeTone}">${escapeHtml(followUp.notificationsEnabled ? "Alerts On" : "Alerts Off")}</span>
+      </div>
+      <div class="follow-up-guide-metrics">
+        <article class="operational-guide-metric">
+          <span>Cadence</span>
+          <strong>${escapeHtml(followUp.cadence)}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Owner</span>
+          <strong>${escapeHtml(followUp.owner)}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Last follow-up</span>
+          <strong>${escapeHtml(formatDate(followUp.lastFollowUp))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Next follow-up</span>
+          <strong>${escapeHtml(formatDate(followUp.nextFollowUpDate))}</strong>
+        </article>
+        <article class="operational-guide-metric">
+          <span>Open tasks</span>
+          <strong>${escapeHtml(String(openTasks))}</strong>
+        </article>
+      </div>
+    </article>
+  `;
+}
+
+function buildFollowUpNotificationItems(deals) {
+  return deals
+    .filter((deal) => !isInactiveDeal(deal))
+    .map((deal) => {
+      const followUp = getDealFollowUpState(deal);
+      if (!followUp.notificationsEnabled) {
+        return null;
+      }
+      if (!["missing", "overdue", "due-soon", "stale"].includes(followUp.statusKey)) {
+        return null;
+      }
+      return {
+        deal,
+        followUp,
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => right.followUp.severity - left.followUp.severity || compareNullableDates(left.followUp.nextFollowUpDate, right.followUp.nextFollowUpDate));
+}
+
+function renderPipelineFollowUpNotifications(deals) {
+  if (!elements.pipelineFollowUpNotifications || !elements.pipelineFollowUpSummary) {
+    return;
+  }
+
+  const items = buildFollowUpNotificationItems(deals).slice(0, 8);
+  elements.pipelineFollowUpSummary.textContent = `${items.length} alert${items.length === 1 ? "" : "s"}`;
+
+  if (!items.length) {
+    elements.pipelineFollowUpNotifications.innerHTML = '<div class="empty-state">No follow-up alerts are active in the current funnel view. Cadence is on track for the visible accounts.</div>';
+    return;
+  }
+
+  elements.pipelineFollowUpNotifications.innerHTML = items
+    .map(({ deal, followUp }) => {
+      const tone = followUp.toneClass === "is-blocked" ? "blocked" : followUp.toneClass === "is-progress" ? "info" : "success";
+      return `
+        <article class="notification-card ${followUp.toneClass}">
+          <div class="notification-card-head">
+            <div>
+              <span>${escapeHtml(followUp.statusKey.replace(/-/g, " "))}</span>
+              <strong>${escapeHtml(deal.deal || deal.client || deal.operator || "Unnamed account")}</strong>
+            </div>
+            <span class="pill ${tone}">${escapeHtml(followUp.cadence)}</span>
+          </div>
+          <p>${escapeHtml(followUp.summary)}</p>
+          <div class="notification-card-meta">
+            <span><strong>Owner:</strong> ${escapeHtml(followUp.owner)}</span>
+            <span><strong>Market:</strong> ${escapeHtml(deal.market || "N/A")}</span>
+            <span><strong>Next:</strong> ${escapeHtml(formatDate(followUp.nextFollowUpDate))}</span>
+          </div>
+          <div class="row-actions">
+            <button class="icon-button" data-action="mark-followed-up-today-from-deal" data-id="${escapeAttribute(deal.id)}">Mark Today</button>
+            <button class="icon-button" data-action="create-task-from-deal" data-id="${escapeAttribute(deal.id)}">Create Task</button>
+            <button class="icon-button" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">Open Deal</button>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function getRiskDeals(deals = getScopedDeals()) {
   return deals
     .map((deal) => {
@@ -9675,7 +10057,7 @@ function handleDealScoringInput() {
   scheduleDealAutosave();
 }
 
-function handleDealAssistAction(event) {
+async function handleDealAssistAction(event) {
   const jumpButton = event.target.closest("[data-form-jump]");
   if (jumpButton) {
     const targetSection = document.getElementById(jumpButton.dataset.formJump || "");
@@ -9695,6 +10077,45 @@ function handleDealAssistAction(event) {
       field.dispatchEvent(new Event("input", { bubbles: true }));
       field.dispatchEvent(new Event("change", { bubbles: true }));
     }
+    return;
+  }
+
+  const followUpPresetButton = event.target.closest("[data-follow-up-preset]");
+  if (followUpPresetButton) {
+    const cadence = cleanText(followUpPresetButton.dataset.followUpPreset);
+    if (dealForm.elements.followUpCadence) {
+      dealForm.elements.followUpCadence.value = cadence;
+    }
+    if (dealForm.elements.followUpOwner && !cleanText(dealForm.elements.followUpOwner.value)) {
+      dealForm.elements.followUpOwner.value = getActiveUser()?.fullName || "";
+    }
+    if (dealForm.elements.followUpNotificationsEnabled) {
+      dealForm.elements.followUpNotificationsEnabled.checked = true;
+    }
+    if (dealForm.elements.followUpCadence) {
+      dealForm.elements.followUpCadence.dispatchEvent(new Event("input", { bubbles: true }));
+      dealForm.elements.followUpCadence.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (!cleanText(dealForm.elements.nextFollowUpDate?.value)) {
+      seedDealFollowUpDateFromForm();
+    }
+    scheduleDealAutosave({ immediate: true });
+    return;
+  }
+
+  const followUpActionButton = event.target.closest("[data-follow-up-action]");
+  if (followUpActionButton) {
+    const action = cleanText(followUpActionButton.dataset.followUpAction);
+    if (action === "seed-next-date") {
+      seedDealFollowUpDateFromForm();
+    }
+    if (action === "mark-today") {
+      markDealFollowedUpTodayInForm();
+    }
+    if (action === "create-plan") {
+      await createFollowUpPlanForDeal();
+    }
+    scheduleDealAutosave({ immediate: true });
     return;
   }
 
@@ -9989,6 +10410,125 @@ function applyCommercialBuilderAction(action) {
   }
 }
 
+function seedDealFollowUpDateFromForm() {
+  if (!dealForm) {
+    return;
+  }
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const followUp = getDealFollowUpState(draft);
+  if (dealForm.elements.followUpCadence) {
+    dealForm.elements.followUpCadence.value = followUp.cadence;
+  }
+  if (dealForm.elements.nextFollowUpDate) {
+    dealForm.elements.nextFollowUpDate.value = followUp.nextFollowUpDate;
+    dealForm.elements.nextFollowUpDate.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  if (dealForm.elements.followUpOwner && !cleanText(dealForm.elements.followUpOwner.value)) {
+    dealForm.elements.followUpOwner.value = followUp.owner;
+  }
+  if (dealForm.elements.followUpNotificationsEnabled) {
+    dealForm.elements.followUpNotificationsEnabled.checked = true;
+  }
+  setBanner(`Next follow-up seeded for ${formatDate(followUp.nextFollowUpDate)} using the ${followUp.cadence.toLowerCase()} cadence.`, "success");
+}
+
+function markDealFollowedUpTodayInForm() {
+  if (!dealForm) {
+    return;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  if (dealForm.elements.lastFollowUp) {
+    dealForm.elements.lastFollowUp.value = today;
+  }
+  if (!cleanText(dealForm.elements.followUpCadence?.value)) {
+    dealForm.elements.followUpCadence.value = getDefaultFollowUpCadence(dealForm.elements.stage?.value);
+  }
+  seedDealFollowUpDateFromForm();
+  setBanner("Last follow-up was marked as today and the next touchpoint was refreshed.", "success");
+}
+
+function buildFollowUpCadenceTaskDrafts(deal, count = 4) {
+  const followUp = getDealFollowUpState(deal);
+  const startDate = followUp.nextFollowUpDate || addDaysToIsoDate(new Date().toISOString().slice(0, 10), followUp.cadenceDays);
+  const existingKeys = new Set(state.tasks.map((task) => [cleanText(task.dealId), cleanText(task.title), cleanText(task.dueDate)].join("|")));
+  let nextSequence = toNullableNumber(state.workspace.taskSequence) || 0;
+  const tasks = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const dueDate = index === 0 ? startDate : addDaysToIsoDate(startDate, followUp.cadenceDays * index);
+    const title = `${followUp.cadence} follow-up ${index + 1} · ${deal.client || deal.operator || deal.deal || "account"}`;
+    const dedupeKey = [cleanText(deal.id), title, dueDate].join("|");
+    if (existingKeys.has(dedupeKey)) {
+      continue;
+    }
+    nextSequence += 1;
+    tasks.push(
+      normalizeTask({
+        ...buildTaskPrefillFromSnapshot(deal),
+        id: generateId("task"),
+        taskNumber: buildTaskNumber(nextSequence, { targetYear: yearFromDate(dueDate) || state.workspace.fiscalYear }),
+        title,
+        scopeType: "Client",
+        dealId: deal.id,
+        deal: deal.deal,
+        client: deal.client,
+        operator: deal.operator,
+        market: deal.market,
+        owner: followUp.owner,
+        dueDate,
+        nextStep: deal.actionItems || buildDealOperationalGuide(deal).recommendation,
+        notes: [deal.followUpNotes, deal.statusText || deal.comments].filter(Boolean).join(" · "),
+        traceLog: appendTraceLog("", `${followUp.cadence} follow-up plan scheduled`),
+      })
+    );
+  }
+
+  state.workspace.taskSequence = nextSequence;
+  return tasks;
+}
+
+async function createFollowUpPlanForDeal(sourceDeal = null) {
+  const draft = buildDocumentDealDraft(sourceDeal);
+  if (!draft) {
+    return;
+  }
+  if (!cleanText(draft.deal)) {
+    setBanner("Name the deal before creating a follow-up plan.", "danger");
+    return;
+  }
+
+  const prepared = normalizeDeal({
+    ...draft,
+    followUpCadence: resolveDealFollowUpCadence(draft),
+    followUpOwner: cleanText(draft.followUpOwner) || getDealOwner(draft) || getActiveUser()?.fullName || "",
+    followUpNotificationsEnabled: draft.followUpNotificationsEnabled !== false,
+    nextFollowUpDate: getDealFollowUpState(draft).nextFollowUpDate,
+  });
+
+  const exists = state.deals.some((deal) => deal.id === prepared.id);
+  state.deals = exists ? state.deals.map((deal) => (deal.id === prepared.id ? prepared : deal)) : [prepared, ...state.deals];
+  const newTasks = buildFollowUpCadenceTaskDrafts(prepared, resolveDealFollowUpCadence(prepared) === "Monthly" ? 3 : 4);
+  if (newTasks.length) {
+    state.tasks = [...newTasks, ...state.tasks];
+  }
+
+  const saved = await persistState();
+  renderAll();
+  if (!sourceDeal) {
+    ui.editingDealId = prepared.id;
+    fillDealForm(prepared);
+  }
+  setBanner(
+    buildExcelBanner(
+      saved
+        ? `${newTasks.length} follow-up task${newTasks.length === 1 ? "" : "s"} created for ${prepared.deal}.`
+        : `${newTasks.length} follow-up task${newTasks.length === 1 ? "" : "s"} created in browser storage for ${prepared.deal}.`
+    ),
+    saved ? "success" : "warn"
+  );
+}
+
 function syncDealScoringPreview() {
   if (!dealForm) {
     return;
@@ -10017,6 +10557,8 @@ function syncDealScoringPreview() {
     dealForm.elements.priorityClass.value = scoring.priorityClass;
   }
 
+  renderDealIntakeAssistantFromForm();
+  renderDealFollowUpGuideFromForm();
   renderDealWorkflowGuideFromForm();
 }
 

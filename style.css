@@ -916,10 +916,17 @@ button.stat-card {
 .deal-form-segments,
 .quick-fill-strip,
 .commercial-builder,
+.deal-intake-assistant,
+.deal-intake-grid,
 .deal-autosave-shell,
 .deal-autosave-sections,
 .deal-autosave-summary,
-.deal-autosave-actions {
+.deal-autosave-actions,
+.follow-up-guide-card,
+.follow-up-guide-metrics,
+.follow-up-notification-grid,
+.notification-card,
+.notification-card-meta {
   display: grid;
   gap: 12px;
 }
@@ -957,6 +964,134 @@ button.stat-card {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.deal-intake-assistant {
+  padding-top: 4px;
+  border-top: 1px solid rgba(210, 221, 233, 0.9);
+}
+
+.deal-intake-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.deal-intake-head strong {
+  display: block;
+  color: var(--ink);
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.deal-intake-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.deal-intake-card,
+.notification-card {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(222, 230, 239, 0.95);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.deal-intake-card span,
+.notification-card-head span {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.deal-intake-card strong,
+.follow-up-guide-head strong,
+.notification-card-head strong {
+  color: var(--ink);
+  font-size: 0.96rem;
+  letter-spacing: -0.02em;
+}
+
+.deal-intake-card small,
+.notification-card p {
+  color: var(--ink-soft);
+  line-height: 1.45;
+}
+
+.deal-intake-card.is-ready,
+.follow-up-guide-card.is-ready,
+.notification-card.is-ready {
+  background: rgba(236, 249, 241, 0.92);
+  border-color: rgba(120, 191, 143, 0.28);
+}
+
+.deal-intake-card.is-missing {
+  background: rgba(255, 251, 236, 0.9);
+  border-color: rgba(221, 192, 118, 0.28);
+}
+
+.follow-up-planner {
+  gap: 16px;
+}
+
+.deal-follow-up-guide {
+  display: grid;
+}
+
+.follow-up-guide-card {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(229, 236, 244, 0.95);
+}
+
+.follow-up-guide-card.is-progress,
+.notification-card.is-progress {
+  background: rgba(247, 244, 230, 0.92);
+  border-color: rgba(215, 194, 116, 0.3);
+}
+
+.follow-up-guide-card.is-blocked,
+.notification-card.is-blocked {
+  background: rgba(255, 238, 238, 0.94);
+  border-color: rgba(214, 114, 114, 0.28);
+}
+
+.follow-up-guide-card.is-muted {
+  background: rgba(247, 248, 250, 0.92);
+  border-color: rgba(208, 214, 224, 0.85);
+}
+
+.follow-up-guide-head,
+.notification-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.follow-up-guide-head p,
+.notification-card p {
+  margin: 0;
+}
+
+.follow-up-guide-metrics {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.follow-up-notification-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.notification-card-meta {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  color: var(--ink-soft);
+  font-size: 0.84rem;
 }
 
 .deal-autosave-pill {
@@ -1615,6 +1750,22 @@ textarea {
   color: var(--ink-soft);
   font-size: 0.86rem;
   font-weight: 700;
+}
+
+.finder-empty-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.finder-empty-stack span {
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.finder-empty-action {
+  justify-self: start;
 }
 
 .summary-grid {
@@ -3672,7 +3823,9 @@ button.stage-card {
   .lead-market-layout,
   .forecast-split,
   .crm-intel-layout,
-  .market-interpretation-board {
+  .market-interpretation-board,
+  .deal-intake-grid,
+  .follow-up-notification-grid {
     grid-template-columns: 1fr;
   }
 
@@ -3714,7 +3867,9 @@ button.stage-card {
   .market-interpretation-metrics,
   .company-profile-metrics,
   .company-profile-grid,
-  .company-account-meta {
+  .company-account-meta,
+  .follow-up-guide-metrics,
+  .notification-card-meta {
     grid-template-columns: 1fr;
   }
 

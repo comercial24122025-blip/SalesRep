@@ -130,6 +130,7 @@
             <small id="company-search-status" class="finder-helper">Search the full workspace by company name, operator, contact, website, or email.</small>
             <div class="company-search-actions">
               <button id="open-company-profile" type="button" class="button button-secondary button-small" disabled>Open Profile</button>
+              <button id="create-company-account" type="button" class="button button-primary button-small" disabled>Create Account</button>
               <button id="clear-company-search" type="button" class="button button-ghost button-small">Clear</button>
             </div>
           </div>
@@ -595,6 +596,7 @@
                     </div>
                     <div id="deal-autosave-sections" class="deal-autosave-sections"></div>
                   </div>
+                  <div id="deal-intake-assistant" class="deal-intake-assistant"></div>
                 </div>
 
                 <div id="deal-section-core" class="form-section">
@@ -608,86 +610,95 @@
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="DD">DD</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Integration">Integration</button>
                   </div>
-                  <div class="form-grid form-grid-3">
-                    <label>
-                      Deal
-                      <input name="deal" type="text" placeholder="Deal name" required />
-                    </label>
-                    <label>
-                      Client
-                      <input name="client" type="text" placeholder="Client or account" />
-                    </label>
-                    <label>
-                      Operator
-                      <input name="operator" type="text" placeholder="Operator Name" />
-                    </label>
-                    <label>
-                      Group
-                      <input name="groupName" type="text" placeholder="GROUP" />
-                    </label>
-                    <label>
-                      KAM
-                      <input name="kam" type="text" placeholder="LATAM KAM" />
-                    </label>
-                    <label>
-                      Type
-                      <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" list="deal-type-options" />
-                    </label>
-                    <label>
-                      Stage
-                      <select name="stage">
-                        <option>Lead</option>
-                        <option>Qualified</option>
-                        <option>Proposal</option>
-                        <option>Legal</option>
-                        <option>DD</option>
-                        <option>Integration</option>
-                        <option>Legal Approval</option>
-                        <option>Go Live</option>
-                        <option>Live</option>
-                        <option>Handover</option>
-                      </select>
-                    </label>
-                    <label>
-                      Market
-                      <input name="market" type="text" placeholder="Ex. Peru" list="deal-market-options" />
-                    </label>
-                    <label>
-                      Jurisdiction
-                      <input name="jurisdiction" type="text" placeholder="Jurisdiction" />
-                    </label>
-                    <label>
-                      Legal Entity
-                      <input name="legalEntity" type="text" placeholder="LEGAL ENTITY" />
-                    </label>
-                    <label>
-                      Site Status
-                      <input name="siteStatus" type="text" placeholder="SITE (URL)" />
-                    </label>
-                    <label>
-                      Account Scope
-                      <input name="accountScope" type="text" placeholder="R/.COM" />
-                    </label>
-                    <label>
-                      Platform
-                      <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" list="deal-platform-options" />
-                    </label>
-                    <label>
-                      Deal Value (EUR)
-                      <input name="dealValue" type="number" min="0" step="0.01" placeholder="0" />
-                    </label>
-                    <label>
-                      Deal Value 2
-                      <input name="dealValueAlt" type="number" min="0" step="0.01" placeholder="0" />
-                    </label>
-                    <label>
-                      Source
-                      <input name="source" type="text" placeholder="Inbound, outbound, partner..." />
-                    </label>
-                    <label>
-                      Status
-                      <input name="status" type="text" placeholder="Active, blocked, pending..." />
-                    </label>
+                  <div class="form-subsection">
+                    <h4>Account Identity</h4>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        Deal
+                        <input name="deal" type="text" placeholder="Deal name" required />
+                      </label>
+                      <label>
+                        Client
+                        <input name="client" type="text" placeholder="Client or account" />
+                      </label>
+                      <label>
+                        Operator
+                        <input name="operator" type="text" placeholder="Operator Name" />
+                      </label>
+                      <label>
+                        Group
+                        <input name="groupName" type="text" placeholder="GROUP" />
+                      </label>
+                      <label>
+                        Legal Entity
+                        <input name="legalEntity" type="text" placeholder="LEGAL ENTITY" />
+                      </label>
+                      <label>
+                        Site Status
+                        <input name="siteStatus" type="text" placeholder="SITE (URL)" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-subsection">
+                    <h4>Commercial Ownership & Coverage</h4>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        KAM
+                        <input name="kam" type="text" placeholder="LATAM KAM" />
+                      </label>
+                      <label>
+                        Type
+                        <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" list="deal-type-options" />
+                      </label>
+                      <label>
+                        Stage
+                        <select name="stage">
+                          <option>Lead</option>
+                          <option>Qualified</option>
+                          <option>Proposal</option>
+                          <option>Legal</option>
+                          <option>DD</option>
+                          <option>Integration</option>
+                          <option>Legal Approval</option>
+                          <option>Go Live</option>
+                          <option>Live</option>
+                          <option>Handover</option>
+                        </select>
+                      </label>
+                      <label>
+                        Market
+                        <input name="market" type="text" placeholder="Ex. Peru" list="deal-market-options" />
+                      </label>
+                      <label>
+                        Jurisdiction
+                        <input name="jurisdiction" type="text" placeholder="Jurisdiction" />
+                      </label>
+                      <label>
+                        Account Scope
+                        <input name="accountScope" type="text" placeholder="R/.COM" />
+                      </label>
+                      <label>
+                        Platform
+                        <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" list="deal-platform-options" />
+                      </label>
+                      <label>
+                        Deal Value (EUR)
+                        <input name="dealValue" type="number" min="0" step="0.01" placeholder="0" />
+                      </label>
+                      <label>
+                        Deal Value 2
+                        <input name="dealValueAlt" type="number" min="0" step="0.01" placeholder="0" />
+                      </label>
+                      <label>
+                        Source
+                        <input name="source" type="text" placeholder="Inbound, outbound, partner..." />
+                      </label>
+                      <label>
+                        Status
+                        <input name="status" type="text" placeholder="Active, blocked, pending..." />
+                      </label>
+                    </div>
                   </div>
 
                   <label class="full-span">
@@ -810,67 +821,120 @@
 
                 <div id="deal-section-timeline" class="form-section">
                   <h3>Timeline and execution</h3>
-                  <div class="form-grid form-grid-3">
-                    <label>
-                      Prospect Date
-                      <input name="prospectDate" type="date" />
-                    </label>
-                    <label>
-                      Offer Date
-                      <input name="offerDate" type="date" />
-                    </label>
-                    <label>
-                      DD Date
-                      <input name="ddDate" type="date" />
-                    </label>
-                    <label>
-                      Integration Date
-                      <input name="integrationDate" type="date" />
-                    </label>
-                    <label>
-                      Legal Approval Date
-                      <input name="legalApprovalDate" type="date" />
-                    </label>
-                    <label>
-                      Live Date
-                      <input name="liveDate" type="date" />
-                    </label>
-                    <label>
-                      Signing ETA
-                      <input name="signingEta" type="date" />
-                    </label>
-                    <label>
-                      Signing Year
-                      <input name="signingYear" type="number" min="2024" max="2035" />
-                    </label>
-                    <label>
-                      Signing Month
-                      <input name="signingMonth" type="number" min="1" max="12" />
-                    </label>
-                    <label>
-                      Signed ETA
-                      <input name="signedEta" type="date" />
-                    </label>
-                    <label>
-                      Last Follow Up
-                      <input name="lastFollowUp" type="date" />
-                    </label>
-                    <label>
-                      Handover
-                      <input name="handover" type="date" />
-                    </label>
-                    <label>
-                      Live Since
-                      <input name="liveSince" type="date" />
-                    </label>
-                    <label>
-                      Mo
-                      <input name="month" type="text" placeholder="Apr" />
-                    </label>
-                    <label>
-                      Evo
-                      <input name="evo" type="text" placeholder="Q2" />
-                    </label>
+                  <div class="form-subsection">
+                    <h4>Stage Dates</h4>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        Prospect Date
+                        <input name="prospectDate" type="date" />
+                      </label>
+                      <label>
+                        Offer Date
+                        <input name="offerDate" type="date" />
+                      </label>
+                      <label>
+                        DD Date
+                        <input name="ddDate" type="date" />
+                      </label>
+                      <label>
+                        Integration Date
+                        <input name="integrationDate" type="date" />
+                      </label>
+                      <label>
+                        Legal Approval Date
+                        <input name="legalApprovalDate" type="date" />
+                      </label>
+                      <label>
+                        Live Date
+                        <input name="liveDate" type="date" />
+                      </label>
+                      <label>
+                        Signing ETA
+                        <input name="signingEta" type="date" />
+                      </label>
+                      <label>
+                        Signing Year
+                        <input name="signingYear" type="number" min="2024" max="2035" />
+                      </label>
+                      <label>
+                        Signing Month
+                        <input name="signingMonth" type="number" min="1" max="12" />
+                      </label>
+                      <label>
+                        Signed ETA
+                        <input name="signedEta" type="date" />
+                      </label>
+                      <label>
+                        Handover
+                        <input name="handover" type="date" />
+                      </label>
+                      <label>
+                        Live Since
+                        <input name="liveSince" type="date" />
+                      </label>
+                      <label>
+                        Mo
+                        <input name="month" type="text" placeholder="Apr" />
+                      </label>
+                      <label>
+                        Evo
+                        <input name="evo" type="text" placeholder="Q2" />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="form-subsection follow-up-planner">
+                    <div class="form-section-head">
+                      <div>
+                        <h4>Follow-Up Planner</h4>
+                        <p class="form-note">Plan a weekly, biweekly, or monthly operating cadence and let SalesRep create the follow-up sequence for the account.</p>
+                      </div>
+                      <div class="quick-fill-strip">
+                        <span>Cadence</span>
+                        <button type="button" class="button button-ghost button-small" data-follow-up-preset="Weekly">Weekly</button>
+                        <button type="button" class="button button-ghost button-small" data-follow-up-preset="Biweekly">Biweekly</button>
+                        <button type="button" class="button button-ghost button-small" data-follow-up-preset="Monthly">Monthly</button>
+                      </div>
+                    </div>
+                    <div class="form-grid form-grid-2">
+                      <label>
+                        Last Follow Up
+                        <input name="lastFollowUp" type="date" />
+                      </label>
+                      <label>
+                        Follow-Up Cadence
+                        <select name="followUpCadence">
+                          <option value="">Select cadence</option>
+                          <option>Weekly</option>
+                          <option>Biweekly</option>
+                          <option>Monthly</option>
+                          <option>Custom</option>
+                        </select>
+                      </label>
+                      <label>
+                        Next Follow-Up Date
+                        <input name="nextFollowUpDate" type="date" />
+                      </label>
+                      <label>
+                        Follow-Up Owner
+                        <input name="followUpOwner" type="text" placeholder="KAM or account owner" />
+                      </label>
+                      <label class="full-span">
+                        Follow-Up Notes
+                        <textarea name="followUpNotes" rows="2" placeholder="Weekly update call, biweekly legal review, monthly live client growth review..."></textarea>
+                      </label>
+                      <label class="toggle full-span">
+                        <input name="followUpNotificationsEnabled" type="checkbox" />
+                        Follow-Up Notifications Enabled
+                      </label>
+                    </div>
+                    <div id="deal-follow-up-guide" class="deal-follow-up-guide"></div>
+                    <div class="quick-fill-strip quick-fill-strip-subtle">
+                      <span>Planner Actions</span>
+                      <button type="button" class="button button-secondary button-small" data-follow-up-action="seed-next-date">Set Next Follow-Up</button>
+                      <button type="button" class="button button-secondary button-small" data-follow-up-action="mark-today">Mark Followed Up Today</button>
+                      <button type="button" class="button button-primary button-small" data-follow-up-action="create-plan">Create Follow-Up Plan</button>
+                    </div>
                   </div>
                 </div>
 
@@ -1428,6 +1492,14 @@
                   <span id="pipeline-operating-stage-chip" class="chip">Focus: Lead</span>
                 </div>
                 <div id="pipeline-operating-guide" class="pipeline-operating-guide"></div>
+              </div>
+
+              <div class="pipeline-operating-shell">
+                <div class="subpanel-head">
+                  <h3>Follow-Up Notifications</h3>
+                  <span id="pipeline-follow-up-summary" class="chip">0 alerts</span>
+                </div>
+                <div id="pipeline-follow-up-notifications" class="follow-up-notification-grid"></div>
               </div>
 
               <div class="filter-grid">
