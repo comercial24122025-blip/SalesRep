@@ -763,6 +763,7 @@ const ui = {
   campaignPreset: null,
   kpiSearch: "",
   isHydrating: true,
+  companyAssistKey: "",
 };
 
 let state = {
@@ -781,11 +782,36 @@ let state = {
   },
 };
 
+let derived = createDerivedState();
+
 const serverMeta = {
   workbookPath: "",
   workbookUrl: STATIC_WORKBOOK_URL,
   ready: false,
   storageMode: "static",
+};
+
+const DEAL_FORM_ASSIST_LISTS = {
+  client: "deal-client-options",
+  operator: "deal-operator-options",
+  groupName: "deal-group-options",
+  kam: "deal-kam-options",
+  market: "deal-market-options",
+  platform: "deal-platform-options",
+  companyName: "deal-company-options",
+  documentClientName: "deal-company-options",
+  legalEntity: "deal-legal-entity-options",
+  primaryContact: "deal-contact-options",
+  decisionMaker: "deal-contact-options",
+  ddContactName: "deal-dd-contact-options",
+  companyLegalRepresentative: "deal-legal-rep-options",
+  legalRepresentativeName: "deal-legal-rep-options",
+  invoiceEmail: "deal-email-options",
+  supportEmail: "deal-email-options",
+  managementEmail: "deal-email-options",
+  integrationEmail: "deal-email-options",
+  ddContactEmail: "deal-email-options",
+  legalRepresentativeEmail: "deal-email-options",
 };
 
 function resolveApiUrl(pathname) {
@@ -805,6 +831,108 @@ function resolveAssetUrl(pathname) {
     return APP_BASE_URL.toString();
   }
   return new URL(value, APP_BASE_URL).toString();
+}
+
+function createDerivedState() {
+  return {
+    dealsRef: null,
+    usersRef: null,
+    dealDocsById: new Map(),
+    dealTimePartsById: new Map(),
+    companyDealsByKey: new Map(),
+    companyProfiles: [],
+    companyProfilesByKey: new Map(),
+    formOptions: new Map(),
+    scopedDealsKey: "",
+    scopedDeals: [],
+  };
+}
+
+function rebuildDerivedState(force = false) {
+  if (!force && derived.dealsRef === state.deals && derived.usersRef === state.users) {
+    return derived;
+  }
+
+  const next = createDerivedState();
+  next.dealsRef = state.deals;
+  next.usersRef = state.users;
+
+  state.deals.forEach((deal) => {
+    const searchText = buildDealSearchText(deal);
+    const companyKey = getCompanyProfileKey(deal);
+    const companyLabel = getCompanyProfileLabel(deal);
+    const timeParts = getDealTimeParts(deal);
+    next.dealDocsById.set(deal.id, {
+      id: deal.id,
+      searchText,
+      companyKey,
+      companyLabel,
+    });
+    next.dealTimePartsById.set(deal.id, timeParts);
+    if (!next.companyDealsByKey.has(companyKey)) {
+      next.companyDealsByKey.set(companyKey, []);
+    }
+    next.companyDealsByKey.get(companyKey).push(deal);
+  });
+
+  next.companyDealsByKey.forEach((items, key) => {
+    const deals = [...items].sort((left, right) => {
+      const stageDiff = STAGE_ORDER.indexOf(cleanText(right.stage)) - STAGE_ORDER.indexOf(cleanText(left.stage));
+      if (stageDiff !== 0) {
+        return stageDiff;
+      }
+      return Number(right.dealValue || 0) - Number(left.dealValue || 0);
+    });
+    next.companyDealsByKey.set(key, deals);
+    const primary = deals[0];
+    const contacts = collectCompanyContactRows(deals);
+    const websites = uniqueValues(deals.map((item) => item.url));
+    const markets = uniqueValues(deals.map((item) => item.market));
+    const stages = uniqueValues(deals.map((item) => item.stage));
+    const profile = {
+      key,
+      dealId: primary?.id || "",
+      title: getCompanyProfileLabel(primary || {}),
+      primary,
+      deals,
+      contacts,
+      websites,
+      markets,
+      stages,
+      searchText: normalizeSearchText(
+        [
+          getCompanyProfileLabel(primary || {}),
+          ...deals.flatMap((item) => [
+            item.client,
+            item.operator,
+            item.deal,
+            item.market,
+            item.url,
+            item.companyName,
+            item.documentClientName,
+            item.legalEntity,
+            item.primaryContact,
+            item.decisionMaker,
+            item.ddContactName,
+            item.ddContactEmail,
+            item.legalRepresentativeName,
+            item.legalRepresentativeEmail,
+            item.invoiceEmail,
+            item.supportEmail,
+            item.managementEmail,
+            item.integrationEmail,
+          ]),
+          ...contacts.flatMap((contact) => [contact.role, contact.name, contact.email, contact.market]),
+        ].join(" ")
+      ),
+    };
+    next.companyProfiles.push(profile);
+    next.companyProfilesByKey.set(key, profile);
+  });
+
+  next.formOptions = buildDealFormAssistOptions(next.companyProfiles);
+  derived = next;
+  return derived;
 }
 
 init();
@@ -960,6 +1088,9 @@ function bindEvents() {
   dealForm.addEventListener("change", (event) => {
     if (event.target?.id?.startsWith("commercial-builder-")) {
       syncCommercialBuilderUi();
+    }
+    if (["client", "operator", "companyName", "documentClientName"].includes(event.target?.name)) {
+      maybeHydrateDealFormFromCompanyMatch();
     }
   });
   syncCommercialBuilderUi();
@@ -2805,12 +2936,14 @@ function createCampaignShape() {
 }
 
 function renderAll() {
+  rebuildDerivedState();
   synchronizeTaskSequence();
   ensureActiveUser();
   renderGlobalFilters();
   renderViewState();
   renderWorkspaceChrome();
   renderCompanyFinder();
+  renderDealFormAssist();
   renderModuleFlow();
   renderWorkflowCommandBar();
   renderHeroMetrics();
@@ -4489,20 +4622,10 @@ function buildCompanyFinderSuggestions(query) {
     return [];
   }
 
-  const suggestionsByCompany = new Map();
-  state.deals.forEach((deal) => {
-    const suggestion = buildCompanyFinderSuggestion(deal, normalizedQuery);
-    if (!suggestion) {
-      return;
-    }
-    const key = getCompanyProfileKey(deal);
-    const existing = suggestionsByCompany.get(key);
-    if (!existing || suggestion.score > existing.score) {
-      suggestionsByCompany.set(key, suggestion);
-    }
-  });
-
-  return Array.from(suggestionsByCompany.values())
+  rebuildDerivedState();
+  return derived.companyProfiles
+    .map((profile) => buildCompanyFinderSuggestion(profile, normalizedQuery))
+    .filter(Boolean)
     .sort((left, right) => right.score - left.score || left.title.localeCompare(right.title))
     .slice(0, 8);
 }
@@ -4520,9 +4643,10 @@ function getCompanyFinderPrimarySuggestion(query = elements.companySearch?.value
   return buildCompanyFinderSuggestions(normalizedQuery)[0] || null;
 }
 
-function buildCompanyFinderSuggestion(deal, normalizedQuery) {
+function buildCompanyFinderSuggestion(profile, normalizedQuery) {
+  const deal = profile.primary || {};
   const matches = [
-    scorePipelineFinderField("Company", getCompanyProfileLabel(deal), normalizedQuery, 6),
+    scorePipelineFinderField("Company", profile.title, normalizedQuery, 6),
     scorePipelineFinderField("Client", deal.client, normalizedQuery, 5),
     scorePipelineFinderField("Operator", deal.operator, normalizedQuery, 5),
     scorePipelineFinderField("Deal", deal.deal, normalizedQuery, 4),
@@ -4537,6 +4661,13 @@ function buildCompanyFinderSuggestion(deal, normalizedQuery) {
     scorePipelineFinderField("Integration Email", deal.integrationEmail, normalizedQuery, 4),
     scorePipelineFinderField("Website", deal.url, normalizedQuery, 3),
     scorePipelineFinderField("Market", deal.market, normalizedQuery, 2),
+    profile.searchText.includes(normalizedQuery)
+      ? {
+          label: "Related Company Data",
+          value: profile.title,
+          score: 140,
+        }
+      : null,
   ].filter(Boolean);
 
   if (!matches.length) {
@@ -4544,16 +4675,17 @@ function buildCompanyFinderSuggestion(deal, normalizedQuery) {
   }
 
   const bestMatch = matches.sort((left, right) => right.score - left.score)[0];
-  const relatedDeals = getCompanyProfileDeals(deal);
-  const markets = uniqueValues(relatedDeals.map((item) => item.market));
-  const stages = uniqueValues(relatedDeals.map((item) => item.stage));
   return {
-    dealId: deal.id,
-    title: getCompanyProfileLabel(deal),
+    dealId: profile.dealId,
+    title: profile.title,
     matchLabel: bestMatch.label,
     subtitle: buildPipelineFinderSubtitle(deal, bestMatch.value),
-    meta: [markets.slice(0, 2).join(" · ") || "No market", `${relatedDeals.length} account${relatedDeals.length === 1 ? "" : "s"}`, stages.slice(0, 2).join(" · ") || "No stage"].join(" · "),
-    searchValue: getCompanyProfileLabel(deal),
+    meta: [
+      profile.markets.slice(0, 2).join(" · ") || "No market",
+      `${profile.deals.length} account${profile.deals.length === 1 ? "" : "s"}`,
+      profile.stages.slice(0, 2).join(" · ") || "No stage",
+    ].join(" · "),
+    searchValue: profile.title,
     score: bestMatch.score,
   };
 }
@@ -4873,16 +5005,9 @@ function getCompanyProfileLabel(deal) {
 }
 
 function getCompanyProfileDeals(sourceDeal) {
+  rebuildDerivedState();
   const key = getCompanyProfileKey(sourceDeal);
-  return state.deals
-    .filter((deal) => getCompanyProfileKey(deal) === key)
-    .sort((left, right) => {
-      const stageDiff = STAGE_ORDER.indexOf(cleanText(right.stage)) - STAGE_ORDER.indexOf(cleanText(left.stage));
-      if (stageDiff !== 0) {
-        return stageDiff;
-      }
-      return Number(right.dealValue || 0) - Number(left.dealValue || 0);
-    });
+  return derived.companyDealsByKey.get(key) || [];
 }
 
 function collectCompanyContactRows(deals) {
@@ -7463,6 +7588,7 @@ function fillDealForm(deal) {
 
   elements.dealFormTitle.textContent = `Edit Deal: ${deal.deal}`;
   elements.dealSubmitButton.textContent = "Update Deal";
+  ui.companyAssistKey = getCompanyProfileKey(deal);
   resetCommercialBuilder();
   syncDealScoringPreview();
 }
@@ -7472,10 +7598,220 @@ function resetDealForm() {
   dealForm.reset();
   fillDealForm(draft);
   ui.editingDealId = null;
+  ui.companyAssistKey = "";
   elements.dealFormTitle.textContent = "New Deal";
   elements.dealSubmitButton.textContent = "Save Deal";
   resetCommercialBuilder();
   syncDealScoringPreview();
+}
+
+function buildDealSearchText(deal) {
+  return normalizeSearchText(
+    [
+      deal.deal,
+      deal.client,
+      deal.operator,
+      deal.casinoName,
+      deal.groupName,
+      deal.kam,
+      deal.market,
+      deal.platform,
+      deal.legalEntity,
+      deal.segment,
+      deal.primaryContact,
+      deal.decisionMaker,
+      deal.licenseStatus,
+      deal.currentCompetitors,
+      deal.productsCurrent,
+      deal.productsPotential,
+      deal.targetPriority,
+      deal.priorityClass,
+      deal.statusText,
+      deal.comments,
+      deal.jira,
+      deal.ddTicket,
+      deal.url,
+      deal.brands,
+      deal.entityInfo,
+      deal.skype,
+      deal.integrationEmail,
+      deal.siteStatus,
+      deal.actionItems,
+      deal.updates,
+      deal.dd,
+      deal.integration,
+      deal.companyName,
+      deal.documentClientName,
+      deal.companyRegistrationNumber,
+      deal.invoiceEmail,
+      deal.supportEmail,
+      deal.managementEmail,
+      deal.ddContactName,
+      deal.ddContactEmail,
+      deal.legalRepresentativeName,
+      deal.legalRepresentativeEmail,
+    ].join(" ")
+  );
+}
+
+function buildDealFormAssistOptions(companyProfiles = []) {
+  const fields = new Map();
+  const push = (key, value) => {
+    const safeValue = cleanText(value);
+    if (!safeValue) {
+      return;
+    }
+    if (!fields.has(key)) {
+      fields.set(key, new Set());
+    }
+    fields.get(key).add(safeValue);
+  };
+
+  companyProfiles.forEach((profile) => {
+    const primary = profile.primary || {};
+    push("deal-company-options", profile.title);
+    push("deal-company-options", primary.companyName);
+    push("deal-company-options", primary.documentClientName);
+    push("deal-client-options", primary.client);
+    push("deal-operator-options", primary.operator);
+    push("deal-group-options", primary.groupName);
+    push("deal-kam-options", primary.kam);
+    profile.markets.forEach((market) => push("deal-market-options", market));
+    push("deal-platform-options", primary.platform);
+    push("deal-legal-entity-options", primary.legalEntity);
+    push("deal-legal-entity-options", primary.companyName);
+    profile.contacts.forEach((contact) => {
+      push("deal-contact-options", contact.name);
+      push("deal-dd-contact-options", contact.name);
+      push("deal-email-options", contact.email);
+      if (contact.role === "Legal Representative") {
+        push("deal-legal-rep-options", contact.name);
+      }
+    });
+    push("deal-legal-rep-options", primary.companyLegalRepresentative);
+    push("deal-legal-rep-options", primary.legalRepresentativeName);
+  });
+
+  state.users.forEach((user) => {
+    push("deal-kam-options", user.fullName);
+    push("deal-email-options", user.email);
+  });
+
+  return new Map(
+    Array.from(fields.entries()).map(([key, values]) => [
+      key,
+      Array.from(values).sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" })),
+    ])
+  );
+}
+
+function ensureDatalistElement(id) {
+  let datalist = document.getElementById(id);
+  if (!datalist) {
+    datalist = document.createElement("datalist");
+    datalist.id = id;
+    document.body.appendChild(datalist);
+  }
+  return datalist;
+}
+
+function renderDealFormAssist() {
+  if (!dealForm) {
+    return;
+  }
+  rebuildDerivedState();
+  Object.entries(DEAL_FORM_ASSIST_LISTS).forEach(([fieldName, listId]) => {
+    const field = dealForm.elements[fieldName];
+    if (!field || field.tagName !== "INPUT") {
+      return;
+    }
+    field.setAttribute("list", listId);
+    const datalist = ensureDatalistElement(listId);
+    const options = derived.formOptions.get(listId) || [];
+    datalist.innerHTML = options.map((value) => `<option value="${escapeAttribute(value)}"></option>`).join("");
+  });
+}
+
+function findCompanyProfileMatchFromForm() {
+  rebuildDerivedState();
+  const candidateValues = [
+    dealForm?.elements.companyName?.value,
+    dealForm?.elements.documentClientName?.value,
+    dealForm?.elements.client?.value,
+    dealForm?.elements.operator?.value,
+  ]
+    .map((value) => normalizeSearchText(value))
+    .filter(Boolean);
+
+  for (const value of candidateValues) {
+    const exactProfile = derived.companyProfilesByKey.get(value);
+    if (exactProfile) {
+      return exactProfile;
+    }
+    const titleMatch = derived.companyProfiles.find((profile) => normalizeSearchText(profile.title) === value);
+    if (titleMatch) {
+      return titleMatch;
+    }
+  }
+
+  return null;
+}
+
+function maybeHydrateDealFormFromCompanyMatch() {
+  if (!dealForm) {
+    return;
+  }
+
+  const profile = findCompanyProfileMatchFromForm();
+  if (!profile?.primary) {
+    return;
+  }
+
+  const profileKey = cleanText(profile.key);
+  if (!profileKey || ui.companyAssistKey === profileKey) {
+    return;
+  }
+
+  const source = profile.primary;
+  const fillableFields = [
+    ["groupName", source.groupName],
+    ["kam", source.kam],
+    ["market", source.market],
+    ["platform", source.platform],
+    ["legalEntity", source.legalEntity],
+    ["companyName", source.companyName || profile.title],
+    ["documentClientName", source.documentClientName || profile.title],
+    ["primaryContact", source.primaryContact],
+    ["decisionMaker", source.decisionMaker],
+    ["licenseStatus", source.licenseStatus || source.companyLicense],
+    ["companyRegistrationNumber", source.companyRegistrationNumber],
+    ["companyRegisteredAddress", source.companyRegisteredAddress],
+    ["companyLegalRepresentative", source.companyLegalRepresentative || source.legalRepresentativeName],
+    ["invoiceEmail", source.invoiceEmail],
+    ["supportEmail", source.supportEmail],
+    ["managementEmail", source.managementEmail],
+    ["ddContactName", source.ddContactName],
+    ["ddContactEmail", source.ddContactEmail],
+    ["legalRepresentativeName", source.legalRepresentativeName || source.companyLegalRepresentative],
+    ["legalRepresentativeEmail", source.legalRepresentativeEmail],
+    ["url", source.url],
+  ];
+
+  let filledCount = 0;
+  fillableFields.forEach(([fieldName, nextValue]) => {
+    const field = dealForm.elements[fieldName];
+    if (!field || cleanText(field.value) || !cleanText(nextValue)) {
+      return;
+    }
+    field.value = cleanText(nextValue);
+    filledCount += 1;
+  });
+
+  if (filledCount > 0) {
+    ui.companyAssistKey = profileKey;
+    syncDealScoringPreview();
+    setBanner(`Company context loaded from ${profile.title}. ${filledCount} field${filledCount === 1 ? "" : "s"} prefilled.`, "success");
+  }
 }
 
 function fillMarketIntelForm(record) {
@@ -7650,8 +7986,14 @@ function resetCampaignForm() {
 }
 
 function getScopedDeals() {
-  return state.deals.filter((deal) => {
-    const parts = getDealTimeParts(deal);
+  rebuildDerivedState();
+  const scopedKey = [ui.filters.year, ui.filters.quarter, ui.filters.month, state.deals.length].join("|");
+  if (derived.scopedDealsKey === scopedKey) {
+    return derived.scopedDeals;
+  }
+
+  const scopedDeals = state.deals.filter((deal) => {
+    const parts = derived.dealTimePartsById.get(deal.id) || getDealTimeParts(deal);
 
     if (ui.filters.year !== "All" && String(parts.year || "") !== ui.filters.year) {
       return false;
@@ -7667,6 +8009,10 @@ function getScopedDeals() {
 
     return true;
   });
+
+  derived.scopedDealsKey = scopedKey;
+  derived.scopedDeals = scopedDeals;
+  return scopedDeals;
 }
 
 function getScopedCampaigns() {
@@ -7795,7 +8141,8 @@ function getVisibleCampaigns(campaigns = getScopedCampaigns()) {
 }
 
 function getFilteredDeals(baseDeals = getPipelineBaseDeals()) {
-  const search = normalizeSearchText(ui.filters.search);
+  rebuildDerivedState();
+  const searchTokens = tokenizeSearchQuery(ui.filters.search);
 
   return [...baseDeals]
     .filter((deal) => {
@@ -7803,14 +8150,12 @@ function getFilteredDeals(baseDeals = getPipelineBaseDeals()) {
         return false;
       }
 
-      if (!search) {
+      if (!searchTokens.length) {
         return true;
       }
 
-      const haystack = normalizeSearchText(
-        `${deal.deal} ${deal.client} ${deal.operator} ${deal.casinoName} ${deal.groupName} ${deal.kam} ${deal.market} ${deal.platform} ${deal.legalEntity} ${deal.segment} ${deal.primaryContact} ${deal.decisionMaker} ${deal.licenseStatus} ${deal.currentCompetitors} ${deal.productsCurrent} ${deal.productsPotential} ${deal.targetPriority} ${deal.priorityClass} ${deal.statusText} ${deal.comments} ${deal.jira} ${deal.ddTicket} ${deal.url} ${deal.brands} ${deal.entityInfo} ${deal.skype} ${deal.integrationEmail} ${deal.siteStatus} ${deal.actionItems} ${deal.updates} ${deal.dd} ${deal.integration}`
-      );
-      return haystack.includes(search);
+      const haystack = derived.dealDocsById.get(deal.id)?.searchText || buildDealSearchText(deal);
+      return searchTokens.every((token) => haystack.includes(token));
     })
     .sort((left, right) => {
       const rightValue = Number(right.dealValue || 0);
@@ -7908,6 +8253,11 @@ function scorePipelineFinderField(label, rawValue, normalizedQuery, weight) {
     return null;
   }
 
+  const tokens = tokenizeSearchQuery(normalizedQuery);
+  if (!tokens.length) {
+    return null;
+  }
+
   let score = 0;
   if (normalizedValue === normalizedQuery) {
     score = weight * 100 + 400;
@@ -7917,6 +8267,8 @@ function scorePipelineFinderField(label, rawValue, normalizedQuery, weight) {
     score = weight * 100 + 180;
   } else if (normalizedValue.includes(normalizedQuery)) {
     score = weight * 100 + 120;
+  } else if (tokens.length > 1 && tokens.every((token) => normalizedValue.includes(token))) {
+    score = weight * 100 + 80;
   } else {
     return null;
   }
@@ -11585,6 +11937,13 @@ function normalizeSearchText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function tokenizeSearchQuery(value) {
+  return normalizeSearchText(value)
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
 }
 
 function toSlugKey(value) {
