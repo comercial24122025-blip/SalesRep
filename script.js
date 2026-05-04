@@ -30,6 +30,7 @@ const COMMERCIAL_BUILDER_FIELD_IDS = [
   "commercial-builder-notes",
 ];
 const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"];
+const VIEW_STAGE_ORDER = STAGE_ORDER.filter((stage) => stage !== "Qualified");
 const KANBAN_STAGE_ORDER = ["Lead", "Proposal", "Legal", "DD", "Integration", "Go Live", "Live", "Handover"];
 const ALL_STAGES = [...STAGE_ORDER];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -179,7 +180,7 @@ const REQUEST_HUB_DEFINITIONS = [
     key: "proposal",
     title: "Proposal Request",
     description: "Client-facing commercial proposal with pricing, scope, validity, and negotiated terms.",
-    stageHint: "Lead · Qualified · Proposal",
+    stageHint: "Lead · Proposal",
     emptyLabel: "No visible accounts are currently sitting in the commercial proposal lane.",
   },
   {
@@ -229,7 +230,7 @@ const REQUEST_HUB_DEFINITIONS = [
 const STAGE_OPERATION_BLUEPRINT = {
   Lead: {
     objective: "Map the account, assign ownership, and establish the first commercial contact baseline.",
-    nextStage: "Qualified",
+    nextStage: "Proposal",
     ownerHint: "Sales Rep / KAM",
     primaryActionKind: null,
   },
@@ -299,10 +300,10 @@ const KPI_CATALOGUE = [
     notes: "Count of distinct clients added",
   },
   {
-    block: "Qualified",
-    name: "Qualified Opportunities",
+    block: "Lead",
+    name: "Active Lead Opportunities",
     definition: "# de oportunidades activas con potencial comercial real",
-    stage: "Qualified",
+    stage: "Lead",
     frequency: "Monthly",
     notes: "Use Raw Status / Next Action",
   },
@@ -738,6 +739,8 @@ const elements = {
   commandActionsToday: document.getElementById("command-actions-today"),
   commandPipelineBars: document.getElementById("command-pipeline-bars"),
   commandTimePressure: document.getElementById("command-time-pressure"),
+  commandMarketBreakdown: document.getElementById("command-market-breakdown"),
+  commandOperatorBreakdown: document.getElementById("command-operator-breakdown"),
   commandUpcomingGoLives: document.getElementById("command-upcoming-golives"),
   forecastSummary: document.getElementById("forecast-summary"),
   executiveKpiReadout: document.getElementById("executive-kpi-readout"),
@@ -1077,6 +1080,7 @@ init();
 async function init() {
   setLoadingState(true, "Loading workspace", "Syncing live pipeline, tasks, market intelligence, and forecast data.");
   bindEvents();
+  ui.activeView = "dashboard";
   resetDealForm();
   resetMarketIntelForm();
   resetTargetForm();
@@ -1086,6 +1090,7 @@ async function init() {
   resetUserForm();
   await hydrateFromExcel();
   renderAll();
+  activateView("dashboard", { scroll: false });
   setLoadingState(false);
 }
 
@@ -3984,7 +3989,7 @@ function renderCrmView() {
           <td>${escapeHtml(deal.market || "N/A")}</td>
           <td>${escapeHtml(deal.segment || "N/A")}</td>
           <td>${escapeHtml(getDealOwner(deal) || "Unassigned")}</td>
-          <td><span class="pill ${taskStatusPillClass(isBlockedDeal(deal) ? "Blocked" : "Open")}">${escapeHtml(deal.stage || "N/A")}</span></td>
+          <td><span class="pill ${taskStatusPillClass(isBlockedDeal(deal) ? "Blocked" : "Open")}">${escapeHtml(getDealVisibleStage(deal) || "N/A")}</span></td>
           <td>${escapeHtml(formatScoreValue(deal.opportunityScore))}</td>
           <td>${renderPriorityBadge(deal.priorityClass || deal.targetPriority)}</td>
           <td>${formatCurrency(getRevenuePotentialAmount(deal))}</td>
@@ -4137,8 +4142,9 @@ function renderDashboard() {
   const visibleTasks = getScopedTasks();
   const usesValue = hasAnyDealValue(scopedDeals);
   const stageDurationMap = getStageDurationMap(scopedDeals);
-  const stageStats = STAGE_ORDER.map((stage) => {
-    const deals = scopedDeals.filter((deal) => deal.stage === stage);
+  const effectiveStageMap = new Map(scopedDeals.map((deal) => [deal.id, getDealVisibleStage(deal)]));
+  const stageStats = VIEW_STAGE_ORDER.map((stage) => {
+    const deals = scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === stage);
     return {
       stage,
       count: deals.length,
@@ -4153,7 +4159,7 @@ function renderDashboard() {
   elements.dashboardStageSummary.textContent = `${totalDeals} deals · ${buildTimeWindowLabel()}`;
   elements.stageOverview.innerHTML = stageStats
     .map((stat) => {
-      const stageDeals = scopedDeals.filter((deal) => deal.stage === stat.stage);
+      const stageDeals = scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === stat.stage);
       const stuckCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
       const atRiskCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "at-risk").length;
       const percentage = totalDeals === 0 ? 0 : Math.round((stat.count / totalDeals) * 100);
@@ -4189,10 +4195,10 @@ function renderDashboard() {
     })
     .join("");
 
-  elements.signalLegal.textContent = String(scopedDeals.filter((deal) => deal.stage === "Legal").length);
-  elements.signalDd.textContent = String(scopedDeals.filter((deal) => deal.stage === "DD").length);
-  elements.signalIntegration.textContent = String(scopedDeals.filter((deal) => deal.stage === "Integration").length);
-  elements.signalNewTraffic.textContent = String(scopedDeals.filter((deal) => deal.stage === "Live").length);
+  elements.signalLegal.textContent = String(scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === "Legal").length);
+  elements.signalDd.textContent = String(scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === "DD").length);
+  elements.signalIntegration.textContent = String(scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === "Integration").length);
+  elements.signalNewTraffic.textContent = String(scopedDeals.filter((deal) => effectiveStageMap.get(deal.id) === "Live").length);
 
   renderForecastSummary(scopedDeals);
   renderExecutiveKpiReadout(scopedDeals);
@@ -4216,6 +4222,8 @@ function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMa
     !elements.commandActionsToday ||
     !elements.commandPipelineBars ||
     !elements.commandTimePressure ||
+    !elements.commandMarketBreakdown ||
+    !elements.commandOperatorBreakdown ||
     !elements.commandUpcomingGoLives
   ) {
     return;
@@ -4234,7 +4242,33 @@ function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMa
   renderActionsTodayPanel(taskBuckets);
   renderPipelineValueChart(stageData);
   renderTimePressurePanel(stageDurationMap);
+  renderMarketOperatorBreakdown(activeDeals);
   renderUpcomingGoLives(upcoming);
+}
+
+function getDealExecutionGaps(deal) {
+  const gaps = [];
+  if (!cleanText(deal.actionItems || deal.followUpNotes || deal.updates || deal.statusText || deal.comments)) {
+    gaps.push("next action");
+  }
+  if (!cleanText(deal.followUpOwner || getDealOwner(deal))) {
+    gaps.push("owner");
+  }
+  if (!cleanText(deal.nextFollowUpDate)) {
+    gaps.push("due date");
+  }
+  return gaps;
+}
+
+function isDealRevenueAtRisk(deal) {
+  const sla = getStageSlaState(deal);
+  if (["stuck", "at-risk"].includes(sla.tone)) {
+    return true;
+  }
+  if (isBlockedDeal(deal)) {
+    return true;
+  }
+  return getDealExecutionGaps(deal).length > 0;
 }
 
 function getFixNowAlerts(deals, tasks = []) {
@@ -4244,20 +4278,9 @@ function getFixNowAlerts(deals, tasks = []) {
     const dealName = getPrimaryOperatorName(deal);
     const stage = cleanText(deal.stage) || "No stage";
     const sla = getStageSlaState(deal);
-    const explicitNextAction = cleanText(deal.actionItems || deal.followUpNotes || deal.updates || deal.statusText || deal.comments);
-    const owner = cleanText(deal.followUpOwner || getDealOwner(deal));
-    const dueDate = cleanText(deal.nextFollowUpDate);
-    const hygieneGaps = [];
-
-    if (!explicitNextAction) {
-      hygieneGaps.push("next action");
-    }
-    if (!owner) {
-      hygieneGaps.push("owner");
-    }
-    if (!dueDate) {
-      hygieneGaps.push("due date");
-    }
+    const hygieneGaps = getDealExecutionGaps(deal);
+    const impactValue = getForecastValue(deal);
+    const impactLabel = impactValue > 0 ? ` · ${formatCompactCurrency(impactValue)} weighted` : "";
 
     if (sla.tone === "stuck") {
       alerts.push({
@@ -4266,8 +4289,9 @@ function getFixNowAlerts(deals, tasks = []) {
         tone: "danger",
         title: `${dealName} is over SLA`,
         message: `${stage} needs intervention now.`,
-        detail: `${stage}: ${sla.days} / ${sla.limit} days`,
+        detail: `${stage}: ${sla.days} / ${sla.limit} days${impactLabel}`,
         dealId: deal.id,
+        impactValue,
       });
     } else if (sla.tone === "at-risk") {
       alerts.push({
@@ -4276,8 +4300,9 @@ function getFixNowAlerts(deals, tasks = []) {
         tone: "warning",
         title: `${dealName} is nearing SLA`,
         message: `${stage} is approaching the limit.`,
-        detail: `${stage}: ${sla.days} / ${sla.limit} days`,
+        detail: `${stage}: ${sla.days} / ${sla.limit} days${impactLabel}`,
         dealId: deal.id,
+        impactValue,
       });
     }
 
@@ -4288,8 +4313,9 @@ function getFixNowAlerts(deals, tasks = []) {
         tone: "danger",
         title: `${dealName} is blocked`,
         message: `${stage} has a blocker that needs resolution.`,
-        detail: `${deal.market || "No market"} · unblock the current dependency`,
+        detail: `${deal.market || "No market"} · unblock the current dependency${impactLabel}`,
         dealId: deal.id,
+        impactValue,
       });
     }
 
@@ -4300,8 +4326,9 @@ function getFixNowAlerts(deals, tasks = []) {
         tone: "danger",
         title: `${dealName} is missing execution inputs`,
         message: `Complete ${hygieneGaps.join(", ")} to keep the deal moving.`,
-        detail: `${stage} · ${deal.market || "No market"}`,
+        detail: `${stage} · ${deal.market || "No market"}${impactLabel}`,
         dealId: deal.id,
+        impactValue,
       });
     }
   });
@@ -4310,15 +4337,18 @@ function getFixNowAlerts(deals, tasks = []) {
     .filter((task) => task.status !== "Done" && isDatePast(task.dueDate))
     .forEach((task) => {
       const relatedDeal = getTaskRelatedDeal(task);
+      const impactValue = relatedDeal ? getForecastValue(relatedDeal) : 0;
+      const impactLabel = impactValue > 0 ? ` · ${formatCompactCurrency(impactValue)} weighted` : "";
       alerts.push({
         id: `task-${task.id}`,
         priority: 1,
         tone: "danger",
         title: task.title || "Overdue action",
         message: `${task.owner || "No owner"} still owes this action.`,
-        detail: `${relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "Unlinked"} · due ${formatDate(task.dueDate)}`,
+        detail: `${relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "Unlinked"} · due ${formatDate(task.dueDate)}${impactLabel}`,
         taskId: task.id,
         dealId: relatedDeal?.id || "",
+        impactValue,
       });
     });
 
@@ -4327,7 +4357,8 @@ function getFixNowAlerts(deals, tasks = []) {
     .sort((left, right) => {
       const toneDelta = (toneWeight[left.tone] ?? 3) - (toneWeight[right.tone] ?? 3);
       const priorityDelta = (left.priority ?? 9) - (right.priority ?? 9);
-      return priorityDelta || toneDelta || left.title.localeCompare(right.title);
+      const impactDelta = Number(right.impactValue || 0) - Number(left.impactValue || 0);
+      return priorityDelta || toneDelta || impactDelta || left.title.localeCompare(right.title);
     })
     .slice(0, 8);
 }
@@ -4338,7 +4369,6 @@ function getCockpitRevenue(deals) {
       const pipelineValue = getDealValueAmount(deal);
       const weightedValue = getForecastValue(deal);
       const stage = cleanText(deal.stage);
-      const sla = getStageSlaState(deal);
 
       accumulator.pipeline += pipelineValue;
       accumulator.weighted += weightedValue;
@@ -4347,21 +4377,22 @@ function getCockpitRevenue(deals) {
         accumulator.commit += weightedValue;
       }
 
-      if (["stuck", "at-risk"].includes(sla.tone)) {
+      if (isDealRevenueAtRisk(deal)) {
         accumulator.atRisk += weightedValue;
+        accumulator.atRiskDeals += 1;
       }
 
       return accumulator;
     },
-    { pipeline: 0, weighted: 0, commit: 0, atRisk: 0 }
+    { pipeline: 0, weighted: 0, commit: 0, atRisk: 0, atRiskDeals: 0 }
   );
 }
 
 function getPipelineStageData(deals, stageStats = []) {
   const stats = stageStats.length
     ? stageStats
-    : STAGE_ORDER.map((stage) => {
-        const stageDeals = deals.filter((deal) => deal.stage === stage);
+    : VIEW_STAGE_ORDER.map((stage) => {
+        const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === stage);
         return {
           stage,
           count: stageDeals.length,
@@ -4371,11 +4402,12 @@ function getPipelineStageData(deals, stageStats = []) {
 
   return stats
     .map((item) => {
-      const stageDeals = deals.filter((deal) => deal.stage === item.stage);
+      const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === item.stage);
       return {
         stage: item.stage,
         count: item.count,
         value: Number(item.value || 0),
+        weightedValue: sumValues(stageDeals.map((deal) => getForecastValue(deal))),
         stuckCount: stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length,
       };
     })
@@ -4405,21 +4437,100 @@ function renderCockpitKpis(revenue, alerts, taskBuckets, deals) {
   const actionsToday = taskBuckets.overdue.length + taskBuckets.today.length;
   const goLivesThisMonth = deals.filter((deal) => isGoLiveThisMonth(deal)).length;
   const weightedForecastNote = `Stage, market, and operator weighted revenue in motion · ${formatLastUpdatedLabel(serverMeta.lastUpdatedAt)}`;
+  const atRiskNote = revenue.atRiskDeals > 0
+    ? `${revenue.atRiskDeals} deals flagged by SLA, blockers, or missing execution inputs`
+    : "No revenue is currently flagged at risk in the visible scope";
 
   elements.commandCenterSummary.textContent = `${fixes} fix now · ${actionsToday} actions today · ${goLivesThisMonth} go lives this month`;
   elements.commandKpiGrid.innerHTML = [
     ["Pipeline", formatCurrency(revenue.pipeline), "Total open value across visible deals", "forecast"],
     ["Weighted Forecast", formatCurrency(revenue.weighted), weightedForecastNote, "forecast"],
     ["Commit", formatCurrency(revenue.commit), "High-confidence execution value", "golive"],
-    ["At Risk", formatCurrency(revenue.atRisk), `${alerts.length} issues require action`, "risk"],
+    ["At Risk", formatCurrency(revenue.atRisk), atRiskNote, "risk"],
   ]
     .map(([label, value, note, tone]) => `
-      <article class="command-kpi-card tone-${escapeAttribute(tone)}">
+      <article class="command-kpi-card tone-${escapeAttribute(tone)}" title="${escapeAttribute(note)}">
         <span>${escapeHtml(label)}</span>
         <strong>${escapeHtml(value)}</strong>
         <small>${escapeHtml(note)}</small>
       </article>
     `)
+    .join("");
+}
+
+function renderMarketOperatorBreakdown(deals) {
+  renderCommandMarketBreakdown(deals);
+  renderCommandOperatorBreakdown(deals);
+}
+
+function renderCommandMarketBreakdown(deals) {
+  const rows = buildForecastMarketRows(deals).slice(0, 4);
+  if (!rows.length) {
+    elements.commandMarketBreakdown.innerHTML = '<div class="empty-state">No market exposure is visible in the active scope.</div>';
+    return;
+  }
+
+  elements.commandMarketBreakdown.innerHTML = rows
+    .map((row) => {
+      const riskValue = sumValues(
+        deals
+          .filter((deal) => (deal.market || "Unknown") === row.market && isDealRevenueAtRisk(deal))
+          .map((deal) => getForecastValue(deal))
+      );
+      return `
+        <button
+          type="button"
+          class="command-breakdown-card"
+          data-action="open-forecast-market"
+          data-market="${escapeAttribute(row.market)}"
+        >
+          <div class="command-breakdown-copy">
+            <strong>${escapeHtml(row.market)}</strong>
+            <small>${row.totalCount} deals · ${row.operatorCount} operators</small>
+          </div>
+          <div class="command-breakdown-metrics">
+            <span>${escapeHtml(formatCompactCurrency(row.forecastValue))} weighted</span>
+            <small>${riskValue > 0 ? `${formatCompactCurrency(riskValue)} at risk` : "No at-risk revenue"}</small>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderCommandOperatorBreakdown(deals) {
+  const rows = buildForecastOperatorRows(deals).slice(0, 4);
+  if (!rows.length) {
+    elements.commandOperatorBreakdown.innerHTML = '<div class="empty-state">No operator concentration is visible in the active scope.</div>';
+    return;
+  }
+
+  elements.commandOperatorBreakdown.innerHTML = rows
+    .map((row) => {
+      const riskValue = sumValues(
+        deals
+          .filter((deal) => getPrimaryOperatorName(deal) === row.operator && (deal.market || "Unknown") === row.market && isDealRevenueAtRisk(deal))
+          .map((deal) => getForecastValue(deal))
+      );
+      return `
+        <button
+          type="button"
+          class="command-breakdown-card"
+          data-action="open-forecast-operator"
+          data-market="${escapeAttribute(row.market)}"
+          data-operator="${escapeAttribute(row.operator)}"
+        >
+          <div class="command-breakdown-copy">
+            <strong>${escapeHtml(row.operator)}</strong>
+            <small>${escapeHtml(row.market)} · ${escapeHtml(row.owner || "No owner assigned")}</small>
+          </div>
+          <div class="command-breakdown-metrics">
+            <span>${escapeHtml(formatCompactCurrency(row.forecastValue))} weighted</span>
+            <small>${riskValue > 0 ? `${formatCompactCurrency(riskValue)} at risk` : `${row.commitCount} commit`}</small>
+          </div>
+        </button>
+      `;
+    })
     .join("");
 }
 
@@ -4517,7 +4628,7 @@ function renderPipelineValueChart(stageData) {
         <button type="button" class="salesforce-bar-row" data-action="open-stage-funnel" data-stage="${escapeAttribute(item.stage)}">
           <div class="salesforce-bar-label">
             <strong>${escapeHtml(item.stage)}</strong>
-            <span>${escapeHtml(item.count)} deals · ${escapeHtml(formatCurrency(item.value))}${item.stuckCount ? ` · ${item.stuckCount} stuck` : ""}</span>
+            <span>${escapeHtml(item.count)} deals · ${escapeHtml(formatCurrency(item.value))} pipeline · ${escapeHtml(formatCompactCurrency(item.weightedValue))} weighted${item.stuckCount ? ` · ${item.stuckCount} stuck` : ""}</span>
           </div>
           <div class="salesforce-bar-track"><span style="width:${width}%"></span></div>
         </button>
@@ -4702,6 +4813,9 @@ function renderDashboardSpotlight(deals) {
   elements.dashboardSpotlight.innerHTML = items
     .map((deal) => {
       const health = getDealHealth(deal);
+      const forecastWeight = getForecastProbability(deal);
+      const weightedValue = getForecastValue(deal);
+      const visibleStage = getDealVisibleStage(deal);
       return `
         <article class="spotlight-card">
           <div class="spotlight-main">
@@ -4717,9 +4831,11 @@ function renderDashboardSpotlight(deals) {
           </div>
           <div class="spotlight-meta">
             <span>${escapeHtml(deal.market || "N/A")}</span>
-            <span>${escapeHtml(deal.stage)}</span>
+            <span>${escapeHtml(visibleStage)}</span>
             <span>${formatDealPeriod(deal)}</span>
             <span>${usesValue ? formatCurrency(deal.dealValue) : escapeHtml(formatDealCommercialMetric(deal))}</span>
+            <span>Weight ${escapeHtml(formatPercent(forecastWeight))}</span>
+            <span>Weighted ${escapeHtml(weightedValue > 0 ? formatCompactCurrency(weightedValue) : "N/A")}</span>
           </div>
           <p>${escapeHtml(deal.statusText || deal.comments || "No executive summary available.")}</p>
           <div class="row-actions">
@@ -5504,6 +5620,7 @@ function renderLeadMarketTracker(deals) {
 
 function renderLeadTrackerCard(deal) {
   const followUp = getLeadFollowUpIndicator(deal);
+  const operationalStage = getDealVisibleStage(deal);
   return `
     <article class="lead-tracker-card ${followUp.cardClass}">
       <div class="lead-tracker-head">
@@ -5516,7 +5633,7 @@ function renderLeadTrackerCard(deal) {
           )}
         </div>
         <div class="pill-row">
-          <span class="pill stage">${escapeHtml(deal.stage)}</span>
+          <span class="pill stage">${escapeHtml(operationalStage)}</span>
           <span class="pill ${followUp.pillClass}">${escapeHtml(followUp.label)}</span>
           ${deal.newTraffic ? '<span class="pill traffic">New traffic</span>' : ""}
         </div>
@@ -5535,7 +5652,7 @@ function renderLeadTrackerCard(deal) {
           <label>
             Stage
             <select name="stage">
-              ${STAGE_ORDER.map((stage) => `<option value="${escapeAttribute(stage)}" ${cleanText(deal.stage) === stage ? "selected" : ""}>${escapeHtml(stage)}</option>`).join("")}
+              ${VIEW_STAGE_ORDER.map((stage) => `<option value="${escapeAttribute(stage)}" ${getDealVisibleStage(deal) === stage ? "selected" : ""}>${escapeHtml(stage)}</option>`).join("")}
             </select>
           </label>
           <label>
@@ -5634,7 +5751,7 @@ function renderRiskList(deals) {
               item.deal.client || item.deal.market || "No client assigned",
               "entity-trigger entity-trigger-inline"
             )}
-            <span>${escapeHtml(item.deal.stage)}</span>
+            <span>${escapeHtml(getDealVisibleStage(item.deal))}</span>
           </header>
           <p>${escapeHtml(item.reason)}</p>
           <div class="meta-row">
@@ -5696,8 +5813,8 @@ function renderPipelineSummary(deals) {
 }
 
 function renderPipelineStageStrip(deals) {
-  const items = STAGE_ORDER.map((stage) => {
-    const stageDeals = deals.filter((deal) => deal.stage === stage);
+  const items = VIEW_STAGE_ORDER.map((stage) => {
+    const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === stage);
     return { stage, count: stageDeals.length, value: sumValues(stageDeals.map((deal) => deal.dealValue)) };
   }).filter((item) => item.count > 0);
 
@@ -6557,7 +6674,7 @@ function syncPipelineFilterOptions(scopedDeals) {
   const markets = uniqueValues(scopedDeals.map((deal) => deal.market));
   const types = uniqueValues(scopedDeals.map((deal) => deal.type));
 
-  setSelectOptions(elements.filterStage, ["All", ...ALL_STAGES], ui.filters.stage);
+  setSelectOptions(elements.filterStage, ["All", ...VIEW_STAGE_ORDER], ui.filters.stage);
   setSelectOptions(elements.filterMarket, ["All", ...markets], ui.filters.market);
   setSelectOptions(elements.filterType, ["All", ...types], ui.filters.type);
   elements.pipelineSearch.value = ui.filters.search;
@@ -6667,7 +6784,7 @@ function selectPipelineFinderSuggestion(index) {
 
 function renderPipelineBoard(deals) {
   const columns = KANBAN_STAGE_ORDER.map((stage) => {
-    const stageDeals = deals.filter((deal) => getKanbanStage(deal.stage) === stage);
+    const stageDeals = deals.filter((deal) => getKanbanStage(getDealVisibleStage(deal)) === stage);
     const totalValue = sumValues(stageDeals.map((deal) => deal.dealValue));
     return { stage, stageDeals, totalValue };
   });
@@ -6707,8 +6824,11 @@ function renderKanbanDealCard(deal) {
   const owner = getDealOwner(deal) || "Unassigned";
   const nextAction = getDealNextAction(deal);
   const riskTone = sla.tone === "stuck" ? "stuck" : sla.tone === "at-risk" ? "risk" : "healthy";
-  const currentStage = cleanText(deal.stage) || "Lead";
-  const nextStage = getNextOperationalStage(currentStage);
+  const operationalStage = getDealOperationalStage(deal) || "Lead";
+  const currentStage = getVisibleStage(operationalStage) || "Lead";
+  const weight = getForecastProbability(deal);
+  const weightedValue = getForecastValue(deal);
+  const nextStage = getNextVisibleStage(operationalStage);
   const nextStageButton = nextStage
     ? `<button type="button" class="kanban-stage-button" data-action="advance-deal-stage" data-id="${escapeAttribute(deal.id)}" data-next-stage="${escapeAttribute(
         nextStage
@@ -6720,7 +6840,7 @@ function renderKanbanDealCard(deal) {
       class="kanban-card kanban-card-${riskTone}"
       draggable="true"
       data-deal-id="${escapeAttribute(deal.id)}"
-      data-current-stage="${escapeAttribute(deal.stage || "")}"
+      data-current-stage="${escapeAttribute(currentStage)}"
     >
       <div class="kanban-card-top">
         ${renderCompanyProfileTrigger(
@@ -6749,7 +6869,8 @@ function renderKanbanDealCard(deal) {
 
       <div class="kanban-card-footer">
         <span>Stage: ${escapeHtml(currentStage)}</span>
-        <span>Prob. ${escapeHtml(formatPercent(getForecastProbability(deal)))}</span>
+        <span>Weight ${escapeHtml(formatPercent(weight))}</span>
+        <span>Weighted ${escapeHtml(weightedValue > 0 ? formatCompactCurrency(weightedValue) : "N/A")}</span>
         <span>DD: ${escapeHtml(deal.ddStatus || "N/A")}</span>
         <span>Int: ${escapeHtml(deal.integrationStatus || "N/A")}</span>
       </div>
@@ -6800,11 +6921,12 @@ function bindKanbanDragAndDrop() {
       const dealId = event.dataTransfer.getData("text/plain");
       const newStage = cleanText(zone.dataset.kanbanDropzone);
       const deal = state.deals.find((item) => item.id === dealId);
+      const currentStage = deal ? getDealVisibleStage(deal) : "";
 
-      if (!deal || !newStage || getKanbanStage(deal.stage) === newStage) {
+      if (!deal || !newStage || getKanbanStage(currentStage) === newStage) {
         return;
       }
-      const targetStage = getDropTargetStage(deal.stage, newStage);
+      const targetStage = getDropTargetStage(currentStage, newStage);
       await moveDealToStage(deal.id, targetStage);
     });
   });
@@ -6828,6 +6950,24 @@ function getNextOperationalStage(stage) {
     return "";
   }
   return STAGE_ORDER[index + 1];
+}
+
+function getNextVisibleStage(stage) {
+  const normalizedStage = normalizeDealStage(stage);
+  const currentVisibleStage = getVisibleStage(normalizedStage);
+  const index = STAGE_ORDER.indexOf(normalizedStage);
+  if (index < 0) {
+    return "";
+  }
+
+  for (let nextIndex = index + 1; nextIndex < STAGE_ORDER.length; nextIndex += 1) {
+    const nextStage = getVisibleStage(STAGE_ORDER[nextIndex]);
+    if (nextStage !== currentVisibleStage) {
+      return nextStage;
+    }
+  }
+
+  return "";
 }
 
 function getDropTargetStage(currentStage, dropColumn) {
@@ -6947,6 +7087,7 @@ function renderDealTable(deals) {
   elements.dealTableBody.innerHTML = deals
     .map((deal) => {
       const health = getDealHealth(deal);
+      const visibleStage = getDealVisibleStage(deal);
 
       return `
         <tr>
@@ -6965,7 +7106,7 @@ function renderDealTable(deals) {
               <small>${escapeHtml([deal.platform || "No platform", deal.jurisdiction].filter(Boolean).join(" · "))}</small>
             </div>
           </td>
-          <td><span class="pill stage">${escapeHtml(deal.stage)}</span></td>
+          <td><span class="pill stage">${escapeHtml(visibleStage)}</span></td>
           <td>${escapeHtml(formatDealPeriod(deal))}</td>
           <td><span class="pill ${health.pillClass}">${escapeHtml(health.label)}</span></td>
           <td>${escapeHtml(formatDealCommercialMetric(deal))}</td>
@@ -7123,7 +7264,7 @@ function renderRequestHubDealCard(deal, key) {
             "entity-trigger entity-trigger-block entity-trigger-compact"
           )}
         </div>
-        <span class="pill ${health.pillClass}">${escapeHtml(deal.stage || "No stage")}</span>
+        <span class="pill ${health.pillClass}">${escapeHtml(getDealVisibleStage(deal) || "No stage")}</span>
       </div>
       <div class="request-hub-meta">
         <span><strong>Market:</strong> ${escapeHtml(deal.market || "N/A")}</span>
@@ -7139,7 +7280,7 @@ function renderRequestHubDealCard(deal, key) {
 
 function getRequestHubDeals(deals, key) {
   return deals.filter((deal) => matchesRequestHubLane(deal, key)).sort((left, right) => {
-    const stageDiff = STAGE_ORDER.indexOf(cleanText(left.stage)) - STAGE_ORDER.indexOf(cleanText(right.stage));
+    const stageDiff = STAGE_ORDER.indexOf(getDealOperationalStage(left)) - STAGE_ORDER.indexOf(getDealOperationalStage(right));
     if (stageDiff !== 0) {
       return stageDiff;
     }
@@ -7148,7 +7289,7 @@ function getRequestHubDeals(deals, key) {
 }
 
 function matchesRequestHubLane(deal, key) {
-  const stage = cleanText(deal.stage);
+  const stage = getDealOperationalStage(deal);
   const legalStatus = cleanText(deal.legalStatus);
   const ddStatus = cleanText(deal.ddStatus);
   const integrationStatus = cleanText(deal.integrationStatus);
@@ -8290,7 +8431,7 @@ function openStageFunnelDrilldown(stage) {
   }
 
   const scopedDeals = getScopedDeals();
-  const matchedDeals = scopedDeals.filter((deal) => deal.stage === normalizedStage);
+  const matchedDeals = scopedDeals.filter((deal) => getDealVisibleStage(deal) === normalizedStage);
   if (matchedDeals.length === 0) {
     setBanner(`No deals are currently available in ${normalizedStage} for the active time window.`, "warn");
     return;
@@ -10208,7 +10349,7 @@ function getFilteredDeals(baseDeals = getPipelineBaseDeals()) {
 function getPipelineBaseDeals(options = {}) {
   const ignorePreset = Boolean(options.ignorePreset);
   return getScopedDeals().filter((deal) => {
-    if (ui.filters.stage !== "All" && deal.stage !== ui.filters.stage) {
+    if (ui.filters.stage !== "All" && getDealVisibleStage(deal) !== ui.filters.stage) {
       return false;
     }
 
@@ -10278,7 +10419,7 @@ function buildPipelineFinderSuggestion(deal, normalizedQuery) {
     title: bestMatch.value,
     matchLabel: bestMatch.label,
     subtitle: buildPipelineFinderSubtitle(deal, bestMatch.value),
-    meta: [deal.market || "No market", deal.stage || "No stage", formatDealCommercialMetric(deal)].join(" · "),
+    meta: [deal.market || "No market", getDealVisibleStage(deal) || "No stage", formatDealCommercialMetric(deal)].join(" · "),
     searchValue: bestMatch.value,
     score: bestMatch.score,
   };
@@ -10329,11 +10470,11 @@ function buildPipelineFinderSubtitle(deal, activeValue) {
 }
 
 function getDefaultFollowUpCadence(stage) {
-  const normalizedStage = cleanText(stage);
+  const normalizedStage = getVisibleStage(stage);
   if (["DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(normalizedStage)) {
     return "Weekly";
   }
-  if (["Lead", "Qualified", "Proposal", "Legal"].includes(normalizedStage)) {
+  if (["Lead", "Proposal", "Legal"].includes(normalizedStage)) {
     return "Biweekly";
   }
   return "Monthly";
@@ -10598,12 +10739,12 @@ function getRiskDeals(deals = getScopedDeals()) {
       }
 
       if (hasStaleFollowUp(deal)) {
-        if (deal.stage === "DD") {
+        if (getDealOperationalStage(deal) === "DD") {
           reasons.push(`DD has gone ${followUpGap} days without follow-up.`);
         } else if (isLiveAccountStage(deal.stage)) {
-          reasons.push(`Active client in ${deal.stage} has gone ${followUpGap} days without follow-up.`);
+          reasons.push(`Active client in ${getDealVisibleStage(deal)} has gone ${followUpGap} days without follow-up.`);
         } else {
-          reasons.push(`${deal.stage || "Account"} has gone ${followUpGap} days without follow-up.`);
+          reasons.push(`${getDealVisibleStage(deal) || "Account"} has gone ${followUpGap} days without follow-up.`);
         }
         severity += isLiveAccountStage(deal.stage) ? 3 : 2;
         if (isLiveAccountStage(deal.stage)) {
@@ -10647,7 +10788,7 @@ function buildExecutionAlerts(deals = getScopedDeals()) {
         tone: sla.tone,
         title: sla.tone === "stuck" ? `${sla.stage} SLA breached` : `${sla.stage} SLA nearing breach`,
         message: `${getPrimaryOperatorName(deal)} is at ${sla.days} / ${sla.limit} days.`,
-        detail: `${deal.market || "No market"} · ${getDealOwner(deal) || "Unassigned"} · ${deal.stage}`,
+        detail: `${deal.market || "No market"} · ${getDealOwner(deal) || "Unassigned"} · ${getDealVisibleStage(deal)}`,
         severity: sla.tone === "stuck" ? 4 : 2,
       });
     }
@@ -10658,7 +10799,7 @@ function buildExecutionAlerts(deals = getScopedDeals()) {
         tone: "at-risk",
         title: "Missing next action",
         message: `${getPrimaryOperatorName(deal)} has no clear next step.`,
-        detail: `${deal.market || "No market"} · ${deal.stage || "No stage"}`,
+        detail: `${deal.market || "No market"} · ${getDealVisibleStage(deal) || "No stage"}`,
         severity: 2,
       });
     }
@@ -10788,7 +10929,7 @@ function getRiskDisplayLabel(value) {
 function renderSlaTimer(deal) {
   const sla = getStageSlaState(deal);
   if (!sla.limit) {
-    return `<div class="sla-timer is-neutral"><span>Stage SLA</span><strong>No active SLA</strong><small>${escapeHtml(deal.stage || "No stage")}</small></div>`;
+    return `<div class="sla-timer is-neutral"><span>Stage SLA</span><strong>No active SLA</strong><small>${escapeHtml(getDealVisibleStage(deal) || "No stage")}</small></div>`;
   }
   const percentage = sla.days === null ? 0 : Math.min(140, Math.round(sla.ratio * 100));
   return `
@@ -11283,8 +11424,8 @@ function buildForecastOperatorRows(deals) {
       weightedCount: 0,
       commitCount: 0,
       liveCount: 0,
-      topStage: deal.stage || "Lead",
-      stageRank: STAGE_ORDER.indexOf(deal.stage),
+      topStage: getDealVisibleStage(deal) || "Lead",
+      stageRank: STAGE_ORDER.indexOf(getDealOperationalStage(deal)),
     };
     const probability = getForecastProbability(deal);
     const dealValue = getDealValueAmount(deal);
@@ -11299,9 +11440,9 @@ function buildForecastOperatorRows(deals) {
     } else {
       entry.liveCount += 1;
     }
-    if (STAGE_ORDER.indexOf(deal.stage) > entry.stageRank) {
-      entry.topStage = deal.stage;
-      entry.stageRank = STAGE_ORDER.indexOf(deal.stage);
+    if (STAGE_ORDER.indexOf(getDealOperationalStage(deal)) > entry.stageRank) {
+      entry.topStage = getDealVisibleStage(deal);
+      entry.stageRank = STAGE_ORDER.indexOf(getDealOperationalStage(deal));
     }
     if (!entry.owner && getDealOwner(deal)) {
       entry.owner = getDealOwner(deal);
@@ -12846,7 +12987,7 @@ function buildStageOperationalRecommendation(stage, deal, checklist, blueprint) 
 }
 
 function buildDealOperationalGuide(deal) {
-  const stage = cleanText(deal.stage) || "Lead";
+  const stage = getDealVisibleStage(deal) || "Lead";
   const blueprint = getStageOperationBlueprint(stage);
   const checklist = buildStageOperationalChecklist(stage, deal);
   const readyCount = checklist.filter((item) => item.ready).length;
@@ -12951,7 +13092,7 @@ function renderDealWorkflowGuideFromForm() {
 }
 
 function buildPipelineOperationalSummary(stage, deals) {
-  const stageDeals = deals.filter((deal) => deal.stage === stage);
+  const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === stage);
   const guides = stageDeals.map((deal) => buildDealOperationalGuide(deal));
   const readyCount = guides.filter((guide) => guide.readyToAdvance).length;
   const blockedCount = stageDeals.filter((deal) => isBlockedDeal(deal)).length;
@@ -12997,14 +13138,14 @@ function resolvePipelineOperationalFocusStage(deals) {
 
   if (ui.editingDealId) {
     const activeDeal = deals.find((deal) => deal.id === ui.editingDealId);
-    if (activeDeal?.stage) {
-      return activeDeal.stage;
+    if (activeDeal) {
+      return getDealVisibleStage(activeDeal);
     }
   }
 
-  const stageCounts = STAGE_ORDER.map((stage) => ({
+  const stageCounts = VIEW_STAGE_ORDER.map((stage) => ({
     stage,
-    count: deals.filter((deal) => deal.stage === stage).length,
+    count: deals.filter((deal) => getDealVisibleStage(deal) === stage).length,
   })).filter((entry) => entry.count > 0);
 
   return stageCounts.sort((left, right) => right.count - left.count || getStageRank(left.stage) - getStageRank(right.stage))[0]?.stage || "Lead";
@@ -13129,7 +13270,7 @@ function buildTaskPrefillFromSnapshot(deal) {
 }
 
 function getLeadDeals(deals = getScopedDeals()) {
-  return deals.filter((deal) => !isInactiveDeal(deal) && (deal.leadFlag || ["Lead", "Qualified"].includes(deal.stage)));
+  return deals.filter((deal) => !isInactiveDeal(deal) && (deal.leadFlag || getDealVisibleStage(deal) === "Lead"));
 }
 
 function getLeadReferenceDate(deal) {
@@ -14227,9 +14368,9 @@ function buildModuleFlowItems() {
     {
       view: "pipeline",
       title: "Opportunity Scoring & Funnel",
-      description: "Advance accounts through Lead, Qualified, Proposal, Legal, DD, Integration, Legal Approval, Go Live, Live, and Handover.",
+      description: "Advance accounts through Lead, Proposal, Legal, DD, Integration, Legal Approval, Go Live, Live, and Handover.",
       metricLabel: "Active stages",
-      metricValue: `${uniqueValues(scopedDeals.map((deal) => deal.stage)).length}`,
+      metricValue: `${uniqueValues(scopedDeals.map((deal) => getDealVisibleStage(deal))).length}`,
       nextAction:
         scopedDeals.length > 0
           ? "Use the pipeline to keep dates, probabilities, stage status, and follow-up actions current."
@@ -14897,6 +15038,25 @@ function normalizeDealStage(value) {
   return aliases[text.toLowerCase().replace(/-/g, " ")] || text;
 }
 
+function getDealOperationalStage(deal = {}) {
+  return inferDealStage({
+    ...deal,
+    agreement: normalizeContractStatus(deal.agreement || deal.legalStatus),
+    ddStatus: normalizeProgressStatus(deal.ddStatus),
+    integrationStatus: normalizeProgressStatus(deal.integrationStatus),
+    goLiveStatus: normalizeGoLiveStatus(deal.goLiveStatus),
+  });
+}
+
+function getVisibleStage(stage) {
+  const normalizedStage = normalizeDealStage(stage) || "Lead";
+  return normalizedStage === "Qualified" ? "Lead" : normalizedStage;
+}
+
+function getDealVisibleStage(deal = {}) {
+  return getVisibleStage(getDealOperationalStage(deal));
+}
+
 function inferDealStage(input = {}) {
   const normalizedStage = normalizeDealStage(input.stage);
   const rawStage = cleanText(input.stage).toLowerCase();
@@ -14905,18 +15065,21 @@ function inferDealStage(input = {}) {
   const ddStatus = normalizeProgressStatus(input.ddStatus);
   const integrationStatus = normalizeProgressStatus(input.integrationStatus);
   const goLiveStatus = normalizeGoLiveStatus(input.goLiveStatus);
+  const normalizedStatusStage = normalizeDealStage(input.status);
 
-  if (normalizedStage === "Handover" || cleanText(input.handover)) {
+  if (normalizedStage === "Handover" || normalizedStatusStage === "Handover" || rawStatus === "handover" || cleanText(input.handover)) {
     return "Handover";
   }
-  if (normalizedStage === "Live" || rawStatus === "live" || cleanText(input.liveSince) || goLiveStatus === "Live") {
+  if (normalizedStage === "Live" || normalizedStatusStage === "Live" || rawStatus === "live" || cleanText(input.liveSince) || goLiveStatus === "Live") {
     return "Live";
   }
-  if (normalizedStage === "Go Live") {
+  if (normalizedStage === "Go Live" || normalizedStatusStage === "Go Live" || rawStatus === "go live" || rawStatus === "go-live") {
     return "Go Live";
   }
   if (
     normalizedStage === "Legal Approval" ||
+    normalizedStatusStage === "Legal Approval" ||
+    ["approval", "legal approval", "signoff", "sign off"].includes(rawStatus) ||
     (agreement === "Signed" &&
       ddStatus === "Completed" &&
       integrationStatus === "Completed" &&
@@ -14927,17 +15090,26 @@ function inferDealStage(input = {}) {
   }
   if (
     normalizedStage === "Integration" ||
+    normalizedStatusStage === "Integration" ||
     ["Started", "In Progress"].includes(integrationStatus) ||
     input.integrationStartedFlag ||
-    rawStatus === "integration"
+    ["integration", "onboarding"].includes(rawStatus)
   ) {
     return "Integration";
   }
-  if (normalizedStage === "DD" || ["Started", "In Progress", "Completed"].includes(ddStatus) || input.ddStartedFlag || input.ddCompletedFlag) {
+  if (
+    normalizedStage === "DD" ||
+    normalizedStatusStage === "DD" ||
+    ["Started", "In Progress", "Completed"].includes(ddStatus) ||
+    input.ddStartedFlag ||
+    input.ddCompletedFlag ||
+    rawStatus === "dd"
+  ) {
     return "DD";
   }
   if (
     normalizedStage === "Legal" ||
+    normalizedStatusStage === "Legal" ||
     ["Negotiation", "Signed"].includes(agreement) ||
     ["legal", "signed"].includes(rawStatus) ||
     ["In Review", "Counterparty Review", "Approved"].includes(cleanText(input.legalStatus)) ||
@@ -14948,7 +15120,8 @@ function inferDealStage(input = {}) {
   }
   if (
     normalizedStage === "Proposal" ||
-    rawStatus === "offer" ||
+    normalizedStatusStage === "Proposal" ||
+    ["offer", "proposal"].includes(rawStatus) ||
     cleanText(input.offerDate) ||
     cleanText(input.signingEta)
   ) {

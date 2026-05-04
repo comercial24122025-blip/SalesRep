@@ -4335,6 +4335,30 @@ button.stage-card {
   align-items: start;
 }
 
+.command-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.command-breakdown-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.subpanel-head-compact {
+  margin-bottom: 0;
+}
+
+.subpanel-head-compact h4 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.chip-muted {
+  opacity: 0.82;
+}
+
 .command-block-wide {
   grid-column: 1 / -1;
 }
@@ -4343,7 +4367,8 @@ button.stage-card {
 .command-pipeline-bars,
 .command-go-live-list,
 .command-actions-list,
-.command-time-list {
+.command-time-list,
+.command-breakdown-list {
   display: grid;
   gap: 10px;
 }
@@ -4430,7 +4455,8 @@ button.stage-card {
 .command-action-section,
 .command-action-card,
 .command-time-row,
-.salesforce-bar-row {
+.salesforce-bar-row,
+.command-breakdown-card {
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
@@ -4533,6 +4559,48 @@ button.stage-card {
   border: 1px dashed rgba(255, 255, 255, 0.14);
   color: rgba(248, 250, 252, 0.56);
   font-size: 0.84rem;
+}
+
+.command-breakdown-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 14px;
+  width: 100%;
+  padding: 14px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.command-breakdown-copy,
+.command-breakdown-metrics {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.command-breakdown-copy strong,
+.command-breakdown-copy small,
+.command-breakdown-metrics span,
+.command-breakdown-metrics small {
+  overflow-wrap: anywhere;
+}
+
+.command-breakdown-copy small,
+.command-breakdown-metrics small {
+  color: rgba(248, 250, 252, 0.66);
+  font-size: 0.78rem;
+}
+
+.command-breakdown-metrics {
+  justify-items: end;
+  align-content: center;
+}
+
+.command-breakdown-metrics span {
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .salesforce-bar-row {
@@ -5087,6 +5155,10 @@ button.stage-card {
   }
 
   .command-center-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .command-breakdown-grid {
     grid-template-columns: 1fr;
   }
 
