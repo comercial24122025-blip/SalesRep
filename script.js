@@ -1367,6 +1367,7 @@ function bindEvents() {
   elements.stageOverview.addEventListener("click", handleStageFunnelAction);
   elements.commandPipelineBars?.addEventListener("click", handleStageFunnelAction);
   elements.fixNowAlerts?.addEventListener("click", handleDealAction);
+  elements.fixNowAlerts?.addEventListener("click", handleTaskAction);
   elements.commandUpcomingGoLives?.addEventListener("click", handleDealAction);
   elements.heroStats.addEventListener("click", handleExecutiveKpiAction);
   elements.marketBars.addEventListener("click", handleDashboardDrilldownAction);
@@ -3922,16 +3923,19 @@ function renderCommandCenter(deals, stageStats = []) {
 
   const activeDeals = deals.filter((deal) => !isInactiveDeal(deal));
   const snapshot = buildForecastSnapshot(activeDeals);
-  const alerts = buildExecutionAlerts(activeDeals);
+  const taskBuckets = getActionBuckets(getVisibleTasks());
+  const overdueActionAlerts = buildActionAlerts(taskBuckets.overdue);
+  const goLiveAlerts = buildGoLiveMonthAlerts(activeDeals);
+  const alerts = [...buildExecutionAlerts(activeDeals), ...overdueActionAlerts, ...goLiveAlerts].sort(compareExecutionAlerts);
   const delayedIntegrations = activeDeals.filter((deal) => getStageSlaState(deal).stage === "Integration" && getStageSlaState(deal).tone === "stuck").length;
   const goLivesThisMonth = activeDeals.filter((deal) => isGoLiveThisMonth(deal)).length;
-  const todayActions = getActionBuckets(getVisibleTasks()).overdue.length + getActionBuckets(getVisibleTasks()).today.length;
+  const todayActions = taskBuckets.overdue.length + taskBuckets.today.length;
 
   elements.commandCenterSummary.textContent = `${todayActions} actions today`;
   elements.fixNowCount.textContent = `${alerts.length} alerts`;
   elements.commandKpiGrid.innerHTML = [
     ["Weighted Forecast", formatForecastUnits(snapshot.weightedCount), "Expected revenue-weighted execution output", "forecast"],
-    ["Deals at Risk", String(alerts.length), "SLA, blocker, or missing-action pressure", "risk"],
+    ["Deals at Risk", String(buildExecutionAlerts(activeDeals).length), "SLA, blocker, or missing-action pressure", "risk"],
     ["Integrations Delayed", String(delayedIntegrations), "Integration records beyond 45 days", "delay"],
     ["Go Lives This Month", String(goLivesThisMonth), "Launches landing in the active month", "golive"],
   ]
@@ -3983,6 +3987,9 @@ function renderCommandCenter(deals, stageStats = []) {
 
 function renderExecutionAlertCard(item) {
   const toneClass = item.tone === "stuck" ? "is-danger" : item.tone === "at-risk" ? "is-warn" : "is-info";
+  const actionButton = item.task
+    ? `<button type="button" class="icon-button success" data-action="mark-task-done" data-id="${escapeAttribute(item.task.id)}">Mark Done</button>`
+    : `<button type="button" class="icon-button" data-action="edit-deal" data-id="${escapeAttribute(item.deal.id)}">Open Deal</button>`;
   return `
     <article class="execution-alert-card ${toneClass}">
       <div>
@@ -3990,7 +3997,7 @@ function renderExecutionAlertCard(item) {
         <p>${escapeHtml(item.message)}</p>
         <small>${escapeHtml(item.detail)}</small>
       </div>
-      <button type="button" class="icon-button" data-action="edit-deal" data-id="${escapeAttribute(item.deal.id)}">Open Deal</button>
+      ${actionButton}
     </article>
   `;
 }
@@ -6101,7 +6108,7 @@ function renderPipelineBoard(deals) {
                 <div class="pill-row">
                   <span class="pill stage">${escapeHtml(deal.market || "No market")}</span>
                   <span class="pill neutral">${escapeHtml(owner)}</span>
-                  <span class="pill ${sla.pillClass || health.pillClass}">${escapeHtml(sla.tone === "neutral" ? health.label : sla.tone === "stuck" ? "Stuck" : sla.tone === "at-risk" ? "At Risk" : "Healthy")}</span>
+                  <span class="pill ${sla.pillClass || health.pillClass}">${escapeHtml(getRiskDisplayLabel(sla.tone === "neutral" ? health.label : sla.tone))}</span>
                 </div>
                 ${renderSlaTimer(deal)}
                 <p class="deal-next-action"><strong>Next Action:</strong> ${escapeHtml(nextAction)}</p>
@@ -9631,7 +9638,37 @@ function buildExecutionAlerts(deals = getScopedDeals()) {
     }
   });
 
-  return alerts.sort((left, right) => right.severity - left.severity || (getStageSlaState(right.deal).ratio || 0) - (getStageSlaState(left.deal).ratio || 0));
+  return alerts.sort(compareExecutionAlerts);
+}
+
+function buildActionAlerts(tasks = []) {
+  return tasks.map((task) => ({
+    task,
+    tone: "stuck",
+    title: "Action overdue",
+    message: `${task.title || "Untitled action"} is overdue.`,
+    detail: `${task.owner || "Unassigned"} · Due ${formatDate(task.dueDate)} · ${buildTaskScopeLabel(task)}`,
+    severity: 4,
+  }));
+}
+
+function buildGoLiveMonthAlerts(deals = []) {
+  return deals
+    .filter((deal) => isGoLiveThisMonth(deal))
+    .map((deal) => ({
+      deal,
+      tone: "healthy",
+      title: "Go Live this month",
+      message: `${getPrimaryOperatorName(deal)} is scheduled for launch this month.`,
+      detail: `${deal.market || "No market"} · ${formatDate(deal.liveDate || deal.liveSince)} · ${getDealOwner(deal) || "Unassigned"}`,
+      severity: 1,
+    }));
+}
+
+function compareExecutionAlerts(left, right) {
+  const leftRatio = left.deal ? getStageSlaState(left.deal).ratio || 0 : 0;
+  const rightRatio = right.deal ? getStageSlaState(right.deal).ratio || 0 : 0;
+  return right.severity - left.severity || rightRatio - leftRatio;
 }
 
 function getStageEntryDate(deal) {
@@ -9690,11 +9727,25 @@ function getStageSlaState(deal) {
     limit,
     days,
     ratio,
-    label: `${stage}: ${days} / ${limit} days`,
-    tone: "healthy",
+      label: `${stage}: ${days} / ${limit} days`,
+      tone: "healthy",
     pillClass: "success",
     cardClass: "health-healthy",
   };
+}
+
+function getRiskDisplayLabel(value) {
+  const normalized = cleanText(value).toLowerCase();
+  if (["stuck", "attention", "blocked"].includes(normalized)) {
+    return "Stuck";
+  }
+  if (["at-risk", "at risk", "risk", "warning"].includes(normalized)) {
+    return "At Risk";
+  }
+  if (["healthy", "live", "go live", "handover", "success"].includes(normalized)) {
+    return "Healthy";
+  }
+  return "Healthy";
 }
 
 function renderSlaTimer(deal) {
