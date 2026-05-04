@@ -745,6 +745,7 @@ const elements = {
   dealAutosaveBadge: document.getElementById("deal-autosave-badge"),
   dealAutosaveCopy: document.getElementById("deal-autosave-copy"),
   dealAutosaveSections: document.getElementById("deal-autosave-sections"),
+  dealFieldSummary: document.getElementById("deal-field-summary"),
   restoreDealDraftButton: document.getElementById("restore-deal-draft-button"),
   discardDealDraftButton: document.getElementById("discard-deal-draft-button"),
   dealIntakeAssistant: document.getElementById("deal-intake-assistant"),
@@ -1119,6 +1120,13 @@ function bindEvents() {
   });
   dealForm.addEventListener("change", () => {
     refreshDealFieldHighlights();
+  });
+  elements.dealFieldSummary?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-focus-deal-field]");
+    if (!button) {
+      return;
+    }
+    focusDealField(button.dataset.focusDealField);
   });
   document.getElementById("deal-cancel-button").addEventListener("click", () => {
     clearActiveDealAutosave(true);
@@ -8787,6 +8795,8 @@ function refreshDealFieldHighlights() {
 
   const pendingValues = new Set(["", "not started", "pending", "select cadence"]);
   const labels = Array.from(dealForm.querySelectorAll("label"));
+  const missingFields = [];
+  const pendingFields = [];
 
   labels.forEach((label) => {
     const field = label.querySelector("input, select, textarea");
@@ -8807,16 +8817,25 @@ function refreshDealFieldHighlights() {
     const isReadonly = field.hasAttribute("readonly");
     const value = cleanText(field.value).toLowerCase();
     const required = field.required;
+    const labelText = getDealFieldLabelText(label);
 
     if (!isReadonly && ((required && !value) || isDealFieldPriorityEmpty(field.name, value))) {
       label.classList.add("field-empty");
+      if (field.name && labelText) {
+        missingFields.push({ name: field.name, label: labelText });
+      }
       return;
     }
 
     if (!isReadonly && isDealFieldPending(field.name, value, pendingValues)) {
       label.classList.add("field-pending");
+      if (field.name && labelText) {
+        pendingFields.push({ name: field.name, label: labelText });
+      }
     }
   });
+
+  renderDealFieldSummary(missingFields, pendingFields);
 }
 
 function isDealFieldPriorityEmpty(fieldName, value) {
@@ -8848,6 +8867,73 @@ function isDealFieldPending(fieldName, value, pendingValues) {
   ]);
 
   return pendingFields.has(fieldName) && pendingValues.has(value);
+}
+
+function renderDealFieldSummary(missingFields = [], pendingFields = []) {
+  if (!elements.dealFieldSummary) {
+    return;
+  }
+
+  if (!missingFields.length && !pendingFields.length) {
+    elements.dealFieldSummary.innerHTML = `
+      <div class="deal-field-summary-card is-complete">
+        <strong>Deal editor status</strong>
+        <p>Core fields are covered. Nothing critical is missing or pending right now.</p>
+      </div>
+    `;
+    return;
+  }
+
+  elements.dealFieldSummary.innerHTML = `
+    <div class="deal-field-summary-card">
+      <div class="deal-field-summary-head">
+        <strong>Missing or pending</strong>
+        <span>${missingFields.length + pendingFields.length} fields</span>
+      </div>
+      ${missingFields.length ? `
+        <div class="deal-field-summary-group">
+          <span>Missing</span>
+          <div class="deal-field-chip-row">
+            ${missingFields.map((field) => `<button type="button" class="deal-field-chip is-missing" data-focus-deal-field="${escapeAttribute(field.name)}">${escapeHtml(field.label)}</button>`).join("")}
+          </div>
+        </div>
+      ` : ""}
+      ${pendingFields.length ? `
+        <div class="deal-field-summary-group">
+          <span>Pending</span>
+          <div class="deal-field-chip-row">
+            ${pendingFields.map((field) => `<button type="button" class="deal-field-chip is-pending" data-focus-deal-field="${escapeAttribute(field.name)}">${escapeHtml(field.label)}</button>`).join("")}
+          </div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function getDealFieldLabelText(label) {
+  const clone = label.cloneNode(true);
+  clone.querySelectorAll("input, select, textarea").forEach((field) => field.remove());
+  return cleanText(clone.textContent).replace(/\s+/g, " ").trim();
+}
+
+function focusDealField(fieldName) {
+  if (!dealForm || !fieldName) {
+    return;
+  }
+
+  const field = dealForm.elements[fieldName];
+  if (!field) {
+    return;
+  }
+
+  const label = field.closest("label");
+  label?.scrollIntoView({ block: "center", behavior: "smooth" });
+  window.setTimeout(() => {
+    field.focus({ preventScroll: true });
+    if (typeof field.select === "function" && ["text", "search", "url", "email", "tel", "number"].includes(field.type)) {
+      field.select();
+    }
+  }, 160);
 }
 
 function buildDealSearchText(deal) {
