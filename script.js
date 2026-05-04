@@ -1114,6 +1114,12 @@ function bindEvents() {
   });
 
   dealForm.addEventListener("submit", handleDealSubmit);
+  dealForm.addEventListener("input", () => {
+    refreshDealFieldHighlights();
+  });
+  dealForm.addEventListener("change", () => {
+    refreshDealFieldHighlights();
+  });
   document.getElementById("deal-cancel-button").addEventListener("click", () => {
     clearActiveDealAutosave(true);
     ui.editingDealId = null;
@@ -8752,6 +8758,7 @@ function fillDealForm(deal, options = {}) {
   ui.companyAssistKey = getCompanyProfileKey(deal);
   resetCommercialBuilder();
   syncDealScoringPreview();
+  refreshDealFieldHighlights();
   setDealAutosaveBaseline();
   if (options.autoRestore ?? Boolean(ui.editingDealId)) {
     maybeRestoreActiveDealAutosave();
@@ -8770,6 +8777,77 @@ function resetDealForm() {
   elements.dealSubmitButton.textContent = "Save Deal";
   resetCommercialBuilder();
   syncDealScoringPreview();
+  refreshDealFieldHighlights();
+}
+
+function refreshDealFieldHighlights() {
+  if (!dealForm) {
+    return;
+  }
+
+  const pendingValues = new Set(["", "not started", "pending", "select cadence"]);
+  const labels = Array.from(dealForm.querySelectorAll("label"));
+
+  labels.forEach((label) => {
+    const field = label.querySelector("input, select, textarea");
+    if (!field) {
+      return;
+    }
+
+    label.classList.remove("field-empty", "field-pending");
+
+    if (field.disabled || field.type === "hidden" || field.closest(".toggle-grid")) {
+      return;
+    }
+
+    if (field.type === "checkbox") {
+      return;
+    }
+
+    const isReadonly = field.hasAttribute("readonly");
+    const value = cleanText(field.value).toLowerCase();
+    const required = field.required;
+
+    if (!isReadonly && ((required && !value) || isDealFieldPriorityEmpty(field.name, value))) {
+      label.classList.add("field-empty");
+      return;
+    }
+
+    if (!isReadonly && isDealFieldPending(field.name, value, pendingValues)) {
+      label.classList.add("field-pending");
+    }
+  });
+}
+
+function isDealFieldPriorityEmpty(fieldName, value) {
+  const highPriorityFields = new Set([
+    "deal",
+    "client",
+    "operator",
+    "kam",
+    "market",
+    "stage",
+    "dealValue",
+    "actionItems",
+    "legalStatus",
+    "ddStatus",
+    "integrationStatus",
+  ]);
+
+  return highPriorityFields.has(fieldName) && !value;
+}
+
+function isDealFieldPending(fieldName, value, pendingValues) {
+  const pendingFields = new Set([
+    "legalStatus",
+    "ddStatus",
+    "integrationStatus",
+    "goLiveStatus",
+    "agreement",
+    "followUpCadence",
+  ]);
+
+  return pendingFields.has(fieldName) && pendingValues.has(value);
 }
 
 function buildDealSearchText(deal) {

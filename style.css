@@ -1211,6 +1211,40 @@ label,
   font-weight: 700;
 }
 
+label.field-empty,
+label.field-pending {
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+label.field-empty {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.06);
+}
+
+label.field-pending {
+  background: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.05);
+}
+
+label.field-empty input,
+label.field-empty select,
+label.field-empty textarea {
+  border-color: rgba(239, 68, 68, 0.36);
+  background: rgba(255, 250, 250, 0.96);
+}
+
+label.field-pending input,
+label.field-pending select,
+label.field-pending textarea {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(255, 252, 245, 0.96);
+}
+
 input,
 select,
 textarea {
