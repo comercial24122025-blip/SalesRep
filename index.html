@@ -667,8 +667,8 @@
               <section class="panel form-panel pipeline-form-panel deal-modal-panel" role="dialog" aria-modal="true" aria-labelledby="deal-form-title">
               <div class="panel-head">
                 <div>
-                  <p class="panel-kicker">Deal workspace</p>
-                  <h2 id="deal-form-title">New Deal</h2>
+                  <p class="panel-kicker">Account workspace</p>
+                  <h2 id="deal-form-title">New Account</h2>
                 </div>
                 <div class="head-actions">
                   <span class="chip">Local workspace</span>
@@ -691,7 +691,6 @@
                     <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="B2C">B2C</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="B2B">B2B</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="type" data-fill-value="Retail">Retail</button>
-                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Qualified">Qualified</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Proposal">Proposal</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Legal">Legal</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="market" data-fill-value="Peru">Peru</button>
@@ -716,62 +715,34 @@
                 </div>
 
                 <div id="deal-section-core" class="form-section">
-                  <h3>Core deal</h3>
+                  <h3>Core account</h3>
                   <div class="quick-fill-strip quick-fill-strip-subtle">
                     <span>Fast stage set</span>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Lead">Lead</button>
-                    <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Qualified">Qualified</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Proposal">Proposal</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Legal">Legal</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="DD">DD</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="stage" data-fill-value="Integration">Integration</button>
                   </div>
                   <div class="form-subsection">
-                    <h4>Account Identity</h4>
+                    <h4>Commercial identity</h4>
                     <div class="form-grid form-grid-3">
                       <label>
                         Deal
-                        <input name="deal" type="text" placeholder="Deal name" required />
+                        <input name="deal" type="text" placeholder="Deal / opportunity name" required />
                       </label>
                       <label>
-                        Client
-                        <input name="client" type="text" placeholder="Client or account" />
+                        Account
+                        <input name="client" type="text" placeholder="Client / account name" />
                       </label>
                       <label>
-                        Operator
-                        <input name="operator" type="text" placeholder="Operator Name" />
-                      </label>
-                      <label>
-                        Group
-                        <input name="groupName" type="text" placeholder="GROUP" />
-                      </label>
-                      <label>
-                        Legal Entity
-                        <input name="legalEntity" type="text" placeholder="LEGAL ENTITY" />
-                      </label>
-                      <label>
-                        Site Status
-                        <input name="siteStatus" type="text" placeholder="SITE (URL)" />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div class="form-subsection">
-                    <h4>Commercial Ownership & Coverage</h4>
-                    <div class="form-grid form-grid-3">
-                      <label>
-                        KAM
-                        <input name="kam" type="text" placeholder="LATAM KAM" />
-                      </label>
-                      <label>
-                        Type
-                        <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" list="deal-type-options" />
+                        Market
+                        <input name="market" type="text" placeholder="Ex. Peru" list="deal-market-options" />
                       </label>
                       <label>
                         Stage
                         <select name="stage">
                           <option>Lead</option>
-                          <option>Qualified</option>
                           <option>Proposal</option>
                           <option>Legal</option>
                           <option>DD</option>
@@ -783,44 +754,66 @@
                         </select>
                       </label>
                       <label>
-                        Market
-                        <input name="market" type="text" placeholder="Ex. Peru" list="deal-market-options" />
+                        KAM
+                        <input name="kam" type="text" placeholder="LATAM KAM" />
                       </label>
                       <label>
-                        Jurisdiction
-                        <input name="jurisdiction" type="text" placeholder="Jurisdiction" />
-                      </label>
-                      <label>
-                        Account Scope
-                        <input name="accountScope" type="text" placeholder="R/.COM" />
-                      </label>
-                      <label>
-                        Platform
-                        <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" list="deal-platform-options" />
+                        Type
+                        <input name="type" type="text" placeholder="Ex. B2C, B2B, Retail, Social" list="deal-type-options" />
                       </label>
                       <label>
                         Deal Value (EUR)
                         <input name="dealValue" type="number" min="0" step="0.01" placeholder="0" />
                       </label>
                       <label>
-                        Deal Value 2
-                        <input name="dealValueAlt" type="number" min="0" step="0.01" placeholder="0" />
+                        Platform
+                        <input name="platform" type="text" placeholder="Ex. Direct Carrier Billing" list="deal-platform-options" />
                       </label>
                       <label>
                         Source
                         <input name="source" type="text" placeholder="Inbound, outbound, partner..." />
                       </label>
                       <label>
-                        Status
+                        Workflow Status
                         <input name="status" type="text" placeholder="Active, blocked, pending..." />
                       </label>
                     </div>
                   </div>
 
                   <label class="full-span">
-                    Status Text
-                    <textarea name="statusText" rows="3" placeholder="Commercial or operating summary"></textarea>
+                    Execution Summary
+                    <textarea name="statusText" rows="3" placeholder="Short commercial or operating summary"></textarea>
                   </label>
+
+                  <details class="form-details">
+                    <summary>Additional naming, legal, and scope details</summary>
+                    <div class="form-grid form-grid-3">
+                      <label>
+                        Operator
+                        <input name="operator" type="text" placeholder="Operator name if different from account" />
+                      </label>
+                      <label>
+                        Group
+                        <input name="groupName" type="text" placeholder="Group / holding name" />
+                      </label>
+                      <label>
+                        Jurisdiction
+                        <input name="jurisdiction" type="text" placeholder="Jurisdiction" />
+                      </label>
+                      <label>
+                        Legal Entity
+                        <input name="legalEntity" type="text" placeholder="Legal entity" />
+                      </label>
+                      <label>
+                        Account Scope
+                        <input name="accountScope" type="text" placeholder="Ex. .com / regulated / retail" />
+                      </label>
+                      <label>
+                        Website / Site
+                        <input name="siteStatus" type="text" placeholder="Website, site status, or URL reference" />
+                      </label>
+                    </div>
+                  </details>
                 </div>
 
                 <div class="form-section stage-guide-section">
@@ -1209,22 +1202,29 @@
                       <div class="form-section-head">
                         <div>
                           <h5>Commercial Builder</h5>
-                          <p class="form-note">Capture revenue share models on GGR or NGR, either as one flat rate across all volume or tiered by volume band. Use one schedule row per band when the commercial is escalated by volume.</p>
+                          <p class="form-note">Build brand-level commercials with GGR or NGR logic, setup fee, deductions, bonus cap, tax, withholding, premium add-ons, and up to 3 pricing tiers.</p>
                         </div>
                         <div class="quick-fill-strip">
                           <span>Presets</span>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="ggr-12">12% GGR</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="ngr-11">11% NGR</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="fixed-fee">Fixed Fee</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered-ggr">Tiered GGR</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="tiered-ngr">Tiered NGR</button>
-                          <button type="button" class="button button-ghost button-small" data-commercial-preset="premium-addon">Premium Add-on</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="evolution-tiered">Evolution</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="ezugi-tiered">Ezugi</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="slots-tiered">Slots</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="growth-tables">Growth Tables</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="high-stake">High Stake</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="first-person">First Person</button>
+                          <button type="button" class="button button-ghost button-small" data-commercial-preset="premium-addon">Premium 1%-5%</button>
                         </div>
                       </div>
-                      <div class="form-grid form-grid-3">
+                      <div class="quick-fill-strip quick-fill-strip-subtle">
+                        <span>Tier helper</span>
+                        <button type="button" class="button button-ghost button-small" data-commercial-action="seed-tier-1">Tier 1</button>
+                        <button type="button" class="button button-ghost button-small" data-commercial-action="seed-tier-2">Tier 2</button>
+                        <button type="button" class="button button-ghost button-small" data-commercial-action="seed-tier-3">Tier 3</button>
+                      </div>
+                      <div class="form-grid form-grid-4">
                         <label>
-                          Product
-                          <input id="commercial-builder-product" type="text" placeholder="Evolution Generic" list="commercial-product-options" />
+                          Brand / Product
+                          <input id="commercial-builder-product" type="text" placeholder="Evolution, Ezugi, NetEnt, Growth Tables..." list="commercial-product-options" />
                         </label>
                         <label>
                           Commercial Model
@@ -1254,7 +1254,16 @@
                           </select>
                         </label>
                         <label>
-                          Revenue Share Rate
+                          Tier Level
+                          <select id="commercial-builder-tier-level">
+                            <option value="">Custom</option>
+                            <option>Tier 1</option>
+                            <option>Tier 2</option>
+                            <option>Tier 3</option>
+                          </select>
+                        </label>
+                        <label>
+                          Revenue Share %
                           <input id="commercial-builder-rate" type="text" placeholder="12%" />
                         </label>
                         <label>
@@ -1280,24 +1289,45 @@
                             <option>Other</option>
                           </select>
                         </label>
+                        <label>
+                          Premium Add-On %
+                          <input id="commercial-builder-premium-rate" type="text" placeholder="1%-5%" />
+                        </label>
+                        <label>
+                          Setup Fee EUR
+                          <input id="commercial-builder-setup-fee" type="number" min="0" step="0.01" placeholder="0.00" />
+                        </label>
+                        <label>
+                          Deductions Allowed
+                          <input id="commercial-builder-deductions" type="text" placeholder="Taxes, withholding, bonus cap, credits..." />
+                        </label>
+                        <label>
+                          Bonus Cap %
+                          <input id="commercial-builder-bonus-cap" type="text" placeholder="10%" />
+                        </label>
+                        <label>
+                          Tax %
+                          <input id="commercial-builder-tax" type="text" placeholder="18%" />
+                        </label>
+                        <label>
+                          Withholding %
+                          <input id="commercial-builder-withholding" type="text" placeholder="5%" />
+                        </label>
                         <label class="full-span">
-                          Builder Notes
-                          <input id="commercial-builder-notes" type="text" placeholder="Ex. all volume, premium tables, branded content, high stake tables, setup waived..." />
+                          Additional Premium / Notes
+                          <input id="commercial-builder-notes" type="text" placeholder="Ex. branded content, premium tables, high stake tables, launch waiver, custom exceptions..." />
                         </label>
                       </div>
-                      <p class="field-help">Examples: `12% of GGR across all volume` or `EUR 0-1,000,000 = 12% of GGR`, then `EUR 1,000,001-3,000,000 = 11% of GGR` as a second row.</p>
+                      <p class="field-help">Examples: `Evolution 12% GGR | EUR 0-1,000,000 | Premium 1%-5%`, `Ezugi 10% GGR | EUR 0-1,000,000 | Premium 1%-5%`, `Growth Tables EUR 0.15`, `High Stake Tables EUR 0.55`, `First Person 11%`.</p>
                       <div class="quick-fill-strip quick-fill-strip-subtle">
                         <span>Apply</span>
+                        <button type="button" class="button button-secondary button-small" data-commercial-action="apply-package">Apply Commercial Package</button>
                         <button type="button" class="button button-secondary button-small" data-commercial-action="append-terms">Add Commercial Summary</button>
                         <button type="button" class="button button-secondary button-small" data-commercial-action="append-schedule">Add Schedule Row</button>
                         <button type="button" class="button button-ghost button-small" data-commercial-action="clear-builder">Clear Builder</button>
                       </div>
                     </div>
                     <div class="form-grid form-grid-2">
-                      <label>
-                        Document Client / Operator Name
-                        <input name="documentClientName" type="text" placeholder="Name to show in proposal, legal, and integration docs" />
-                      </label>
                       <label>
                         Proposal Validity (Days)
                         <input name="proposalValidityDays" type="number" min="1" step="1" placeholder="30" />
@@ -1533,7 +1563,7 @@
                 </div>
 
                 <div class="form-actions">
-                  <button type="submit" id="deal-submit-button" class="button button-primary">Save Deal</button>
+                  <button type="submit" id="deal-submit-button" class="button button-primary">Save Account</button>
                   <button type="button" id="deal-cancel-button" class="button button-ghost">Clear</button>
                 </div>
 
@@ -1575,13 +1605,19 @@
                   <option value="Restricted"></option>
                 </datalist>
                 <datalist id="commercial-product-options">
-                  <option value="Evolution Generic"></option>
+                  <option value="Evolution"></option>
                   <option value="Evolution Premium"></option>
-                  <option value="Native Tables"></option>
+                  <option value="Ezugi"></option>
+                  <option value="NetEnt"></option>
+                  <option value="RedTiger"></option>
+                  <option value="NLC"></option>
+                  <option value="BTG"></option>
+                  <option value="Sneaky Slots"></option>
+                  <option value="RedBaron"></option>
+                  <option value="Slots Bundle"></option>
                   <option value="Growth Tables"></option>
                   <option value="High Stake Tables"></option>
-                  <option value="Ezugi Generic"></option>
-                  <option value="Slots"></option>
+                  <option value="First Person"></option>
                 </datalist>
               </form>
             </section>
@@ -1595,7 +1631,7 @@
                 </div>
                 <div class="head-actions">
                   <span id="pipeline-count" class="chip">0 deals</span>
-                  <button id="open-new-deal-modal-button" class="button button-primary button-small">New Lead / Client / Operator</button>
+                  <button id="open-new-deal-modal-button" class="button button-primary button-small">New Account</button>
                   <button id="export-pipeline-csv" class="button button-ghost button-small">Export CSV</button>
                 </div>
               </div>

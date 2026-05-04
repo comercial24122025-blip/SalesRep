@@ -2831,6 +2831,118 @@ body.deal-modal-open {
   border-radius: 14px;
   background: var(--surface-card);
   border: 1px solid var(--border-soft);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.05);
+}
+
+.pipeline-view .pipeline-finder-field {
+  display: grid;
+  gap: 10px;
+  align-self: stretch;
+  padding: 14px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 255, 0.9));
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+}
+
+.pipeline-view .pipeline-finder-field > input,
+.pipeline-view .pipeline-finder-field > select,
+.pipeline-view .pipeline-finder-field > textarea {
+  margin-top: 0;
+}
+
+.pipeline-view .pipeline-finder-field,
+.pipeline-view .pipeline-finder-field .finder-helper {
+  color: var(--ink-soft);
+}
+
+.pipeline-view .pipeline-finder-field {
+  font-size: 0.94rem;
+  font-weight: 800;
+}
+
+.pipeline-view .pipeline-finder-field .finder-shell {
+  position: relative;
+}
+
+.pipeline-view .pipeline-finder-field .finder-shell::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 15px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(79, 95, 119, 0.58);
+  border-radius: 50%;
+  transform: translateY(-58%);
+  pointer-events: none;
+}
+
+.pipeline-view .pipeline-finder-field .finder-shell::after {
+  content: "";
+  position: absolute;
+  top: calc(50% + 4px);
+  left: 27px;
+  width: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(79, 95, 119, 0.58);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+
+.pipeline-view .pipeline-finder-field input[type="search"] {
+  min-height: 52px;
+  padding-left: 42px;
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(204, 219, 238, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.pipeline-view .pipeline-finder-field .finder-shell:focus-within::before,
+.pipeline-view .pipeline-finder-field .finder-shell:focus-within::after {
+  border-color: rgba(37, 99, 235, 0.72);
+  background: rgba(37, 99, 235, 0.72);
+}
+
+.pipeline-view .pipeline-finder-field .finder-helper {
+  max-width: 54ch;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.pipeline-view .pipeline-finder-field .finder-foot {
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.pipeline-view .pipeline-finder-field .finder-foot .button {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 9px;
+}
+
+.pipeline-view .pipeline-finder-field .finder-suggestions {
+  top: calc(100% + 10px);
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.97);
+  border-color: rgba(204, 219, 238, 0.92);
+  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.1);
+}
+
+.pipeline-view .pipeline-finder-field .finder-suggestion,
+.pipeline-view .pipeline-finder-field .finder-empty {
+  border-radius: 10px;
+}
+
+.pipeline-view .pipeline-finder-field .finder-suggestion {
+  padding: 13px 14px;
+}
+
+.pipeline-view .pipeline-finder-field .finder-suggestion-top strong {
+  font-size: 0.94rem;
 }
 
 .pipeline-view .summary-card {

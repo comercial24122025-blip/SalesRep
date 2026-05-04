@@ -22,11 +22,18 @@ const COMMERCIAL_BUILDER_FIELD_IDS = [
   "commercial-builder-model",
   "commercial-builder-base",
   "commercial-builder-structure",
+  "commercial-builder-tier-level",
   "commercial-builder-rate",
   "commercial-builder-fixed-fee",
   "commercial-builder-volume-from",
   "commercial-builder-volume-to",
   "commercial-builder-volume-unit",
+  "commercial-builder-premium-rate",
+  "commercial-builder-setup-fee",
+  "commercial-builder-deductions",
+  "commercial-builder-bonus-cap",
+  "commercial-builder-tax",
+  "commercial-builder-withholding",
   "commercial-builder-notes",
 ];
 const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"];
@@ -1259,6 +1266,10 @@ function bindEvents() {
   dealForm.addEventListener("click", handleDealAssistAction);
   dealForm.addEventListener("change", (event) => {
     if (event.target?.id?.startsWith("commercial-builder-")) {
+      if (event.target?.id === "commercial-builder-tier-level" && cleanText(event.target.value)) {
+        const snapshot = getCommercialBuilderSnapshot();
+        applyCommercialBuilderValues(getCommercialTierDefinition(snapshot.product, event.target.value, snapshot.base));
+      }
       syncCommercialBuilderUi();
     }
     if (["client", "operator", "companyName", "documentClientName"].includes(event.target?.name)) {
@@ -7959,20 +7970,51 @@ function renderKpiCatalogue() {
 
 function buildDealDraftFromForm(existingDeal) {
   const formData = new FormData(dealForm);
-  return normalizeDeal({
-    ...(existingDeal || {}),
-    ...Object.fromEntries(formData.entries()),
-    id: ui.editingDealId || existingDeal?.id || generateId("deal"),
-    newTraffic: formData.has("newTraffic"),
-    leadFlag: formData.has("leadFlag"),
-    signedFlag: formData.has("signedFlag"),
-    ddStartedFlag: formData.has("ddStartedFlag"),
-    ddCompletedFlag: formData.has("ddCompletedFlag"),
-    integrationStartedFlag: formData.has("integrationStartedFlag"),
-    integrationCompletedFlag: formData.has("integrationCompletedFlag"),
-    goLiveFlag: formData.has("goLiveFlag"),
-    followUpNotificationsEnabled: formData.has("followUpNotificationsEnabled"),
-  });
+  return synchronizeDealIdentityFields(
+    normalizeDeal({
+      ...(existingDeal || {}),
+      ...Object.fromEntries(formData.entries()),
+      id: ui.editingDealId || existingDeal?.id || generateId("deal"),
+      newTraffic: formData.has("newTraffic"),
+      leadFlag: formData.has("leadFlag"),
+      signedFlag: formData.has("signedFlag"),
+      ddStartedFlag: formData.has("ddStartedFlag"),
+      ddCompletedFlag: formData.has("ddCompletedFlag"),
+      integrationStartedFlag: formData.has("integrationStartedFlag"),
+      integrationCompletedFlag: formData.has("integrationCompletedFlag"),
+      goLiveFlag: formData.has("goLiveFlag"),
+      followUpNotificationsEnabled: formData.has("followUpNotificationsEnabled"),
+    })
+  );
+}
+
+function synchronizeDealIdentityFields(deal) {
+  const draft = { ...deal };
+  const primaryAccountName = cleanText(draft.client || draft.operator || draft.companyName || draft.documentClientName || draft.deal);
+  const primaryLegalName = cleanText(draft.companyName || draft.legalEntity || primaryAccountName);
+  const primaryDocumentName = cleanText(draft.documentClientName || primaryLegalName || primaryAccountName);
+
+  if (!cleanText(draft.deal) && primaryAccountName) {
+    draft.deal = primaryAccountName;
+  }
+
+  if (!cleanText(draft.client) && (primaryAccountName || cleanText(draft.deal))) {
+    draft.client = primaryAccountName || cleanText(draft.deal);
+  }
+
+  if (!cleanText(draft.operator) && cleanText(draft.client)) {
+    draft.operator = cleanText(draft.client);
+  }
+
+  if (!cleanText(draft.companyName) && primaryLegalName) {
+    draft.companyName = primaryLegalName;
+  }
+
+  if (!cleanText(draft.documentClientName) && primaryDocumentName) {
+    draft.documentClientName = primaryDocumentName;
+  }
+
+  return draft;
 }
 
 async function handleDealSubmit(event) {
@@ -7984,7 +8026,7 @@ async function handleDealSubmit(event) {
   const autosaveKey = getActiveDealAutosaveKey();
 
   if (!draft.deal.trim()) {
-    setBanner("El campo Deal es obligatorio.", "danger");
+    setBanner("Add at least a deal or account name before saving.", "danger");
     return;
   }
 
@@ -8008,7 +8050,7 @@ async function handleDealSubmit(event) {
   resetDealForm();
   renderAll();
   activateView("pipeline", { targetSelector: "#pipeline-board" });
-  setBanner(buildExcelBanner(saved ? `Deal guardado en Excel: ${draft.deal}.` : `Deal actualizado en memoria: ${draft.deal}.`), saved ? "success" : "warn");
+  setBanner(buildExcelBanner(saved ? `Account saved to Excel: ${draft.deal}.` : `Account updated in memory: ${draft.deal}.`), saved ? "success" : "warn");
 }
 
 async function handleMarketIntelSubmit(event) {
@@ -9591,7 +9633,10 @@ function fillDealForm(deal, options = {}) {
   ];
 
   fields.forEach((field) => {
-    dealForm.elements[field].value = deal[field] ?? "";
+    const element = dealForm.elements[field];
+    if (element) {
+      element.value = deal[field] ?? "";
+    }
   });
 
   [
@@ -9605,11 +9650,14 @@ function fillDealForm(deal, options = {}) {
     "goLiveFlag",
     "followUpNotificationsEnabled",
   ].forEach((field) => {
-    dealForm.elements[field].checked = Boolean(deal[field]);
+    const element = dealForm.elements[field];
+    if (element) {
+      element.checked = Boolean(deal[field]);
+    }
   });
 
-  elements.dealFormTitle.textContent = `Edit Deal: ${deal.deal}`;
-  elements.dealSubmitButton.textContent = "Update Deal";
+  elements.dealFormTitle.textContent = `Edit Account: ${deal.deal || deal.client || deal.operator || "Draft"}`;
+  elements.dealSubmitButton.textContent = "Update Account";
   ui.companyAssistKey = getCompanyProfileKey(deal);
   resetCommercialBuilder();
   syncDealScoringPreview();
@@ -9628,8 +9676,8 @@ function resetDealForm() {
   dealForm.reset();
   fillDealForm(draft, { autoRestore: true });
   ui.companyAssistKey = "";
-  elements.dealFormTitle.textContent = "New Deal";
-  elements.dealSubmitButton.textContent = "Save Deal";
+  elements.dealFormTitle.textContent = "New Account";
+  elements.dealSubmitButton.textContent = "Save Account";
   resetCommercialBuilder();
   syncDealScoringPreview();
   refreshDealFieldHighlights();
@@ -11768,11 +11816,18 @@ function getCommercialBuilderElements() {
     model: document.getElementById("commercial-builder-model"),
     base: document.getElementById("commercial-builder-base"),
     structure: document.getElementById("commercial-builder-structure"),
+    tierLevel: document.getElementById("commercial-builder-tier-level"),
     rate: document.getElementById("commercial-builder-rate"),
     fixedFee: document.getElementById("commercial-builder-fixed-fee"),
     volumeFrom: document.getElementById("commercial-builder-volume-from"),
     volumeTo: document.getElementById("commercial-builder-volume-to"),
     volumeUnit: document.getElementById("commercial-builder-volume-unit"),
+    premiumRate: document.getElementById("commercial-builder-premium-rate"),
+    setupFee: document.getElementById("commercial-builder-setup-fee"),
+    deductions: document.getElementById("commercial-builder-deductions"),
+    bonusCap: document.getElementById("commercial-builder-bonus-cap"),
+    tax: document.getElementById("commercial-builder-tax"),
+    withholding: document.getElementById("commercial-builder-withholding"),
     notes: document.getElementById("commercial-builder-notes"),
   };
 }
@@ -11793,109 +11848,241 @@ function resetCommercialBuilder() {
 }
 
 function applyCommercialBuilderPreset(presetKey) {
-  const builder = getCommercialBuilderElements();
+  const preset = getCommercialBuilderPreset(cleanText(presetKey));
+  if (!preset) {
+    return;
+  }
+
+  resetCommercialBuilder();
+  applyCommercialBuilderValues(preset);
+  syncCommercialBuilderUi();
+}
+
+function getCommercialBuilderPreset(presetKey) {
   const presets = {
-    "ggr-12": {
-      product: "Evolution Generic",
+    "evolution-tiered": {
+      product: "Evolution",
       model: "Revenue Share",
       base: "GGR",
-      structure: "Single Rate",
-      rate: "12%",
-      volumeFrom: "",
-      volumeTo: "",
-      volumeUnit: "EUR",
-      notes: "",
+      structure: "Tiered by Volume",
+      tierLevel: "Tier 1",
+      premiumRate: "1%-5%",
+      notes: "Core live casino commercial",
     },
-    "ngr-11": {
-      product: "Evolution Generic",
+    "ezugi-tiered": {
+      product: "Ezugi",
       model: "Revenue Share",
-      base: "NGR",
-      structure: "Single Rate",
-      rate: "11%",
-      volumeFrom: "",
-      volumeTo: "",
-      volumeUnit: "EUR",
-      notes: "",
+      base: "GGR",
+      structure: "Tiered by Volume",
+      tierLevel: "Tier 1",
+      premiumRate: "1%-5%",
+      notes: "Ezugi commercial",
     },
-    "fixed-fee": {
+    "slots-tiered": {
+      product: "Slots Bundle",
+      model: "Revenue Share",
+      base: "GGR",
+      structure: "Tiered by Volume",
+      tierLevel: "Tier 1",
+      premiumRate: "1%-5%",
+      notes: "NetEnt, RedTiger, NLC, BTG, Sneaky Slots, RedBaron",
+    },
+    "growth-tables": {
       product: "Growth Tables",
       model: "Fixed Fee",
-      base: "Monthly Fee",
+      base: "Per Table",
       structure: "Single Rate",
-      rate: "",
       fixedFee: "0.15",
-      volumeFrom: "",
-      volumeTo: "",
-      volumeUnit: "EUR",
-      notes: "Fixed fee",
+      notes: "EUR 0.15 per table",
     },
-    "tiered-ggr": {
-      product: "Evolution Generic",
+    "high-stake": {
+      product: "High Stake Tables",
+      model: "Fixed Fee",
+      base: "Per Table",
+      structure: "Single Rate",
+      fixedFee: "0.55",
+      notes: "EUR 0.55 per table",
+    },
+    "first-person": {
+      product: "First Person",
       model: "Revenue Share",
       base: "GGR",
-      structure: "Tiered by Volume",
-      rate: "12%",
-      volumeFrom: "0",
-      volumeTo: "1000000",
-      volumeUnit: "EUR",
-      notes: "Tier 1 revenue share",
-    },
-    "tiered-ngr": {
-      product: "Evolution Generic",
-      model: "Revenue Share",
-      base: "NGR",
-      structure: "Tiered by Volume",
+      structure: "Single Rate",
       rate: "11%",
-      volumeFrom: "0",
-      volumeTo: "1000000",
-      volumeUnit: "EUR",
-      notes: "Tier 1 revenue share",
+      notes: "First Person commercial",
     },
     "premium-addon": {
       product: "Evolution Premium",
       model: "Premium Add-On",
       base: "GGR",
       structure: "Custom",
-      rate: "1%-5%",
-      volumeFrom: "",
-      volumeTo: "",
-      volumeUnit: "EUR",
+      premiumRate: "1%-5%",
       notes: "Premium add-on",
     },
   };
 
-  const preset = presets[cleanText(presetKey)];
+  const preset = presets[presetKey];
   if (!preset) {
-    return;
+    return null;
   }
+  const next = { ...preset };
+  if (next.tierLevel) {
+    Object.assign(next, getCommercialTierDefinition(next.product, next.tierLevel, next.base));
+  }
+  return next;
+}
 
-  resetCommercialBuilder();
-  Object.entries(preset).forEach(([key, value]) => {
-    const element =
-      key === "fixedFee"
-        ? builder.fixedFee
-        : key === "product"
-        ? builder.product
-        : key === "model"
-        ? builder.model
-        : key === "base"
-        ? builder.base
-        : key === "structure"
-        ? builder.structure
-        : key === "rate"
-        ? builder.rate
-        : key === "volumeFrom"
-        ? builder.volumeFrom
-        : key === "volumeTo"
-        ? builder.volumeTo
-        : key === "volumeUnit"
-        ? builder.volumeUnit
-        : builder.notes;
+function applyCommercialBuilderValues(values = {}) {
+  const builder = getCommercialBuilderElements();
+  const fieldMap = {
+    product: builder.product,
+    model: builder.model,
+    base: builder.base,
+    structure: builder.structure,
+    tierLevel: builder.tierLevel,
+    rate: builder.rate,
+    fixedFee: builder.fixedFee,
+    volumeFrom: builder.volumeFrom,
+    volumeTo: builder.volumeTo,
+    volumeUnit: builder.volumeUnit,
+    premiumRate: builder.premiumRate,
+    setupFee: builder.setupFee,
+    deductions: builder.deductions,
+    bonusCap: builder.bonusCap,
+    tax: builder.tax,
+    withholding: builder.withholding,
+    notes: builder.notes,
+  };
+
+  Object.entries(values).forEach(([key, value]) => {
+    const element = fieldMap[key];
     if (element) {
-      element.value = value;
+      element.value = value ?? "";
     }
   });
-  syncCommercialBuilderUi();
+}
+
+function normalizeCommercialTierLevel(value) {
+  const normalized = cleanText(value).toLowerCase();
+  if (normalized === "tier 1" || normalized === "1" || normalized === "t1") {
+    return 1;
+  }
+  if (normalized === "tier 2" || normalized === "2" || normalized === "t2") {
+    return 2;
+  }
+  if (normalized === "tier 3" || normalized === "3" || normalized === "t3") {
+    return 3;
+  }
+  return 0;
+}
+
+function detectCommercialFamily(product) {
+  const value = cleanText(product).toLowerCase();
+  if (!value) {
+    return "evolution";
+  }
+  if (value.includes("ezugi")) {
+    return "ezugi";
+  }
+  if (
+    value.includes("slot") ||
+    value.includes("netent") ||
+    value.includes("redtiger") ||
+    value.includes("red tiger") ||
+    value.includes("nlc") ||
+    value.includes("btg") ||
+    value.includes("sneaky") ||
+    value.includes("redbaron") ||
+    value.includes("red baron")
+  ) {
+    return "slots";
+  }
+  if (value.includes("growth")) {
+    return "growth";
+  }
+  if (value.includes("high stake")) {
+    return "high-stake";
+  }
+  if (value.includes("first person")) {
+    return "first-person";
+  }
+  return "evolution";
+}
+
+function getCommercialTierDefinition(product, tierLabel, currentBase = "") {
+  const family = detectCommercialFamily(product);
+  const tier = normalizeCommercialTierLevel(tierLabel) || 1;
+  const ranges = {
+    1: { volumeFrom: "0", volumeTo: "1000000", volumeUnit: "EUR" },
+    2: { volumeFrom: "1000001", volumeTo: "3000000", volumeUnit: "EUR" },
+    3: { volumeFrom: "3000001", volumeTo: "", volumeUnit: "EUR" },
+  };
+  const rates = {
+    evolution: { 1: "12%", 2: "11%", 3: "10%" },
+    ezugi: { 1: "10%", 2: "9%", 3: "8%" },
+    slots: { 1: "10%", 2: "9%", 3: "8%" },
+  };
+
+  if (family === "growth") {
+    return {
+      model: "Fixed Fee",
+      base: "Per Table",
+      structure: "Single Rate",
+      tierLevel: "",
+      rate: "",
+      fixedFee: "0.15",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
+      premiumRate: "",
+      notes: "EUR 0.15 per table",
+    };
+  }
+
+  if (family === "high-stake") {
+    return {
+      model: "Fixed Fee",
+      base: "Per Table",
+      structure: "Single Rate",
+      tierLevel: "",
+      rate: "",
+      fixedFee: "0.55",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
+      premiumRate: "",
+      notes: "EUR 0.55 per table",
+    };
+  }
+
+  if (family === "first-person") {
+    return {
+      model: "Revenue Share",
+      base: "GGR",
+      structure: "Single Rate",
+      tierLevel: "",
+      rate: "11%",
+      fixedFee: "",
+      volumeFrom: "",
+      volumeTo: "",
+      volumeUnit: "EUR",
+      premiumRate: "",
+      notes: "First Person commercial",
+    };
+  }
+
+  return {
+    model: "Revenue Share",
+    base: cleanText(currentBase) || "GGR",
+    structure: "Tiered by Volume",
+    tierLevel: `Tier ${tier}`,
+    rate: rates[family]?.[tier] || "12%",
+    fixedFee: "",
+    volumeFrom: ranges[tier].volumeFrom,
+    volumeTo: ranges[tier].volumeTo,
+    volumeUnit: ranges[tier].volumeUnit,
+    premiumRate: "1%-5%",
+  };
 }
 
 function getCommercialBuilderSnapshot() {
@@ -11905,11 +12092,18 @@ function getCommercialBuilderSnapshot() {
     model: cleanText(builder.model?.value),
     base: cleanText(builder.base?.value),
     structure: cleanText(builder.structure?.value),
+    tierLevel: cleanText(builder.tierLevel?.value),
     rate: cleanText(builder.rate?.value),
     fixedFee: cleanText(builder.fixedFee?.value),
     volumeFrom: cleanText(builder.volumeFrom?.value),
     volumeTo: cleanText(builder.volumeTo?.value),
     volumeUnit: cleanText(builder.volumeUnit?.value),
+    premiumRate: cleanText(builder.premiumRate?.value),
+    setupFee: cleanText(builder.setupFee?.value),
+    deductions: cleanText(builder.deductions?.value),
+    bonusCap: cleanText(builder.bonusCap?.value),
+    tax: cleanText(builder.tax?.value),
+    withholding: cleanText(builder.withholding?.value),
     notes: cleanText(builder.notes?.value),
   };
 }
@@ -11929,6 +12123,9 @@ function syncCommercialBuilderUi() {
     builder.fixedFee.disabled = !isFixedFee;
     builder.fixedFee.placeholder = isFixedFee ? "0.00" : "Only for fixed fee";
   }
+  if (builder.tierLevel) {
+    builder.tierLevel.disabled = isFixedFee;
+  }
   if (builder.volumeFrom) {
     builder.volumeFrom.disabled = isFixedFee;
     builder.volumeFrom.placeholder = isTiered ? "0" : "Optional";
@@ -11939,6 +12136,9 @@ function syncCommercialBuilderUi() {
   }
   if (builder.volumeUnit) {
     builder.volumeUnit.disabled = isFixedFee;
+  }
+  if (builder.premiumRate) {
+    builder.premiumRate.placeholder = isFixedFee ? "Optional premium uplift" : "1%-5%";
   }
 }
 
@@ -11966,13 +12166,27 @@ function buildCommercialLabel(snapshot) {
 
   const rate = snapshot.rate || "TBC";
   const base = snapshot.base || "GGR";
+  const premiumLabel = snapshot.premiumRate ? ` + Premium ${snapshot.premiumRate}` : "";
   if (snapshot.model === "Premium Add-On") {
-    return `${rate} premium add-on on ${base}`;
+    return `${snapshot.premiumRate || rate} premium add-on on ${base}`;
   }
   if (snapshot.model === "Hybrid") {
-    return `${rate} hybrid on ${base}`;
+    return `${rate} hybrid on ${base}${premiumLabel}`;
   }
-  return `${rate} of ${base}`;
+  return `${rate} of ${base}${premiumLabel}`;
+}
+
+function buildCommercialPackageNotes(snapshot) {
+  return [
+    snapshot.deductions ? `Deductions ${snapshot.deductions}` : "",
+    snapshot.setupFee ? `Setup Fee EUR ${snapshot.setupFee}` : "",
+    snapshot.bonusCap ? `Bonus Cap ${snapshot.bonusCap}` : "",
+    snapshot.tax ? `Tax ${snapshot.tax}` : "",
+    snapshot.withholding ? `Withholding ${snapshot.withholding}` : "",
+    snapshot.notes,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function buildCommercialBuilderTerm(snapshot) {
@@ -11980,24 +12194,86 @@ function buildCommercialBuilderTerm(snapshot) {
   const modelLabel = snapshot.model || "Commercial";
   const volumeLabel = buildCommercialVolumeLabel(snapshot);
   const commercialLabel = buildCommercialLabel(snapshot);
+  const extras = buildCommercialPackageNotes(snapshot);
 
   if (snapshot.model === "Fixed Fee" || snapshot.fixedFee) {
-    return `${product}: ${commercialLabel}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+    return `${product}: ${commercialLabel}${extras ? ` · ${extras}` : ""}`;
   }
 
   if (snapshot.structure === "Tiered by Volume" || snapshot.volumeFrom || snapshot.volumeTo) {
-    return `${product}: ${commercialLabel} for ${volumeLabel}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+    return `${product}: ${commercialLabel} for ${volumeLabel}${extras ? ` · ${extras}` : ""}`;
   }
 
-  return `${product}: ${commercialLabel} across all volume${modelLabel !== "Revenue Share" ? ` · ${modelLabel}` : ""}${snapshot.notes ? ` · ${snapshot.notes}` : ""}`;
+  return `${product}: ${commercialLabel} across all volume${modelLabel !== "Revenue Share" ? ` · ${modelLabel}` : ""}${extras ? ` · ${extras}` : ""}`;
 }
 
 function buildCommercialBuilderScheduleRow(snapshot) {
   const product = snapshot.product || "Commercial Item";
   const tier = buildCommercialVolumeLabel(snapshot);
   const commercial = buildCommercialLabel(snapshot);
-  const notes = [snapshot.model && snapshot.model !== "Revenue Share" ? snapshot.model : "", snapshot.notes].filter(Boolean).join(" · ");
+  const notes = [snapshot.model && snapshot.model !== "Revenue Share" ? snapshot.model : "", buildCommercialPackageNotes(snapshot)]
+    .filter(Boolean)
+    .join(" · ");
   return [product, tier, commercial, notes].join(" | ");
+}
+
+function appendUniqueValueToTextarea(fieldName, nextLine) {
+  const field = dealForm.elements[fieldName];
+  if (!field || !cleanText(nextLine)) {
+    return;
+  }
+  const currentLines = cleanMultilineText(field.value)
+    .split("\n")
+    .map((line) => cleanText(line))
+    .filter(Boolean);
+  if (currentLines.some((line) => line.toLowerCase() === cleanText(nextLine).toLowerCase())) {
+    return;
+  }
+  appendValueToTextarea(fieldName, nextLine);
+}
+
+function setDealFormFieldValue(fieldName, value) {
+  const field = dealForm?.elements?.[fieldName];
+  if (!field) {
+    return;
+  }
+  field.value = value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+function applyCommercialPackageToForm(snapshot) {
+  if (!dealForm) {
+    return;
+  }
+
+  if (dealForm.elements.pricingBase && snapshot.base) {
+    setDealFormFieldValue("pricingBase", snapshot.base);
+  }
+  if (dealForm.elements.deductionTerms && snapshot.deductions) {
+    setDealFormFieldValue("deductionTerms", snapshot.deductions);
+  }
+  if (dealForm.elements.deductionsAllowed && snapshot.deductions) {
+    setDealFormFieldValue("deductionsAllowed", snapshot.deductions);
+  }
+  if (dealForm.elements.setupFeeAmount && snapshot.setupFee) {
+    setDealFormFieldValue("setupFeeAmount", snapshot.setupFee);
+  }
+  if (dealForm.elements.setupFeeStatus && snapshot.setupFee) {
+    const numericSetupFee = toNullableNumber(snapshot.setupFee);
+    setDealFormFieldValue("setupFeeStatus", numericSetupFee === 0 ? "Waived" : "Not Waived");
+  }
+  if (dealForm.elements.bonusCap && snapshot.bonusCap) {
+    setDealFormFieldValue("bonusCap", snapshot.bonusCap);
+  }
+  if (dealForm.elements.gamingTax && snapshot.tax) {
+    setDealFormFieldValue("gamingTax", snapshot.tax);
+  }
+  if (dealForm.elements.withholdingTax && snapshot.withholding) {
+    setDealFormFieldValue("withholdingTax", snapshot.withholding);
+  }
+  if (snapshot.product) {
+    appendUniqueValueToTextarea("negotiatedProducts", snapshot.product);
+  }
 }
 
 function appendValueToTextarea(fieldName, nextLine) {
@@ -12011,14 +12287,25 @@ function appendValueToTextarea(fieldName, nextLine) {
 }
 
 function applyCommercialBuilderAction(action) {
+  const builder = getCommercialBuilderElements();
+  if (action === "seed-tier-1" || action === "seed-tier-2" || action === "seed-tier-3") {
+    const level = action.slice(-1);
+    const baseSnapshot = getCommercialBuilderSnapshot();
+    const tierValues = getCommercialTierDefinition(baseSnapshot.product || builder.product?.value, `Tier ${level}`, baseSnapshot.base);
+    applyCommercialBuilderValues(tierValues);
+    syncCommercialBuilderUi();
+    setBanner(`Commercial Builder seeded for Tier ${level}.`, "success");
+    return;
+  }
+
   const snapshot = getCommercialBuilderSnapshot();
   if (action === "clear-builder") {
     resetCommercialBuilder();
     return;
   }
 
-  if (!snapshot.product && !snapshot.rate && !snapshot.fixedFee) {
-    setBanner("Define at least the product and rate or fixed fee before applying a commercial line.", "warn");
+  if (!snapshot.product && !snapshot.rate && !snapshot.fixedFee && !snapshot.premiumRate) {
+    setBanner("Define at least the brand/product and a commercial value before applying the package.", "warn");
     return;
   }
 
@@ -12036,6 +12323,12 @@ function applyCommercialBuilderAction(action) {
   if (action === "append-schedule") {
     appendValueToTextarea("commercialSchedule", buildCommercialBuilderScheduleRow(snapshot));
     setBanner("Commercial schedule row added from the Commercial Builder.", "success");
+    return;
+  }
+
+  if (action === "apply-package") {
+    applyCommercialPackageToForm(snapshot);
+    setBanner("Commercial package fields applied to proposal and agreement scope.", "success");
   }
 }
 
