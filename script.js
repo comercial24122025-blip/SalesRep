@@ -89,6 +89,23 @@ const STAGE_CADENCE_MILESTONES = [
   ["Go Live", "liveDate"],
   ["Handover", "handover"],
 ];
+const STAGE_SLA_DAYS = {
+  Legal: 20,
+  DD: 35,
+  Integration: 45,
+};
+const STAGE_ENTRY_FIELDS = {
+  Lead: "prospectDate",
+  Qualified: "prospectDate",
+  Proposal: "offerDate",
+  Legal: "signedEta",
+  DD: "ddDate",
+  Integration: "integrationDate",
+  "Legal Approval": "legalApprovalDate",
+  "Go Live": "liveDate",
+  Live: "liveSince",
+  Handover: "handover",
+};
 
 const DOCUMENT_STAGE_ACTIONS = {
   legal: {
@@ -666,6 +683,12 @@ const elements = {
   clearCompanySearch: document.getElementById("clear-company-search"),
   stageOverview: document.getElementById("stage-overview"),
   dashboardStageSummary: document.getElementById("dashboard-stage-summary"),
+  commandCenterSummary: document.getElementById("command-center-summary"),
+  commandKpiGrid: document.getElementById("command-kpi-grid"),
+  fixNowCount: document.getElementById("fix-now-count"),
+  fixNowAlerts: document.getElementById("fix-now-alerts"),
+  commandPipelineBars: document.getElementById("command-pipeline-bars"),
+  commandUpcomingGoLives: document.getElementById("command-upcoming-golives"),
   forecastSummary: document.getElementById("forecast-summary"),
   executiveKpiReadout: document.getElementById("executive-kpi-readout"),
   forecastMarkets: document.getElementById("forecast-markets"),
@@ -1342,6 +1365,9 @@ function bindEvents() {
   });
 
   elements.stageOverview.addEventListener("click", handleStageFunnelAction);
+  elements.commandPipelineBars?.addEventListener("click", handleStageFunnelAction);
+  elements.fixNowAlerts?.addEventListener("click", handleDealAction);
+  elements.commandUpcomingGoLives?.addEventListener("click", handleDealAction);
   elements.heroStats.addEventListener("click", handleExecutiveKpiAction);
   elements.marketBars.addEventListener("click", handleDashboardDrilldownAction);
   elements.forecastMarkets.addEventListener("click", handleDashboardDrilldownAction);
@@ -3839,6 +3865,8 @@ function renderDashboard() {
     };
   });
 
+  renderCommandCenter(scopedDeals, stageStats);
+
   const totalDeals = scopedDeals.length;
   elements.dashboardStageSummary.textContent = `${totalDeals} deals · ${buildTimeWindowLabel()}`;
   elements.stageOverview.innerHTML = stageStats
@@ -3885,6 +3913,86 @@ function renderDashboard() {
   renderLeadMarketTracker(scopedDeals);
   renderLatamReference();
   renderRiskList(scopedDeals);
+}
+
+function renderCommandCenter(deals, stageStats = []) {
+  if (!elements.commandKpiGrid || !elements.fixNowAlerts || !elements.commandPipelineBars || !elements.commandUpcomingGoLives) {
+    return;
+  }
+
+  const activeDeals = deals.filter((deal) => !isInactiveDeal(deal));
+  const snapshot = buildForecastSnapshot(activeDeals);
+  const alerts = buildExecutionAlerts(activeDeals);
+  const delayedIntegrations = activeDeals.filter((deal) => getStageSlaState(deal).stage === "Integration" && getStageSlaState(deal).tone === "stuck").length;
+  const goLivesThisMonth = activeDeals.filter((deal) => isGoLiveThisMonth(deal)).length;
+  const todayActions = getActionBuckets(getVisibleTasks()).overdue.length + getActionBuckets(getVisibleTasks()).today.length;
+
+  elements.commandCenterSummary.textContent = `${todayActions} actions today`;
+  elements.fixNowCount.textContent = `${alerts.length} alerts`;
+  elements.commandKpiGrid.innerHTML = [
+    ["Weighted Forecast", formatForecastUnits(snapshot.weightedCount), "Expected revenue-weighted execution output", "forecast"],
+    ["Deals at Risk", String(alerts.length), "SLA, blocker, or missing-action pressure", "risk"],
+    ["Integrations Delayed", String(delayedIntegrations), "Integration records beyond 45 days", "delay"],
+    ["Go Lives This Month", String(goLivesThisMonth), "Launches landing in the active month", "golive"],
+  ]
+    .map(([label, value, note, tone]) => `
+      <article class="command-kpi-card tone-${escapeAttribute(tone)}">
+        <span>${escapeHtml(label)}</span>
+        <strong>${escapeHtml(value)}</strong>
+        <small>${escapeHtml(note)}</small>
+      </article>
+    `)
+    .join("");
+
+  elements.fixNowAlerts.innerHTML = alerts.length
+    ? alerts.slice(0, 6).map(renderExecutionAlertCard).join("")
+    : '<div class="empty-state">No urgent execution gaps under the active filters.</div>';
+
+  const maxStageValue = Math.max(...stageStats.map((item) => Number(item.value || 0)), 1);
+  elements.commandPipelineBars.innerHTML = stageStats
+    .filter((item) => item.count > 0)
+    .map((item) => {
+      const stageDeals = activeDeals.filter((deal) => deal.stage === item.stage);
+      const stuckCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
+      const width = Math.max(8, Math.round((Number(item.value || 0) / maxStageValue) * 100));
+      return `
+        <button type="button" class="command-stage-row" data-action="open-stage-funnel" data-stage="${escapeAttribute(item.stage)}">
+          <span>${escapeHtml(item.stage)}</span>
+          <strong>${escapeHtml(item.count)} deals</strong>
+          <div class="command-stage-track"><i style="width:${width}%"></i></div>
+          <small>${escapeHtml(formatCurrency(item.value))}${stuckCount ? ` · ${stuckCount} stuck` : ""}</small>
+        </button>
+      `;
+    })
+    .join("") || '<div class="empty-state">No visible pipeline value in the current scope.</div>';
+
+  const upcoming = getUpcomingGoLiveDeals(activeDeals, 60);
+  elements.commandUpcomingGoLives.innerHTML = upcoming.length
+    ? upcoming.slice(0, 6).map((deal) => {
+        const dateText = cleanText(deal.liveDate || deal.liveSince || deal.signedEta || deal.signingEta);
+        return `
+          <article class="command-go-live-card">
+            ${renderCompanyProfileTrigger(deal, getPrimaryOperatorName(deal), buildDealContextLine(deal), "entity-trigger entity-trigger-block entity-trigger-compact")}
+            <span>${escapeHtml(formatDate(dateText))}</span>
+            <small>${escapeHtml(deal.productsFuture || deal.productsCurrent || deal.platform || "Launch scope pending")}</small>
+          </article>
+        `;
+      }).join("")
+    : '<div class="empty-state">No dated go-live records are landing in the next 60 days.</div>';
+}
+
+function renderExecutionAlertCard(item) {
+  const toneClass = item.tone === "stuck" ? "is-danger" : item.tone === "at-risk" ? "is-warn" : "is-info";
+  return `
+    <article class="execution-alert-card ${toneClass}">
+      <div>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.message)}</p>
+        <small>${escapeHtml(item.detail)}</small>
+      </div>
+      <button type="button" class="icon-button" data-action="edit-deal" data-id="${escapeAttribute(item.deal.id)}">Open Deal</button>
+    </article>
+  `;
 }
 
 function renderMarketBars(deals) {
@@ -5974,14 +6082,17 @@ function renderPipelineBoard(deals) {
       ? stageDeals
           .map((deal) => {
             const health = getDealHealth(deal);
+            const sla = getStageSlaState(deal);
+            const owner = getDealOwner(deal) || "Unassigned";
+            const nextAction = getDealNextAction(deal);
             return `
-              <article class="kanban-card ${health.cardClass}">
+              <article class="kanban-card execution-deal-card ${sla.cardClass || health.cardClass}">
                 <div class="pipeline-card-head">
                   <div>
                     ${renderCompanyProfileTrigger(
                       deal,
-                      deal.deal || getCompanyProfileLabel(deal),
-                      buildDealContextLine(deal),
+                      getPrimaryOperatorName(deal),
+                      `${deal.market || "No market"} · ${owner}`,
                       "entity-trigger entity-trigger-block entity-trigger-compact"
                     )}
                   </div>
@@ -5989,30 +6100,24 @@ function renderPipelineBoard(deals) {
                 </div>
                 <div class="pill-row">
                   <span class="pill stage">${escapeHtml(deal.market || "No market")}</span>
-                  <span class="pill neutral">${escapeHtml(deal.type || "No type")}</span>
-                  ${deal.newTraffic ? '<span class="pill traffic">New traffic</span>' : ""}
-                  <span class="pill ${health.pillClass}">${escapeHtml(health.label)}</span>
+                  <span class="pill neutral">${escapeHtml(owner)}</span>
+                  <span class="pill ${sla.pillClass || health.pillClass}">${escapeHtml(sla.tone === "neutral" ? health.label : sla.tone === "stuck" ? "Stuck" : sla.tone === "at-risk" ? "At Risk" : "Healthy")}</span>
                 </div>
-                <div class="pipeline-meta-grid">
-                  <span><strong>Period:</strong> ${escapeHtml(formatDealPeriod(deal))}</span>
-                  <span><strong>Follow up:</strong> ${formatDate(deal.lastFollowUp)}</span>
-                  <span><strong>Platform:</strong> ${escapeHtml(deal.platform || "N/A")}</span>
-                  <span><strong>Go Live:</strong> ${escapeHtml(deal.goLiveStatus || "N/A")}</span>
+                ${renderSlaTimer(deal)}
+                <p class="deal-next-action"><strong>Next Action:</strong> ${escapeHtml(nextAction)}</p>
+                <div class="pipeline-meta-grid execution-meta-grid">
+                  <span><strong>Stage:</strong> ${escapeHtml(deal.stage || "N/A")}</span>
+                  <span><strong>Probability:</strong> ${escapeHtml(formatPercent(getForecastProbability(deal)))}</span>
+                  <span><strong>DD:</strong> ${escapeHtml(deal.ddStatus || "N/A")}</span>
+                  <span><strong>Integration:</strong> ${escapeHtml(deal.integrationStatus || "N/A")}</span>
                 </div>
-                ${renderDealOperationalPulse(deal)}
-                ${renderStageStatusBlock(deal)}
-                ${renderRequestPackStatusBlock(deal)}
-                ${renderTrackingLinks(deal)}
-                <p>${escapeHtml(deal.statusText || deal.comments || "No operating summary available.")}</p>
                 <div class="kanban-actions">
                   ${renderDealWorkflowDocumentButtons(deal, {
                     className: "icon-button",
                     includeTask: true,
-                    includeCampaign: true,
                     includeEdit: true,
-                    editLabel: "Edit",
+                    editLabel: "Open Deal",
                   })}
-                  <button class="icon-button danger" data-action="delete-deal" data-id="${escapeHtml(deal.id)}">Delete</button>
                 </div>
               </article>
             `;
@@ -6474,6 +6579,62 @@ function buildTargetProgressCard(label, value, target, drilldownKey = "") {
   };
 }
 
+function getActionBuckets(tasks = getVisibleTasks()) {
+  const activeTasks = tasks.filter((task) => task.status !== "Done");
+  const buckets = {
+    overdue: [],
+    today: [],
+    upcoming: [],
+    blocked: [],
+  };
+
+  activeTasks.forEach((task) => {
+    if (task.status === "Blocked") {
+      buckets.blocked.push(task);
+      return;
+    }
+
+    const dueDate = cleanText(task.dueDate);
+    if (!dueDate) {
+      buckets.upcoming.push(task);
+      return;
+    }
+
+    const delta = daysUntil(dueDate);
+    if (delta < 0) {
+      buckets.overdue.push(task);
+    } else if (delta === 0) {
+      buckets.today.push(task);
+    } else {
+      buckets.upcoming.push(task);
+    }
+  });
+
+  return buckets;
+}
+
+function getTaskRelatedDeal(task) {
+  const directId = cleanText(task.dealId);
+  if (directId) {
+    const byId = state.deals.find((deal) => deal.id === directId || deal.dealNumber === directId);
+    if (byId) {
+      return byId;
+    }
+  }
+
+  const candidates = [task.deal, task.client, task.operator].map((value) => cleanText(value).toLowerCase()).filter(Boolean);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return state.deals.find((deal) => {
+    const labels = [deal.deal, deal.client, deal.operator, getPrimaryOperatorName(deal), getCompanyProfileLabel(deal)]
+      .map((value) => cleanText(value).toLowerCase())
+      .filter(Boolean);
+    return candidates.some((candidate) => labels.some((label) => label === candidate || label.includes(candidate) || candidate.includes(label)));
+  }) || null;
+}
+
 function renderTargetTable() {
   if (state.targets.length === 0) {
     elements.targetTableBody.innerHTML = `
@@ -6518,36 +6679,42 @@ function renderTargetTable() {
 function renderTasks() {
   const visibleTasks = getVisibleTasks();
   const openCount = visibleTasks.filter((task) => task.status !== "Done").length;
-  elements.taskSummary.textContent = ui.taskPreset ? `${visibleTasks.length} tasks · ${ui.taskPreset.label}` : `${visibleTasks.length} tasks`;
+  const buckets = getActionBuckets(visibleTasks);
+  const todayCount = buckets.overdue.length + buckets.today.length;
+  elements.taskSummary.textContent = ui.taskPreset ? `${visibleTasks.length} actions · ${ui.taskPreset.label}` : `${todayCount} require action today`;
   elements.taskOpenCount.textContent = `${openCount} open`;
   renderTaskBoard(visibleTasks);
   renderTaskTable(visibleTasks);
 }
 
 function renderTaskBoard(tasks = getVisibleTasks()) {
-  const groups = TASK_SCOPE_TYPES.map((scopeType) => ({
-    scopeType,
-    tasks: tasks.filter((task) => task.scopeType === scopeType),
-  })).filter((group) => group.tasks.length > 0);
+  const buckets = getActionBuckets(tasks);
+  const groups = [
+    { key: "overdue", title: "Overdue", tone: "danger", tasks: buckets.overdue },
+    { key: "today", title: "Due Today", tone: "warn", tasks: buckets.today },
+    { key: "upcoming", title: "Upcoming", tone: "success", tasks: buckets.upcoming },
+    { key: "blocked", title: "Blocked", tone: "neutral", tasks: buckets.blocked },
+  ];
 
-  if (groups.length === 0) {
-    elements.taskBoard.innerHTML = '<div class="empty-state">Todavia no hay tareas. Crea una desde cliente, mercado o target.</div>';
+  if (tasks.length === 0) {
+    elements.taskBoard.innerHTML = '<div class="empty-state">No actions match the active filters. Create one from a deal, account, market, or target.</div>';
     return;
   }
 
   elements.taskBoard.innerHTML = groups
     .map((group) => {
       return `
-        <section class="task-column">
+        <section class="task-column action-column action-${group.tone}">
           <header>
-            <strong>${escapeHtml(group.scopeType)}</strong>
+            <strong>${escapeHtml(group.title)}</strong>
             <span>${group.tasks.length}</span>
           </header>
           <div class="task-column-list">
-            ${group.tasks
-              .sort((left, right) => compareTasks(left, right))
-              .map((task) => renderTaskCard(task))
-              .join("")}
+            ${
+              group.tasks.length
+                ? group.tasks.sort((left, right) => compareTasks(left, right)).map((task) => renderTaskCard(task)).join("")
+                : '<div class="empty-state">Clear.</div>'
+            }
           </div>
         </section>
       `;
@@ -6556,30 +6723,36 @@ function renderTaskBoard(tasks = getVisibleTasks()) {
 }
 
 function renderTaskCard(task) {
+  const deal = getTaskRelatedDeal(task);
+  const operator = deal ? getPrimaryOperatorName(deal) : task.operator || task.client || task.deal || task.title || "Action";
+  const market = deal?.market || task.market || "No market";
+  const stage = deal?.stage || task.scopeType || "No stage";
   return `
     <article class="task-card ${taskStatusClass(task.status)}">
       <div class="task-card-head">
         <div>
           <span class="task-number">${escapeHtml(task.taskNumber || "Pending number")}</span>
-          <strong>${escapeHtml(task.title || "Tarea sin titulo")}</strong>
-          <small>${escapeHtml(buildTaskScopeLabel(task))}</small>
+          <strong>${escapeHtml(operator)}</strong>
+          <small>${escapeHtml(`${market} · ${stage}`)}</small>
         </div>
         <span class="task-priority">${escapeHtml(task.priority)}</span>
       </div>
       <div class="pill-row">
-        <span class="pill neutral">${escapeHtml(task.scopeType)}</span>
+        <span class="pill stage">${escapeHtml(stage)}</span>
+        <span class="pill neutral">${escapeHtml(task.owner || "Unassigned")}</span>
         <span class="pill ${taskStatusPillClass(task.status)}">${escapeHtml(task.status)}</span>
       </div>
       <div class="task-card-meta">
         <span><strong>Due:</strong> ${formatDate(task.dueDate)}</span>
-        <span><strong>Owner:</strong> ${escapeHtml(task.owner || "N/A")}</span>
-        <span><strong>Jira:</strong> ${escapeHtml(task.jiraTicket || "N/A")}</span>
+        <span><strong>Market:</strong> ${escapeHtml(market)}</span>
+        <span><strong>Jira:</strong> ${escapeHtml(task.jiraTicket || deal?.jira || "N/A")}</span>
       </div>
       <p>${escapeHtml(task.nextStep || "Sin next step definido.")}</p>
       <small class="task-trace">${escapeHtml(getLatestTraceLine(task.traceLog) || "Sin trazabilidad registrada.")}</small>
       <div class="kanban-actions">
-        <button class="icon-button" data-action="edit-task" data-id="${escapeHtml(task.id)}">Editar</button>
-        <button class="icon-button danger" data-action="delete-task" data-id="${escapeHtml(task.id)}">Eliminar</button>
+        <button class="icon-button success" data-action="mark-task-done" data-id="${escapeHtml(task.id)}">Mark Done</button>
+        ${deal ? `<button class="icon-button" data-action="open-task-deal" data-id="${escapeHtml(task.id)}">Open Deal</button>` : ""}
+        <button class="icon-button" data-action="edit-task" data-id="${escapeHtml(task.id)}">Edit</button>
       </div>
     </article>
   `;
@@ -8009,6 +8182,22 @@ async function handleTaskAction(event) {
     setBanner(`Editando tarea: ${task.title}.`, "default");
   }
 
+  if (action === "mark-task-done") {
+    task.status = "Done";
+    task.updatedAt = new Date().toISOString();
+    const saved = await persistState();
+    renderAll();
+    setBanner(buildExcelBanner(saved ? `Action completed: ${task.title}.` : `Action completed in memory: ${task.title}.`), saved ? "success" : "warn");
+  }
+
+  if (action === "open-task-deal") {
+    const deal = getTaskRelatedDeal(task);
+    if (deal) {
+      openCompanyProfileById(deal.id);
+      setBanner(`Opened deal for action: ${task.title}.`, "default");
+    }
+  }
+
   if (action === "delete-task") {
     if (!window.confirm(`Eliminar la tarea "${task.title}"?`)) {
       return;
@@ -9403,6 +9592,156 @@ function getRiskDeals(deals = getScopedDeals()) {
     .sort((left, right) => right.severity - left.severity || compareNullableDates(left.deal.lastFollowUp, right.deal.lastFollowUp));
 }
 
+function buildExecutionAlerts(deals = getScopedDeals()) {
+  const alerts = [];
+
+  deals.forEach((deal) => {
+    const sla = getStageSlaState(deal);
+    if (sla.tone === "stuck" || sla.tone === "at-risk") {
+      alerts.push({
+        deal,
+        tone: sla.tone,
+        title: sla.tone === "stuck" ? `${sla.stage} SLA breached` : `${sla.stage} SLA nearing breach`,
+        message: `${getPrimaryOperatorName(deal)} is at ${sla.days} / ${sla.limit} days.`,
+        detail: `${deal.market || "No market"} · ${getDealOwner(deal) || "Unassigned"} · ${deal.stage}`,
+        severity: sla.tone === "stuck" ? 4 : 2,
+      });
+    }
+
+    if (!cleanText(deal.actionItems) && !cleanText(deal.followUpNotes) && !cleanText(deal.statusText)) {
+      alerts.push({
+        deal,
+        tone: "at-risk",
+        title: "Missing next action",
+        message: `${getPrimaryOperatorName(deal)} has no clear next step.`,
+        detail: `${deal.market || "No market"} · ${deal.stage || "No stage"}`,
+        severity: 2,
+      });
+    }
+
+    if (isBlockedDeal(deal)) {
+      alerts.push({
+        deal,
+        tone: "stuck",
+        title: "Blocked deal",
+        message: `${getPrimaryOperatorName(deal)} has a blocked status in the execution path.`,
+        detail: `${deal.legalStatus || deal.ddStatus || deal.integrationStatus || deal.goLiveStatus || deal.status}`,
+        severity: 5,
+      });
+    }
+  });
+
+  return alerts.sort((left, right) => right.severity - left.severity || (getStageSlaState(right.deal).ratio || 0) - (getStageSlaState(left.deal).ratio || 0));
+}
+
+function getStageEntryDate(deal) {
+  const field = STAGE_ENTRY_FIELDS[cleanText(deal.stage)];
+  return cleanText(field ? deal[field] : "") || cleanText(deal.lastFollowUp || deal.signedEta || deal.signingEta);
+}
+
+function getStageSlaState(deal) {
+  const stage = cleanText(deal.stage);
+  const limit = STAGE_SLA_DAYS[stage] || null;
+  const entryDate = getStageEntryDate(deal);
+  const days = entryDate ? daysSince(entryDate) : null;
+
+  if (!limit || days === null || days < 0) {
+    return {
+      stage,
+      limit,
+      days,
+      ratio: 0,
+      label: limit ? `No ${stage} start date` : "No SLA",
+      tone: "neutral",
+      pillClass: "neutral",
+      cardClass: "health-open",
+    };
+  }
+
+  const ratio = days / limit;
+  if (ratio > 1 || isBlockedDeal(deal)) {
+    return {
+      stage,
+      limit,
+      days,
+      ratio,
+      label: `${stage}: ${days} / ${limit} days`,
+      tone: "stuck",
+      pillClass: "blocked",
+      cardClass: "health-attention",
+    };
+  }
+
+  if (ratio >= 0.7) {
+    return {
+      stage,
+      limit,
+      days,
+      ratio,
+      label: `${stage}: ${days} / ${limit} days`,
+      tone: "at-risk",
+      pillClass: "traffic",
+      cardClass: "health-risk",
+    };
+  }
+
+  return {
+    stage,
+    limit,
+    days,
+    ratio,
+    label: `${stage}: ${days} / ${limit} days`,
+    tone: "healthy",
+    pillClass: "success",
+    cardClass: "health-healthy",
+  };
+}
+
+function renderSlaTimer(deal) {
+  const sla = getStageSlaState(deal);
+  if (!sla.limit) {
+    return `<div class="sla-timer is-neutral"><span>Stage SLA</span><strong>No active SLA</strong><small>${escapeHtml(deal.stage || "No stage")}</small></div>`;
+  }
+  const percentage = sla.days === null ? 0 : Math.min(140, Math.round(sla.ratio * 100));
+  return `
+    <div class="sla-timer is-${escapeAttribute(sla.tone)}">
+      <span>${escapeHtml(sla.stage)} SLA</span>
+      <strong>${escapeHtml(sla.days === null ? "No start date" : `${sla.days} / ${sla.limit} days`)}</strong>
+      <div class="sla-track"><i style="width:${Math.min(100, percentage)}%"></i></div>
+      <small>${escapeHtml(sla.tone === "stuck" ? "Over SLA" : sla.tone === "at-risk" ? "Near SLA" : sla.tone === "healthy" ? "On track" : "Stage date required")}</small>
+    </div>
+  `;
+}
+
+function getDealNextAction(deal) {
+  return cleanText(deal.actionItems || deal.followUpNotes || deal.updates || deal.statusText || deal.comments || "Define next action");
+}
+
+function getUpcomingGoLiveDeals(deals, windowDays = 60) {
+  return deals
+    .filter((deal) => ["Integration", "Legal Approval", "Go Live", "Live"].includes(cleanText(deal.stage)))
+    .map((deal) => {
+      const dateText = cleanText(deal.liveDate || deal.liveSince || deal.signedEta || deal.signingEta);
+      return { deal, dateText, days: dateText ? daysUntil(dateText) : null };
+    })
+    .filter((item) => item.days !== null && item.days >= 0 && item.days <= windowDays)
+    .sort((left, right) => left.days - right.days)
+    .map((item) => item.deal);
+}
+
+function isGoLiveThisMonth(deal) {
+  const dateText = cleanText(deal.liveDate || deal.liveSince);
+  if (!dateText) {
+    return false;
+  }
+  const date = new Date(`${dateText}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return false;
+  }
+  const now = new Date();
+  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
+}
+
 function isBlockedDeal(deal) {
   const fields = [deal.legalStatus, deal.ddStatus, deal.integrationStatus, deal.goLiveStatus, deal.agreement, deal.status];
   return fields.some((value) => String(value || "").toLowerCase().includes("blocked"));
@@ -9549,6 +9888,16 @@ function composeDealStateLabel(deal) {
 }
 
 function getDealHealth(deal) {
+  const sla = getStageSlaState(deal);
+  if (sla.tone === "stuck") {
+    return { label: "Stuck", pillClass: "blocked", cardClass: "health-attention" };
+  }
+  if (sla.tone === "at-risk") {
+    return { label: "At Risk", pillClass: "traffic", cardClass: "health-risk" };
+  }
+  if (sla.tone === "healthy") {
+    return { label: "Healthy", pillClass: "success", cardClass: "health-healthy" };
+  }
   if (isBlockedDeal(deal) || isInactiveDeal(deal)) {
     return { label: "Attention", pillClass: "blocked", cardClass: "health-attention" };
   }

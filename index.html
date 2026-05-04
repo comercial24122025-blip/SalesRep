@@ -170,7 +170,7 @@
           <button class="view-tab" data-view-trigger="crm">2. Intelligence</button>
           <button class="view-tab" data-view-trigger="pipeline">3. Funnel</button>
           <button class="view-tab" data-view-trigger="requests">4. Proposals & Requests</button>
-          <button class="view-tab" data-view-trigger="tasks">5. Tasks & Jira</button>
+          <button class="view-tab" data-view-trigger="tasks">5. My Actions</button>
           <button class="view-tab" data-view-trigger="campaigns">6. Growth & Handover</button>
           <button class="view-tab" data-view-trigger="targets">7. Targets & Forecast</button>
           <button class="view-tab" data-view-trigger="catalogue">8. KPIs</button>
@@ -221,6 +221,43 @@
       <main class="views">
         <section class="view is-active" data-view="dashboard">
           <div class="dashboard-layout">
+            <section class="panel panel-wide cockpit-command-center">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Revenue execution cockpit</p>
+                  <h2>Command Center</h2>
+                </div>
+                <div class="head-actions">
+                  <span id="command-center-summary" class="chip">0 actions today</span>
+                  <button type="button" class="button button-primary button-small" data-view-trigger="tasks">Open My Actions</button>
+                </div>
+              </div>
+              <div id="command-kpi-grid" class="command-kpi-grid"></div>
+              <div class="command-center-grid">
+                <section class="command-block command-block-alerts">
+                  <div class="subpanel-head">
+                    <h3>Fix Now</h3>
+                    <span id="fix-now-count" class="chip">0 alerts</span>
+                  </div>
+                  <div id="fix-now-alerts" class="fix-now-list"></div>
+                </section>
+                <section class="command-block">
+                  <div class="subpanel-head">
+                    <h3>Pipeline by Stage</h3>
+                    <span class="chip">Value + SLA pressure</span>
+                  </div>
+                  <div id="command-pipeline-bars" class="command-pipeline-bars"></div>
+                </section>
+                <section class="command-block">
+                  <div class="subpanel-head">
+                    <h3>Upcoming Go Lives</h3>
+                    <span class="chip">Next 60 days</span>
+                  </div>
+                  <div id="command-upcoming-golives" class="command-go-live-list"></div>
+                </section>
+              </div>
+            </section>
+
             <section class="panel panel-wide">
               <div class="panel-head">
                 <div>
@@ -1483,7 +1520,7 @@
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Commercial funnel</p>
-                  <h2>Pipeline Readout</h2>
+                  <h2>Pipeline Kanban</h2>
                 </div>
                 <div class="head-actions">
                   <span id="pipeline-count" class="chip">0 deals</span>
@@ -1555,6 +1592,11 @@
               </div>
 
               <div id="pipeline-board" class="kanban"></div>
+
+              <div class="subpanel-head pipeline-table-head">
+                <h3>Pipeline Table</h3>
+                <span class="chip">Detailed readout</span>
+              </div>
 
               <div class="table-wrap">
                 <table class="data-table">
@@ -1745,7 +1787,7 @@
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Execution tracking</p>
-                  <h2 id="task-form-title">Nueva tarea</h2>
+                  <h2 id="task-form-title">New Action</h2>
                 </div>
                 <span id="task-open-count" class="chip">0 abiertas</span>
               </div>
@@ -1867,7 +1909,7 @@
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Task control tower</p>
-                  <h2>Tareas por cliente, mercado y target</h2>
+                  <h2>My Actions Today</h2>
                 </div>
                 <div class="head-actions">
                   <span id="task-summary" class="chip">0 tareas</span>
