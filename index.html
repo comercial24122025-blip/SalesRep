@@ -754,8 +754,8 @@
                         </select>
                       </label>
                       <label>
-                        KAM
-                        <input name="kam" type="text" placeholder="LATAM KAM" />
+                        Owner
+                        <input name="kam" type="text" placeholder="LATAM owner" />
                       </label>
                       <label>
                         Type
@@ -1026,7 +1026,7 @@
                       </label>
                       <label>
                         Follow-Up Owner
-                        <input name="followUpOwner" type="text" placeholder="KAM or account owner" />
+                        <input name="followUpOwner" type="text" placeholder="Account owner or follow-up owner" />
                       </label>
                       <label class="full-span">
                         Follow-Up Notes
@@ -1132,7 +1132,7 @@
 
                 <div id="deal-section-requests" class="form-section">
                   <h3>Client Requests &amp; Negotiation Pack</h3>
-                  <p class="form-note">Use this block to prepare structured internal handoffs for Legal, Proposal, Integration, and commercial negotiation. Core client type, market, platform, KAM, license status, and product scope are inherited from the deal header above.</p>
+                  <p class="form-note">Use this block to prepare structured internal handoffs for Legal, Proposal, Integration, and commercial negotiation. Core client type, market, platform, owner, license status, and product scope are inherited from the deal header above.</p>
 
                   <div class="form-subsection">
                     <h4>Legal &amp; DD intake</h4>
@@ -1339,6 +1339,10 @@
                       <label class="full-span">
                         Proposal Request
                         <textarea name="proposalRequest" rows="3" placeholder="What the client is requesting in the proposal round"></textarea>
+                        <div class="field-inline-actions">
+                          <button type="button" id="seed-proposal-template-button" class="button button-ghost button-small">Use Proposal Template</button>
+                        </div>
+                        <span class="field-help">Seeds a client-facing proposal structure with Client Name, Region / Territory / Country, Valid Through Date, and Commercials.</span>
                       </label>
                       <label class="full-span">
                         Negotiated Products

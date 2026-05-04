@@ -238,13 +238,13 @@ const STAGE_OPERATION_BLUEPRINT = {
   Lead: {
     objective: "Map the account, assign ownership, and establish the first commercial contact baseline.",
     nextStage: "Proposal",
-    ownerHint: "Sales Rep / KAM",
+    ownerHint: "Sales Rep / Owner",
     primaryActionKind: null,
   },
   Qualified: {
     objective: "Validate that the operator has real commercial potential, product fit, and decision-making access.",
     nextStage: "Proposal",
-    ownerHint: "Sales Rep / KAM",
+    ownerHint: "Sales Rep / Owner",
     primaryActionKind: "proposal",
   },
   Proposal: {
@@ -481,7 +481,7 @@ const PIPELINE_CSV_COLUMNS = [
   ["Client", "client"],
   ["Operator", "operator"],
   ["Group", "groupName"],
-  ["KAM", "kam"],
+  ["Owner", "kam"],
   ["Type", "type"],
   ["Market", "market"],
   ["Jurisdiction", "jurisdiction"],
@@ -1223,6 +1223,9 @@ function bindEvents() {
   });
   document.getElementById("copy-proposal-brief-button").addEventListener("click", () => {
     void copyDealBrief("proposal");
+  });
+  document.getElementById("seed-proposal-template-button")?.addEventListener("click", () => {
+    seedProposalRequestFromTemplate();
   });
   document.getElementById("copy-integration-brief-button").addEventListener("click", () => {
     void copyDealBrief("integration");
@@ -4242,15 +4245,17 @@ function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMa
 
   const activeDeals = deals.filter((deal) => !isInactiveDeal(deal));
   const scopedTasks = Array.isArray(tasks) ? tasks : [];
-  const taskBuckets = getActionBuckets(scopedTasks);
+  const activeUser = getActiveUser();
+  const myTasks = getMyActionTasks(scopedTasks, activeUser);
+  const taskBuckets = getActionBuckets(myTasks);
   const fixNowAlerts = getFixNowAlerts(activeDeals, scopedTasks);
   const revenue = getCockpitRevenue(activeDeals);
   const stageData = getPipelineStageData(activeDeals, stageStats);
   const upcoming = getUpcomingGoLiveDeals(activeDeals, 60);
 
-  renderCockpitKpis(revenue, fixNowAlerts, taskBuckets, activeDeals);
+  renderCockpitKpis(revenue, fixNowAlerts, taskBuckets, activeDeals, activeUser);
   renderFixNowPanel(fixNowAlerts);
-  renderActionsTodayPanel(taskBuckets);
+  renderActionsTodayPanel(taskBuckets, activeUser);
   renderPipelineValueChart(stageData);
   renderTimePressurePanel(stageDurationMap);
   renderMarketOperatorBreakdown(activeDeals);
@@ -4443,16 +4448,17 @@ function formatLastUpdatedLabel(value) {
   }).format(date)}`;
 }
 
-function renderCockpitKpis(revenue, alerts, taskBuckets, deals) {
+function renderCockpitKpis(revenue, alerts, taskBuckets, deals, activeUser = getActiveUser()) {
   const fixes = alerts.filter((item) => item.tone === "danger").length;
   const actionsToday = taskBuckets.overdue.length + taskBuckets.today.length;
   const goLivesThisMonth = deals.filter((deal) => isGoLiveThisMonth(deal)).length;
-  const weightedForecastNote = `Stage, market, and operator weighted revenue in motion · ${formatLastUpdatedLabel(serverMeta.lastUpdatedAt)}`;
+  const weightedForecastNote = `Projected weighted revenue from Go Live ETA or today through ${getForecastPeriodEndLabel()} · ${formatLastUpdatedLabel(serverMeta.lastUpdatedAt)}`;
   const atRiskNote = revenue.atRiskDeals > 0
     ? `${revenue.atRiskDeals} deals flagged by SLA, blockers, or missing execution inputs`
     : "No revenue is currently flagged at risk in the visible scope";
+  const ownerLabel = getShortUserName(activeUser) || "team";
 
-  elements.commandCenterSummary.textContent = `${fixes} fix now · ${actionsToday} actions today · ${goLivesThisMonth} go lives this month`;
+  elements.commandCenterSummary.textContent = `${fixes} fix now · ${actionsToday} actions for ${ownerLabel} today · ${goLivesThisMonth} go lives this month`;
   elements.commandKpiGrid.innerHTML = [
     ["Pipeline", formatCurrency(revenue.pipeline), "Total open value across visible deals", "forecast"],
     ["Weighted Forecast", formatCurrency(revenue.weighted), weightedForecastNote, "forecast"],
@@ -4576,17 +4582,153 @@ function renderFixNowAlertCard(item) {
   `;
 }
 
-function renderActionsTodayPanel(taskBuckets) {
+function buildActionsTodaySummary(taskBuckets, activeUser = getActiveUser()) {
+  const ownerLabel = getShortUserName(activeUser) || "team";
+  const overdueCount = taskBuckets.overdue.length;
+  const todayCount = taskBuckets.today.length;
+  const blockedCount = taskBuckets.blocked.length;
+  const upcomingCount = taskBuckets.upcoming.length;
+  const primaryTask = getPrimaryActionTask(taskBuckets);
+
+  if (!primaryTask) {
+    return {
+      tone: "success",
+      title: `Today, ${ownerLabel}: no urgent actions`,
+      message: "You are clear on overdue and due-today work in the current view.",
+      detail: upcomingCount > 0
+        ? `${upcomingCount} upcoming actions remain queued next.`
+        : "No open actions are assigned right now.",
+    };
+  }
+
+  const primaryTaskLabel = buildActionTaskLabel(primaryTask);
+  const primaryDeal = getTaskRelatedDeal(primaryTask);
+  const weightedValue = primaryDeal ? getForecastValue(primaryDeal) : 0;
+  const weightedLabel = weightedValue > 0 ? `${formatCompactCurrency(weightedValue)} weighted` : "No weighted revenue linked";
+
+  if (overdueCount > 0) {
+    return {
+      tone: "danger",
+      title: `Today, ${ownerLabel}: clear overdue work first`,
+      message: `${overdueCount} overdue action${overdueCount === 1 ? "" : "s"} need attention before anything else.${todayCount > 0 ? ` Then close ${todayCount} due today.` : ""}`,
+      detail: `Start with ${primaryTaskLabel} · ${weightedLabel}`,
+    };
+  }
+
+  if (todayCount > 0) {
+    return {
+      tone: "warning",
+      title: `Today, ${ownerLabel}: close what is due today`,
+      message: `${todayCount} action${todayCount === 1 ? "" : "s"} are due today.${blockedCount > 0 ? ` ${blockedCount} blocked item${blockedCount === 1 ? " is" : "s are"} waiting behind them.` : ""}`,
+      detail: `Start with ${primaryTaskLabel} · ${weightedLabel}`,
+    };
+  }
+
+  if (blockedCount > 0) {
+    return {
+      tone: "neutral",
+      title: `Today, ${ownerLabel}: unblock stalled work`,
+      message: `${blockedCount} blocked action${blockedCount === 1 ? "" : "s"} need a decision or dependency cleared.`,
+      detail: `Start with ${primaryTaskLabel} · ${weightedLabel}`,
+    };
+  }
+
+  return {
+    tone: "success",
+    title: `Today, ${ownerLabel}: stay ahead of the queue`,
+    message: `${upcomingCount} scheduled action${upcomingCount === 1 ? "" : "s"} are next in line.`,
+    detail: `Next up: ${primaryTaskLabel} · ${weightedLabel}`,
+  };
+}
+
+function getPrimaryActionTask(taskBuckets) {
+  return taskBuckets.overdue[0] || taskBuckets.today[0] || taskBuckets.blocked[0] || taskBuckets.upcoming[0] || null;
+}
+
+function buildActionTaskLabel(task) {
+  const title = cleanText(task.title || task.nextStep) || "Untitled action";
+  const relatedDeal = getTaskRelatedDeal(task);
+  const scope = relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "No linked deal";
+  return `${title} for ${scope}`;
+}
+
+function getShortUserName(user) {
+  const name = cleanText(user?.fullName);
+  return name ? name.split(/\s+/)[0] : "";
+}
+
+function getTaskPriorityWeight(task) {
+  const priority = cleanText(task.priority);
+  if (priority === "High") {
+    return 0;
+  }
+  if (priority === "Medium") {
+    return 1;
+  }
+  return 2;
+}
+
+function sortActionTasks(tasks = []) {
+  return [...tasks].sort((left, right) => {
+    const leftDelta = cleanText(left.dueDate) ? daysUntil(left.dueDate) : Number.POSITIVE_INFINITY;
+    const rightDelta = cleanText(right.dueDate) ? daysUntil(right.dueDate) : Number.POSITIVE_INFINITY;
+    const dueDelta = leftDelta - rightDelta;
+    if (dueDelta !== 0) {
+      return dueDelta;
+    }
+
+    const priorityDelta = getTaskPriorityWeight(left) - getTaskPriorityWeight(right);
+    if (priorityDelta !== 0) {
+      return priorityDelta;
+    }
+
+    const leftImpact = getForecastValue(getTaskRelatedDeal(left) || {});
+    const rightImpact = getForecastValue(getTaskRelatedDeal(right) || {});
+    const impactDelta = rightImpact - leftImpact;
+    if (impactDelta !== 0) {
+      return impactDelta;
+    }
+
+    return cleanText(left.title).localeCompare(cleanText(right.title));
+  });
+}
+
+function getMyActionTasks(tasks = getVisibleTasks(), activeUser = getActiveUser()) {
+  const ownerName = cleanText(activeUser?.fullName).toLowerCase();
+  if (!ownerName) {
+    return sortActionTasks(tasks);
+  }
+
+  const owned = tasks.filter((task) => {
+    if (cleanText(task.owner).toLowerCase() === ownerName) {
+      return true;
+    }
+
+    const relatedDeal = getTaskRelatedDeal(task);
+    const dealOwner = cleanText(relatedDeal?.followUpOwner || getDealOwner(relatedDeal)).toLowerCase();
+    return Boolean(dealOwner) && dealOwner === ownerName;
+  });
+  return sortActionTasks(owned);
+}
+
+function renderActionsTodayPanel(taskBuckets, activeUser = getActiveUser()) {
   const sections = [
     ["Overdue", "danger", taskBuckets.overdue],
     ["Due Today", "warning", taskBuckets.today],
-    ["Upcoming", "success", taskBuckets.upcoming],
     ["Blocked", "neutral", taskBuckets.blocked],
+    ["Upcoming", "success", taskBuckets.upcoming],
   ];
   const totalActions = sections.reduce((count, [, , tasks]) => count + tasks.length, 0);
+  const summary = buildActionsTodaySummary(taskBuckets, activeUser);
 
-  elements.commandActionsCount.textContent = `${totalActions} actions`;
-  elements.commandActionsToday.innerHTML = sections
+  elements.commandActionsCount.textContent = `${totalActions} actions for ${getShortUserName(activeUser) || "team"}`;
+  elements.commandActionsToday.innerHTML = `
+    <section class="command-action-focus tone-${escapeAttribute(summary.tone)}">
+      <strong>${escapeHtml(summary.title)}</strong>
+      <p>${escapeHtml(summary.message)}</p>
+      <small>${escapeHtml(summary.detail)}</small>
+    </section>
+    ${sections
     .map(([label, tone, tasks]) => `
       <section class="command-action-section tone-${escapeAttribute(tone)}">
         <header>
@@ -4598,7 +4740,8 @@ function renderActionsTodayPanel(taskBuckets) {
         </div>
       </section>
     `)
-    .join("");
+    .join("")}
+  `;
 }
 
 function renderCommandActionCard(task) {
@@ -4606,16 +4749,27 @@ function renderCommandActionCard(task) {
   const operator = relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "No linked deal";
   const contextParts = [relatedDeal?.market, relatedDeal?.stage, task.owner].filter(Boolean);
   const dueLabel = cleanText(task.dueDate) ? formatDate(task.dueDate) : "No due date";
+  const delta = cleanText(task.dueDate) ? daysUntil(task.dueDate) : null;
+  const urgencyLabel = delta === null
+    ? "No due date"
+    : delta < 0
+      ? `${Math.abs(delta)}d overdue`
+      : delta === 0
+        ? "Due today"
+        : `Due in ${delta}d`;
+  const weightedValue = relatedDeal ? getForecastValue(relatedDeal) : 0;
+  const impactLabel = weightedValue > 0 ? `${formatCompactCurrency(weightedValue)} weighted` : "";
 
   return `
     <article class="command-action-card">
       <div class="command-action-copy">
-        <strong>${escapeHtml(task.title || "Untitled action")}</strong>
+        <strong>${escapeHtml(task.title || task.nextStep || "Untitled action")}</strong>
         <span>${escapeHtml(operator)}</span>
         <small>${escapeHtml(contextParts.join(" · ") || "No owner or stage assigned")}</small>
       </div>
       <div class="command-action-meta">
-        <em>${escapeHtml(dueLabel)}</em>
+        <em>${escapeHtml(urgencyLabel)}</em>
+        <small>${escapeHtml([task.priority || "Medium", dueLabel, impactLabel].filter(Boolean).join(" · "))}</small>
         <div class="command-action-buttons">
           <button type="button" class="icon-button success" data-action="mark-task-done" data-id="${escapeAttribute(task.id)}">Mark Done</button>
           ${relatedDeal ? `<button type="button" class="icon-button" data-action="open-task-deal" data-id="${escapeAttribute(task.id)}">Open Deal</button>` : ""}
@@ -6650,7 +6804,7 @@ function collectCompanyContactRows(deals) {
     pushContact("Support", "Customer Support", deal.supportEmail, deal.market);
     pushContact("Management", "Management", deal.managementEmail, deal.market);
     pushContact("Integration", "Integration", deal.integrationEmail, deal.market);
-    pushContact("Account Owner", owner, ownerUser?.email, deal.market);
+    pushContact("Owner", owner, ownerUser?.email, deal.market);
   });
 
   return contacts;
@@ -7614,6 +7768,11 @@ function getActionBuckets(tasks = getVisibleTasks()) {
       buckets.upcoming.push(task);
     }
   });
+
+  buckets.overdue = sortActionTasks(buckets.overdue);
+  buckets.today = sortActionTasks(buckets.today);
+  buckets.upcoming = sortActionTasks(buckets.upcoming);
+  buckets.blocked = sortActionTasks(buckets.blocked);
 
   return buckets;
 }
@@ -10622,7 +10781,7 @@ function renderDealIntakeAssistantFromForm() {
     },
     {
       label: "Ownership",
-      note: "KAM, stage, source, and commercial model should be visible.",
+      note: "Account owner, stage, source, and commercial model should be visible.",
       ready: hasAnyText(getDealOwner(draft), draft.stage, draft.source, draft.type),
     },
     {
@@ -12830,11 +12989,79 @@ function getDealValueAmount(deal) {
   return Number(deal?.dealValue || 0);
 }
 
-function getForecastValue(deal) {
-  if (!deal || isLiveAccountStage(deal.stage) || isInactiveDeal(deal)) {
+function getCurrentForecastPeriodBounds() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endOfYear = new Date(today.getFullYear(), 11, 31);
+  endOfYear.setHours(0, 0, 0, 0);
+  return {
+    start: today,
+    end: endOfYear,
+    year: today.getFullYear(),
+  };
+}
+
+function getForecastStartDate(deal) {
+  const { start, end, year } = getCurrentForecastPeriodBounds();
+  const startOfYear = new Date(year, 0, 1);
+  startOfYear.setHours(0, 0, 0, 0);
+  const today = new Date(start);
+
+  const liveDateText = cleanText(deal?.liveDate || deal?.liveSince);
+  const liveDate = liveDateText ? new Date(`${liveDateText}T00:00:00`) : null;
+  if (liveDate && !Number.isNaN(liveDate.getTime())) {
+    liveDate.setHours(0, 0, 0, 0);
+  }
+
+  if (isLiveAccountStage(deal?.stage) && liveDate && liveDate >= startOfYear && liveDate <= end) {
+    return liveDate;
+  }
+
+  const etaText = cleanText(deal?.liveDate);
+  const etaDate = etaText ? new Date(`${etaText}T00:00:00`) : null;
+  if (etaDate && !Number.isNaN(etaDate.getTime())) {
+    etaDate.setHours(0, 0, 0, 0);
+    if (etaDate > today) {
+      return etaDate;
+    }
+  }
+
+  return today;
+}
+
+function getForecastProrationFactor(deal) {
+  const { start, end, year } = getCurrentForecastPeriodBounds();
+  const projectionStart = getForecastStartDate(deal);
+
+  if (projectionStart > end) {
     return 0;
   }
-  return getDealValueAmount(deal) * getForecastProbability(deal);
+
+  const startOfYear = new Date(year, 0, 1);
+  startOfYear.setHours(0, 0, 0, 0);
+  const totalDaysInYear = Math.floor((end.getTime() - startOfYear.getTime()) / 86400000) + 1;
+  const projectedDays = Math.floor((end.getTime() - projectionStart.getTime()) / 86400000) + 1;
+
+  return clampNumber(projectedDays / totalDaysInYear, 0, 1);
+}
+
+function getForecastPeriodLabel() {
+  const { start, end } = getCurrentForecastPeriodBounds();
+  const startLabel = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(start);
+  const endLabel = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(end);
+  return `${startLabel} to ${endLabel}`;
+}
+
+function getForecastPeriodEndLabel() {
+  const { end } = getCurrentForecastPeriodBounds();
+  return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(end);
+}
+
+function getForecastValue(deal) {
+  if (!deal || isInactiveDeal(deal)) {
+    return 0;
+  }
+  return getDealValueAmount(deal) * getForecastProrationFactor(deal) * getForecastProbability(deal);
 }
 
 function resolveDealValue(input) {
@@ -12958,7 +13185,7 @@ function getRequestPackStatusItems(deal) {
       { label: "Commercial Schedule", value: deal.commercialSchedule },
       { label: "Pricing Base", value: deal.pricingBase },
       { label: "Deductions", value: deal.deductionTerms },
-      { label: "Validity", value: buildProposalValidityText(deal) },
+      { label: "Valid Through Date", value: buildProposalValidThroughDateLabel(deal) },
       { label: "Activation Requirements", value: deal.activationRequirements },
     ]),
     buildRequestPackStatusItem("DD Request", [
@@ -13096,7 +13323,7 @@ function buildStageOperationalChecklist(stage, deal) {
       return [
         buildOperationalRequirement("Account identity", hasAnyText(deal.deal, deal.client, deal.operator), "Deal, client, or operator should be named."),
         buildOperationalRequirement("Market assigned", hasAnyText(deal.market), "Market should be visible before qualification starts."),
-        buildOperationalRequirement("Owner assigned", hasAnyText(getDealOwner(deal)), "A clear KAM or owner is required."),
+        buildOperationalRequirement("Owner assigned", hasAnyText(getDealOwner(deal)), "A clear owner is required."),
         buildOperationalRequirement("Lead source logged", hasAnyText(deal.source), "Capture inbound, outbound, partner, or referral source."),
         buildOperationalRequirement("Primary contact mapped", hasAnyText(deal.primaryContact, deal.decisionMaker), "At least one commercial contact should be known."),
       ];
@@ -13702,6 +13929,35 @@ function buildDocumentClientName(deal) {
   return buildBriefValue(deal.documentClientName, deal.companyName, deal.client, deal.operator, deal.deal);
 }
 
+function buildProposalValidThroughDateLabel(deal) {
+  const validUntil = getProposalValidUntil(deal);
+  return validUntil ? formatDate(validUntil) : "TBC";
+}
+
+function buildProposalCommercialsSummary(deal) {
+  return [
+    `Pricing Base: ${buildBriefValue(deal.pricingBase)}`,
+    `Commercial Terms: ${buildBriefValue(deal.commercialTerms)}`,
+    `Commercial Schedule: ${buildBriefValue(deal.commercialSchedule)}`,
+    `Setup Fee EUR: ${buildBriefValue(deal.setupFeeAmount)}`,
+    `Deductions Allowed: ${buildBriefValue(deal.deductionsAllowed, deal.deductionTerms)}`,
+    `Bonus Cap %: ${buildBriefValue(deal.bonusCap)}`,
+    `Tax %: ${buildBriefValue(deal.gamingTax)}`,
+    `Withholding %: ${buildBriefValue(deal.withholdingTax)}`,
+  ].join("\n");
+}
+
+function buildProposalRequestTemplate(deal) {
+  return [
+    `Client Name: ${buildDocumentClientName(deal)}`,
+    `Region / Territory / Country: ${buildBriefValue(deal.market, deal.jurisdiction, deal.clientBased)}`,
+    `Valid Through Date: ${buildProposalValidThroughDateLabel(deal)}`,
+    "",
+    "Commercials:",
+    buildProposalCommercialsSummary(deal),
+  ].join("\n");
+}
+
 function getProposalValidityDays(deal) {
   const days = toNullableNumber(deal.proposalValidityDays);
   return days && days > 0 ? days : 30;
@@ -13733,6 +13989,21 @@ function buildProposalValidityText(deal) {
   const validUntil = getProposalValidUntil(deal);
   const monthHint = days >= 28 && days <= 31 ? " (1 month)" : "";
   return validUntil ? `${days} days${monthHint} · valid until ${formatDate(validUntil)}` : `${days} days${monthHint} from issue date`;
+}
+
+function seedProposalRequestFromTemplate() {
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const proposalField = dealForm.elements.proposalRequest;
+  if (!proposalField) {
+    return;
+  }
+
+  proposalField.value = buildProposalRequestTemplate(draft);
+  proposalField.dispatchEvent(new Event("input", { bubbles: true }));
+  proposalField.dispatchEvent(new Event("change", { bubbles: true }));
+  refreshDealFieldHighlights();
+  setBanner("Proposal Request seeded from the commercial proposal template.", "success");
 }
 
 function parseCommercialScheduleRows(value) {
@@ -13859,7 +14130,7 @@ function buildIntegrationRequestBrief(deal) {
     `Other live suppliers: ${buildBriefValue(deal.otherLiveSuppliers)}`,
     `Potential: ${buildBriefValue(deal.priorityClass, deal.targetPriority)}`,
     `Priority: ${buildBriefValue(deal.targetPriority)}`,
-    `KAM: ${buildBriefValue(deal.kam)}`,
+    `Owner: ${buildBriefValue(deal.kam)}`,
     `License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
     `Integration team: ${buildBriefValue(deal.integrationTeam)}`,
     `Products: ${buildNegotiatedProductsValue(deal)}`,
@@ -13938,12 +14209,13 @@ function buildDdRequestBrief(deal) {
 
 function buildProposalRequestBrief(deal) {
   const scheduleLines = buildCommercialScheduleBriefLines(deal);
+  const proposalScope = cleanText(deal.proposalRequest) || buildProposalRequestTemplate(deal);
   return [
     "Commercial Proposal",
     "",
     "Executive Summary",
     buildBriefValue(
-      deal.proposalRequest,
+      proposalScope,
       deal.statusText,
       `This commercial proposal outlines the Evolution standard offering and commercial framework for ${buildDocumentClientName(deal)}.`
     ),
@@ -13959,17 +14231,17 @@ function buildProposalRequestBrief(deal) {
     "Big Time Gaming and Nolimit City: Distinctive slots and high-engagement mechanics.",
     "",
     "Our Commercial Proposal",
-    `Client: ${buildDocumentClientName(deal)}`,
+    `Client Name: ${buildDocumentClientName(deal)}`,
     `Deal: ${buildBriefValue(deal.deal)}`,
-    `Market: ${buildBriefValue(deal.market)}`,
+    `Region / Territory / Country: ${buildBriefValue(deal.market, deal.jurisdiction, deal.clientBased)}`,
     `Segment: ${buildBriefValue(deal.segment, deal.type)}`,
     `Platform: ${buildBriefValue(deal.platform)}`,
-    `Proposal validity: ${buildProposalValidityText(deal)}`,
+    `Valid Through Date: ${buildProposalValidThroughDateLabel(deal)}`,
     `Requested products: ${buildNegotiatedProductsValue(deal)}`,
     `Strategic fit: ${buildBriefValue(deal.strategicFit)}`,
     `Revenue potential EUR: ${buildBriefValue(deal.revenuePotentialEur || deal.dealValue)}`,
     "",
-    "Our Offering and Pricing",
+    "Commercials",
     `Commercial terms: ${buildBriefValue(deal.commercialTerms)}`,
     `Pricing base: ${buildBriefValue(deal.pricingBase)}`,
     `Activation requirements: ${buildBriefValue(deal.activationRequirements)}`,

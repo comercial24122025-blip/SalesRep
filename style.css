@@ -1834,6 +1834,12 @@ textarea {
   font-weight: 600;
 }
 
+.field-inline-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
 .form-subsection {
   display: grid;
   gap: 14px;
@@ -4583,12 +4589,58 @@ button.stage-card {
 
 .command-action-section,
 .command-action-card,
+.command-action-focus,
 .command-time-row,
 .salesforce-bar-row,
 .command-breakdown-card {
   border-radius: 10px;
   border: 1px solid var(--border-soft);
   background: rgba(255, 255, 255, 0.92);
+}
+
+.command-action-focus {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.command-action-focus strong,
+.command-action-focus p,
+.command-action-focus small {
+  margin: 0;
+}
+
+.command-action-focus strong {
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.command-action-focus p {
+  color: var(--ink);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.command-action-focus small {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.command-action-focus.tone-danger {
+  border-color: rgba(239, 68, 68, 0.28);
+  background: linear-gradient(180deg, rgba(255, 248, 247, 0.98), rgba(255, 242, 241, 0.94));
+}
+
+.command-action-focus.tone-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: linear-gradient(180deg, rgba(255, 252, 246, 0.98), rgba(255, 247, 233, 0.94));
+}
+
+.command-action-focus.tone-success,
+.command-action-focus.tone-neutral {
+  border-color: rgba(34, 197, 94, 0.24);
+  background: linear-gradient(180deg, rgba(245, 252, 248, 0.98), rgba(238, 250, 243, 0.94));
 }
 
 .command-action-section {
@@ -4662,7 +4714,8 @@ button.stage-card {
 }
 
 .command-action-copy small,
-.command-action-meta em {
+.command-action-meta em,
+.command-action-meta small {
   color: var(--ink-soft);
   font-size: 0.78rem;
 }
@@ -4672,7 +4725,8 @@ button.stage-card {
   align-content: start;
 }
 
-.command-action-meta em {
+.command-action-meta em,
+.command-action-meta small {
   font-style: normal;
 }
 
