@@ -29,11 +29,13 @@ jobs:
 
       - name: Build static artifact
         run: |
-          mkdir -p dist/data
+          mkdir -p dist/data dist/assets
           cp index.html dist/index.html
           cp script.js dist/script.js
           cp style.css dist/style.css
+          cp -R assets/. dist/assets/
           cp data/published-state.json dist/data/published-state.json
+          cp data/pipeline-command-center.xlsx dist/data/pipeline-command-center.xlsx
           touch dist/.nojekyll
 
       - name: Upload Pages artifact

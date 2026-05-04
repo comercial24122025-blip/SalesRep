@@ -8,8 +8,6 @@ const API_UPLOAD_URL = resolveApiUrl("/api/upload");
 const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
-const BROWSER_STATE_STORAGE_KEY = "salesrep-published-state-v1";
-const DEAL_FORM_AUTOSAVE_STORAGE_KEY = "salesrep-deal-autosave-v1";
 const DEAL_FORM_AUTOSAVE_DELAY_MS = 450;
 const DEAL_FORM_SECTION_DEFS = [
   ["deal-section-core", "Core"],
@@ -79,6 +77,35 @@ const STAGE_FORECAST_WEIGHTS = {
   "Go Live": 0.98,
   Live: 1,
   Handover: 1,
+};
+const LATAM_MARKET_FORECAST_MULTIPLIERS = {
+  Mexico: 1.08,
+  Peru: 1.04,
+  Colombia: 1.03,
+  Chile: 1.01,
+  Panama: 1.01,
+  "Costa Rica": 1,
+  "Dominican Republic": 0.98,
+  Argentina: 0.96,
+  Brazil: 0.95,
+  Ecuador: 0.94,
+  Guatemala: 0.95,
+  Venezuela: 0.82,
+  LATAM: 1,
+  Global: 1,
+};
+const OPERATOR_TYPE_FORECAST_MULTIPLIERS = {
+  B2C: 1.06,
+  B2B: 0.94,
+  Retail: 0.92,
+  Social: 0.88,
+  "B2B / B2C": 0.99,
+  "B2C + Retail": 0.97,
+  "Existing Account": 1.1,
+  Upsell: 1.12,
+  Renewal: 1.08,
+  Reactivation: 0.97,
+  "New Account": 0.94,
 };
 const STAGE_CADENCE_MILESTONES = [
   ["Lead", "prospectDate"],
@@ -651,9 +678,23 @@ const DEAL_FORM_SECTION_FIELD_MAP = buildDealFormSectionFieldMap();
 
 const viewTabs = Array.from(document.querySelectorAll("[data-view-trigger]"));
 const views = Array.from(document.querySelectorAll("[data-view]"));
+const VIEW_SCROLL_TARGETS = {
+  dashboard: ".cockpit-command-center",
+  tasks: "#task-board",
+  admin: "#workspace-form",
+  crm: "#market-intel-board",
+  pipeline: "#pipeline-board",
+  requests: "#requests-board",
+  targets: "#target-progress",
+  campaigns: "#campaign-board",
+  catalogue: "#kpi-grid",
+};
+const NAV_HIGHLIGHT_DURATION_MS = 1800;
 
 const elements = {
   focusSummary: document.getElementById("focus-summary"),
+  operatingFlowShell: document.getElementById("operating-flow-shell"),
+  operatingFlowToggle: document.getElementById("operating-flow-toggle"),
   heroStats: document.getElementById("hero-stats"),
   activeUserSelect: document.getElementById("active-user-select"),
   workspaceDropdownTitle: document.getElementById("workspace-dropdown-title"),
@@ -661,6 +702,9 @@ const elements = {
   workspaceBadge: document.getElementById("workspace-badge"),
   workspacePlanBadge: document.getElementById("workspace-plan-badge"),
   workspaceUserRole: document.getElementById("workspace-user-role"),
+  workspaceHistorySummary: document.getElementById("workspace-history-summary"),
+  workspaceHistoryCopy: document.getElementById("workspace-history-copy"),
+  workspaceHistoryPreview: document.getElementById("workspace-history-preview"),
   moduleFlowSummary: document.getElementById("module-flow-summary"),
   moduleFlowGrid: document.getElementById("module-flow-grid"),
   workflowCurrentTitle: document.getElementById("workflow-current-title"),
@@ -843,11 +887,16 @@ const ui = {
   kpiSearch: "",
   isHydrating: true,
   companyAssistKey: "",
+  dealAutosaveStore: { drafts: {} },
   dealAutosaveStatus: "idle",
   dealAutosaveSavedAt: "",
   dealAutosaveBaseline: null,
   dealAutosaveRestored: false,
   dealModalOpen: false,
+  operatingFlowCollapsed: false,
+  lastScrollY: 0,
+  navHighlightTimer: 0,
+  navHighlightNodes: [],
 };
 
 let state = {
@@ -859,6 +908,7 @@ let state = {
   campaigns: [],
   users: [],
   workspace: {},
+  history: [],
   latamReference: {
     markets: [],
     stageTotals: [],
@@ -872,6 +922,7 @@ let dealAutosaveTimer = 0;
 const serverMeta = {
   workbookPath: "",
   workbookUrl: STATIC_WORKBOOK_URL,
+  lastUpdatedAt: "",
   ready: false,
   storageMode: "static",
 };
@@ -1024,7 +1075,7 @@ function rebuildDerivedState(force = false) {
 init();
 
 async function init() {
-  setLoadingState(true, "Loading workbook", "Syncing pipeline, tasks, market intelligence, and forecast data from Excel.");
+  setLoadingState(true, "Loading workspace", "Syncing live pipeline, tasks, market intelligence, and forecast data.");
   bindEvents();
   resetDealForm();
   resetMarketIntelForm();
@@ -1039,11 +1090,19 @@ async function init() {
 }
 
 function bindEvents() {
+  ui.lastScrollY = window.scrollY || 0;
+
   viewTabs.forEach((button) => {
     button.addEventListener("click", () => {
-      ui.activeView = button.dataset.viewTrigger;
-      renderViewState();
+      activateView(button.dataset.viewTrigger);
     });
+  });
+
+  elements.operatingFlowToggle?.addEventListener("click", () => {
+    ui.operatingFlowCollapsed = false;
+    renderOperatingFlowVisibility();
+    elements.operatingFlowShell?.scrollIntoView({ block: "start", behavior: "smooth" });
+    pulseNavigationTarget(elements.operatingFlowShell);
   });
 
   document.getElementById("reset-demo-button").addEventListener("click", () => {
@@ -1506,6 +1565,9 @@ function bindEvents() {
     }
   });
 
+  window.addEventListener("scroll", handleOperatingFlowScroll, { passive: true });
+  window.addEventListener("resize", handleOperatingFlowResize);
+
   document.getElementById("export-pipeline-csv").addEventListener("click", () => {
     const rows = getFilteredDeals();
     const filename = buildExportFilename("pipeline-visible", "csv");
@@ -1551,33 +1613,17 @@ async function hydrateFromExcel(options = {}) {
     resetUserForm();
     serverMeta.workbookPath = payload.workbookPath || "";
     serverMeta.workbookUrl = resolveApiUrl(payload.workbookUrl || API_DOWNLOAD_URL);
+    serverMeta.lastUpdatedAt = cleanText(payload.savedAt) || cleanText(payload.updatedAt) || cleanText(payload.generatedAt) || "";
     serverMeta.ready = true;
     serverMeta.storageMode = "excel";
     if (showSuccessBanner) {
       setBanner(buildExcelBanner("Datos cargados desde Excel."), "success");
     }
   } catch (error) {
-    const cachedPayload = readBrowserStateCache();
-    if (cachedPayload) {
-      applyStatePayload(cachedPayload);
-      synchronizeTaskSequence();
-      ensureActiveUser();
-      resetWorkspaceForm();
-      resetUserForm();
-      serverMeta.workbookPath = "GitHub published workspace";
-      serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
-      serverMeta.ready = false;
-      serverMeta.storageMode = "browser";
-      if (showSuccessBanner) {
-        setBanner(buildExcelBanner("Loaded browser-saved workspace state."), "success");
-      }
-      return;
-    }
-
     try {
       const publishedResponse = await fetch(STATIC_STATE_URL, { headers: { Accept: "application/json" } });
       if (!publishedResponse.ok) {
-        throw new Error(`No fue posible leer el snapshot publicado (${publishedResponse.status}).`);
+        throw new Error(`No fue posible leer la base publicada (${publishedResponse.status}).`);
       }
 
       const publishedPayload = await publishedResponse.json();
@@ -1586,12 +1632,13 @@ async function hydrateFromExcel(options = {}) {
       ensureActiveUser();
       resetWorkspaceForm();
       resetUserForm();
-      serverMeta.workbookPath = "GitHub published snapshot";
+      serverMeta.workbookPath = "GitHub published workspace baseline";
       serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
+      serverMeta.lastUpdatedAt = cleanText(publishedPayload.savedAt) || cleanText(publishedPayload.updatedAt) || cleanText(publishedPayload.generatedAt) || cleanText(publishedPayload.history?.[0]?.createdAt) || "";
       serverMeta.ready = false;
       serverMeta.storageMode = "static";
       if (showSuccessBanner) {
-        setBanner(buildExcelBanner("Loaded published GitHub snapshot."), "success");
+        setBanner(buildExcelBanner("Loaded published GitHub workspace baseline."), "success");
       }
       return;
     } catch (publishedError) {
@@ -1603,7 +1650,7 @@ async function hydrateFromExcel(options = {}) {
       resetWorkspaceForm();
       resetUserForm();
       setBanner(
-        "No pude conectarme al Excel ni cargar el snapshot publicado. Inicia `./start-server.sh` o vuelve a publicar los datos en GitHub.",
+        "No pude conectarme al Excel ni cargar la base publicada. Inicia `./start-server.sh` o vuelve a publicar los datos en GitHub.",
         "danger"
       );
     }
@@ -1637,37 +1684,23 @@ async function persistState() {
     const payload = await response.json();
     serverMeta.workbookPath = payload.workbookPath || serverMeta.workbookPath;
     serverMeta.workbookUrl = resolveApiUrl(payload.workbookUrl || API_DOWNLOAD_URL);
+    serverMeta.lastUpdatedAt = cleanText(payload.savedAt) || new Date().toISOString();
     serverMeta.ready = true;
     serverMeta.storageMode = "excel";
+    recordWorkspaceHistory("Workspace sync", "Changes saved to the connected workbook.", { storageMode: "excel" });
     await hydrateFromExcel({ showSuccessBanner: false });
     return true;
   } catch (error) {
     serverMeta.ready = false;
-    serverMeta.workbookPath = "GitHub published workspace";
+    serverMeta.workbookPath = "GitHub published workspace baseline";
     serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
-    serverMeta.storageMode = "browser";
-    const savedToBrowser = writeBrowserStateCache({
-      deals: state.deals,
-      marketIntel: state.marketIntel,
-      targets: state.targets,
-      kpis: state.kpis,
-      tasks: state.tasks,
-      campaigns: state.campaigns,
-      users: state.users,
-      workspace: state.workspace,
-      latamReference: state.latamReference,
+    serverMeta.lastUpdatedAt = new Date().toISOString();
+    serverMeta.storageMode = "session";
+    recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
+      storageMode: "session",
     });
-
-    if (!savedToBrowser) {
-      setBanner(
-        "No se pudo persistir en Excel ni en el navegador. Los cambios siguen en memoria para esta sesion.",
-        "warn"
-      );
-      return false;
-    }
-
-    setBanner("Excel backend unavailable. Changes were saved in this browser for the published GitHub app.", "warn");
-    return true;
+    setBanner("Excel backend unavailable. The online workspace stays visible, but changes are session-only until a workbook backend is connected.", "warn");
+    return false;
   }
 }
 
@@ -1681,34 +1714,48 @@ function applyStatePayload(payload) {
     campaigns: Array.isArray(payload?.campaigns) ? payload.campaigns.map(normalizeCampaign) : [],
     users: Array.isArray(payload?.users) ? payload.users.map(normalizeUser) : createDefaultUsers(),
     workspace: normalizeWorkspace(payload?.workspace),
+    history: Array.isArray(payload?.history) ? payload.history.filter((item) => item && typeof item === "object") : [],
     latamReference: normalizeLatamReference(payload?.latamReference),
   };
 }
 
 function readBrowserStateCache() {
-  try {
-    const raw = window.localStorage.getItem(BROWSER_STATE_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 function writeBrowserStateCache(payload) {
-  try {
-    window.localStorage.setItem(BROWSER_STATE_STORAGE_KEY, JSON.stringify(payload));
-    return true;
-  } catch {
-    return false;
-  }
+  void payload;
+  return false;
+}
+
+function readWorkspaceHistory() {
+  return Array.isArray(state?.history) ? [...state.history] : [];
+}
+
+function writeWorkspaceHistory(history) {
+  state.history = Array.isArray(history) ? [...history] : [];
+  return true;
+}
+
+function recordWorkspaceHistory(action, detail, meta = {}) {
+  const entry = {
+    id: generateId("history"),
+    action: cleanText(action) || "Workspace updated",
+    detail: cleanText(detail) || "Change recorded",
+    storageMode: meta.storageMode || serverMeta.storageMode || "session",
+    entityType: cleanText(meta.entityType),
+    entityId: cleanText(meta.entityId),
+    actor: getActiveUser()?.fullName || "Workspace user",
+    createdAt: new Date().toISOString(),
+  };
+  const history = [entry, ...readWorkspaceHistory()].slice(0, 250);
+  state.history = history;
+  writeWorkspaceHistory(history);
+  return entry;
 }
 
 function clearBrowserStateCache() {
-  try {
-    window.localStorage.removeItem(BROWSER_STATE_STORAGE_KEY);
-  } catch {
-    // Ignore localStorage cleanup issues in restricted browser contexts.
-  }
+  return;
 }
 
 function buildDealFormSectionFieldMap() {
@@ -1737,22 +1784,18 @@ function buildDealFormSectionFieldMap() {
 }
 
 function readDealAutosaveStore() {
-  try {
-    const raw = window.localStorage.getItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : null;
-    return parsed && typeof parsed === "object" && parsed.drafts && typeof parsed.drafts === "object" ? parsed : { drafts: {} };
-  } catch {
-    return { drafts: {} };
+  if (!ui.dealAutosaveStore || typeof ui.dealAutosaveStore !== "object") {
+    ui.dealAutosaveStore = { drafts: {} };
   }
+  if (!ui.dealAutosaveStore.drafts || typeof ui.dealAutosaveStore.drafts !== "object") {
+    ui.dealAutosaveStore.drafts = {};
+  }
+  return ui.dealAutosaveStore;
 }
 
 function writeDealAutosaveStore(payload) {
-  try {
-    window.localStorage.setItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY, JSON.stringify(payload));
-    return true;
-  } catch {
-    return false;
-  }
+  ui.dealAutosaveStore = payload && typeof payload === "object" ? payload : { drafts: {} };
+  return true;
 }
 
 function getActiveDealAutosaveKey() {
@@ -1941,14 +1984,6 @@ function clearDealAutosaveEntry(key) {
     return;
   }
   delete store.drafts[key];
-  try {
-    if (Object.keys(store.drafts).length === 0) {
-      window.localStorage.removeItem(DEAL_FORM_AUTOSAVE_STORAGE_KEY);
-      return;
-    }
-  } catch {
-    // Ignore restricted localStorage contexts.
-  }
   writeDealAutosaveStore(store);
 }
 
@@ -3511,7 +3546,7 @@ function renderAll() {
   renderCompanyProfileDrawer();
 }
 
-function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing Cube One from the local Excel workspace.") {
+function setLoadingState(isLoading, title = "Loading workspace", copy = "Syncing Cube One from the live local workspace.") {
   ui.isHydrating = Boolean(isLoading);
   document.body.classList.toggle("app-loading", ui.isHydrating);
   elements.loadingOverlay.classList.toggle("is-visible", ui.isHydrating);
@@ -3546,6 +3581,91 @@ function renderViewState() {
   elements.dealModalShell?.toggleAttribute("hidden", !ui.dealModalOpen);
   elements.dealModalShell?.setAttribute("aria-hidden", ui.dealModalOpen ? "false" : "true");
   document.body.classList.toggle("deal-modal-open", ui.dealModalOpen);
+  renderOperatingFlowVisibility();
+}
+
+function getViewContainer(viewName) {
+  return views.find((view) => view.dataset.view === viewName) || null;
+}
+
+function scrollToViewTarget(viewName, selector = "") {
+  const container = getViewContainer(viewName);
+  if (!container) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    return null;
+  }
+
+  const targetSelector = selector || VIEW_SCROLL_TARGETS[viewName] || "";
+  const target = targetSelector ? container.querySelector(targetSelector) : container;
+  const fallback = target || container;
+
+  fallback.scrollIntoView({ block: "start", behavior: "smooth" });
+  return fallback;
+}
+
+function activateView(viewName, options = {}) {
+  const nextView = cleanText(viewName) || "dashboard";
+  ui.activeView = nextView;
+  renderViewState();
+
+  if (options.scroll === false) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const target = scrollToViewTarget(nextView, options.targetSelector || "");
+    pulseNavigationTarget(target, options);
+  });
+}
+
+function resolveNavigationHighlightTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return null;
+  }
+  return target.closest(".panel, .workflow-command-shell, .module-flow-shell, .company-command-bar, .view-nav-shell") || target;
+}
+
+function focusFirstEditableField(target) {
+  if (!(target instanceof HTMLElement)) {
+    return;
+  }
+  const field = target.matches("input, select, textarea")
+    ? target
+    : target.querySelector("input:not([type='hidden']):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])");
+
+  if (field instanceof HTMLElement) {
+    field.focus({ preventScroll: true });
+    if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+      field.select?.();
+    }
+  }
+}
+
+function pulseNavigationTarget(target, options = {}) {
+  const resolvedTarget = target instanceof HTMLElement ? target : null;
+  const highlightPanel = resolveNavigationHighlightTarget(resolvedTarget);
+  const nodes = [];
+
+  if (highlightPanel) {
+    nodes.push({ node: highlightPanel, className: "is-nav-target" });
+  }
+  if (options.editMode && resolvedTarget && resolvedTarget !== highlightPanel) {
+    nodes.push({ node: resolvedTarget, className: "is-edit-target" });
+  }
+
+  ui.navHighlightNodes.forEach(({ node, className }) => node?.classList?.remove(className));
+  ui.navHighlightNodes = nodes;
+
+  nodes.forEach(({ node, className }) => node.classList.add(className));
+  window.clearTimeout(ui.navHighlightTimer);
+  ui.navHighlightTimer = window.setTimeout(() => {
+    ui.navHighlightNodes.forEach(({ node, className }) => node?.classList?.remove(className));
+    ui.navHighlightNodes = [];
+  }, NAV_HIGHLIGHT_DURATION_MS);
+
+  if (options.focusField) {
+    window.setTimeout(() => focusFirstEditableField(resolvedTarget || highlightPanel), 260);
+  }
 }
 
 function renderWorkspaceChrome() {
@@ -3572,6 +3692,7 @@ function renderWorkspaceChrome() {
       ? `${activeUser.fullName} · ${activeUser.role}`
       : `${workspace.organizationName} · ${workspace.subscriptionPlan}`;
   }
+  renderWorkspaceHistoryPreview();
 
   const ownerSelect = taskForm?.elements?.owner;
   if (ownerSelect) {
@@ -3584,6 +3705,110 @@ function renderWorkspaceChrome() {
     ]);
     setSelectOptions(ownerSelect, names, currentValue);
   }
+}
+
+function formatHistoryTimestamp(value) {
+  if (!value) {
+    return "No recent changes";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "No recent changes";
+  }
+
+  const deltaMs = Date.now() - date.getTime();
+  const deltaMinutes = Math.max(0, Math.round(deltaMs / 60000));
+
+  if (deltaMinutes < 1) {
+    return "Just now";
+  }
+  if (deltaMinutes < 60) {
+    return `${deltaMinutes}m ago`;
+  }
+
+  const deltaHours = Math.round(deltaMinutes / 60);
+  if (deltaHours < 24) {
+    return `${deltaHours}h ago`;
+  }
+
+  return formatDate(value);
+}
+
+function renderWorkspaceHistoryPreview() {
+  const history = Array.isArray(state.history) ? state.history.slice(0, 3) : [];
+  const latestEntry = history[0];
+
+  if (elements.workspaceHistorySummary) {
+    elements.workspaceHistorySummary.textContent = history.length ? `${history.length} events tracked` : "History starting";
+  }
+  if (elements.workspaceHistoryCopy) {
+    elements.workspaceHistoryCopy.textContent = latestEntry
+      ? `${formatHistoryTimestamp(latestEntry.createdAt)} · ${latestEntry.action}`
+      : "Changes are tracked as the workspace moves.";
+  }
+  if (elements.workspaceHistoryPreview) {
+    elements.workspaceHistoryPreview.innerHTML = history.length
+      ? history
+          .map(
+            (entry) => `
+              <article class="history-mini-item">
+                <strong>${escapeHtml(entry.action)}</strong>
+                <span>${escapeHtml(entry.detail)}</span>
+                <small>${escapeHtml(formatHistoryTimestamp(entry.createdAt))}</small>
+              </article>
+            `
+          )
+          .join("")
+      : '<div class="history-mini-empty">Your next save or stage move will appear here.</div>';
+  }
+}
+
+function renderOperatingFlowVisibility() {
+  const shouldCollapse = ui.operatingFlowCollapsed && window.innerWidth > 960;
+  elements.operatingFlowShell?.classList.toggle("is-collapsed", shouldCollapse);
+  elements.operatingFlowToggle?.classList.toggle("is-visible", shouldCollapse);
+  elements.operatingFlowToggle?.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
+}
+
+function handleOperatingFlowScroll() {
+  if (window.innerWidth <= 960) {
+    if (ui.operatingFlowCollapsed) {
+      ui.operatingFlowCollapsed = false;
+      renderOperatingFlowVisibility();
+    }
+    ui.lastScrollY = window.scrollY || 0;
+    return;
+  }
+
+  const currentScrollY = window.scrollY || 0;
+  const delta = currentScrollY - ui.lastScrollY;
+
+  if (currentScrollY <= 140) {
+    if (ui.operatingFlowCollapsed) {
+      ui.operatingFlowCollapsed = false;
+      renderOperatingFlowVisibility();
+    }
+    ui.lastScrollY = currentScrollY;
+    return;
+  }
+
+  if (delta > 14 && !ui.operatingFlowCollapsed) {
+    ui.operatingFlowCollapsed = true;
+    renderOperatingFlowVisibility();
+  } else if (delta < -14 && ui.operatingFlowCollapsed) {
+    ui.operatingFlowCollapsed = false;
+    renderOperatingFlowVisibility();
+  }
+
+  ui.lastScrollY = currentScrollY;
+}
+
+function handleOperatingFlowResize() {
+  if (window.innerWidth <= 960 && ui.operatingFlowCollapsed) {
+    ui.operatingFlowCollapsed = false;
+  }
+  renderOperatingFlowVisibility();
 }
 
 function renderCrmView() {
@@ -3928,22 +4153,34 @@ function renderDashboard() {
   elements.dashboardStageSummary.textContent = `${totalDeals} deals · ${buildTimeWindowLabel()}`;
   elements.stageOverview.innerHTML = stageStats
     .map((stat) => {
+      const stageDeals = scopedDeals.filter((deal) => deal.stage === stat.stage);
+      const stuckCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
+      const atRiskCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "at-risk").length;
       const percentage = totalDeals === 0 ? 0 : Math.round((stat.count / totalDeals) * 100);
       const stageDuration = stageDurationMap.get(stat.stage);
       const metricText = usesValue ? formatCurrency(stat.value) : `${formatForecastUnits(stat.weightedCount)} weighted`;
       const durationText = stageDuration ? `${formatDaysMetric(stageDuration.averageDays)} avg` : "";
+      const pressureText = stuckCount > 0 ? `${stuckCount} stuck` : atRiskCount > 0 ? `${atRiskCount} at risk` : "Healthy flow";
+      const cardTone = stuckCount > 0 ? "is-critical" : atRiskCount > 0 ? "is-warning" : stat.count > 0 ? "is-healthy" : "is-empty";
       return `
         <button
           type="button"
-          class="stage-card ${stat.count > 0 ? "is-clickable" : "is-static"}"
+          class="stage-card ${stageClassName(stat.stage)} ${cardTone} ${stat.count > 0 ? "is-clickable" : "is-static"}"
           ${stat.count > 0 ? `data-action="open-stage-funnel" data-stage="${escapeAttribute(stat.stage)}"` : "disabled"}
         >
           <header>
             <span class="chip">${escapeHtml(stat.stage)}</span>
             <span>${percentage}%</span>
           </header>
-          <strong>${stat.count}</strong>
-          <small>${escapeHtml(durationText ? `${metricText} • ${durationText}` : metricText)}</small>
+          <div class="stage-card-main">
+            <strong>${stat.count}</strong>
+            <span class="stage-card-value">${escapeHtml(metricText)}</span>
+          </div>
+          <small>${escapeHtml(durationText || "No cadence data yet")}</small>
+          <div class="stage-card-pressure">
+            <span>${escapeHtml(pressureText)}</span>
+            <span>${escapeHtml(stat.count > 0 ? "Open stage" : "Waiting for deals")}</span>
+          </div>
           <div class="progress-track">
             <div class="progress-bar" style="width: ${Math.max(percentage, stat.count > 0 ? 8 : 0)}%"></div>
           </div>
@@ -4145,15 +4382,34 @@ function getPipelineStageData(deals, stageStats = []) {
     .filter((item) => item.count > 0);
 }
 
+function formatLastUpdatedLabel(value) {
+  if (!value) {
+    return "Last update not available";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Last update not available";
+  }
+
+  return `Last update ${new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date)}`;
+}
+
 function renderCockpitKpis(revenue, alerts, taskBuckets, deals) {
   const fixes = alerts.filter((item) => item.tone === "danger").length;
   const actionsToday = taskBuckets.overdue.length + taskBuckets.today.length;
   const goLivesThisMonth = deals.filter((deal) => isGoLiveThisMonth(deal)).length;
+  const weightedForecastNote = `Stage, market, and operator weighted revenue in motion · ${formatLastUpdatedLabel(serverMeta.lastUpdatedAt)}`;
 
   elements.commandCenterSummary.textContent = `${fixes} fix now · ${actionsToday} actions today · ${goLivesThisMonth} go lives this month`;
   elements.commandKpiGrid.innerHTML = [
     ["Pipeline", formatCurrency(revenue.pipeline), "Total open value across visible deals", "forecast"],
-    ["Weighted Forecast", formatCurrency(revenue.weighted), "Stage-weighted revenue in motion", "forecast"],
+    ["Weighted Forecast", formatCurrency(revenue.weighted), weightedForecastNote, "forecast"],
     ["Commit", formatCurrency(revenue.commit), "High-confidence execution value", "golive"],
     ["At Risk", formatCurrency(revenue.atRisk), `${alerts.length} issues require action`, "risk"],
   ]
@@ -5276,6 +5532,16 @@ function renderLeadTrackerCard(deal) {
       ${renderTrackingLinks(deal, "compact")}
       <form class="lead-task-form" data-lead-task-form data-lead-id="${escapeAttribute(deal.id)}">
         <div class="lead-task-grid">
+          <label>
+            Stage
+            <select name="stage">
+              ${STAGE_ORDER.map((stage) => `<option value="${escapeAttribute(stage)}" ${cleanText(deal.stage) === stage ? "selected" : ""}>${escapeHtml(stage)}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            Lead Status
+            <input name="status" type="text" value="${escapeAttribute(deal.status || "")}" placeholder="Active, blocked, qualified..." />
+          </label>
           <label>
             Last Follow Up
             <input name="lastFollowUp" type="date" value="${escapeAttribute(deal.lastFollowUp || "")}" />
@@ -6441,6 +6707,13 @@ function renderKanbanDealCard(deal) {
   const owner = getDealOwner(deal) || "Unassigned";
   const nextAction = getDealNextAction(deal);
   const riskTone = sla.tone === "stuck" ? "stuck" : sla.tone === "at-risk" ? "risk" : "healthy";
+  const currentStage = cleanText(deal.stage) || "Lead";
+  const nextStage = getNextOperationalStage(currentStage);
+  const nextStageButton = nextStage
+    ? `<button type="button" class="kanban-stage-button" data-action="advance-deal-stage" data-id="${escapeAttribute(deal.id)}" data-next-stage="${escapeAttribute(
+        nextStage
+      )}">Move to ${escapeHtml(nextStage)}</button>`
+    : `<span class="kanban-stage-complete">Final stage</span>`;
 
   return `
     <article
@@ -6475,12 +6748,14 @@ function renderKanbanDealCard(deal) {
       </div>
 
       <div class="kanban-card-footer">
+        <span>Stage: ${escapeHtml(currentStage)}</span>
         <span>Prob. ${escapeHtml(formatPercent(getForecastProbability(deal)))}</span>
         <span>DD: ${escapeHtml(deal.ddStatus || "N/A")}</span>
         <span>Int: ${escapeHtml(deal.integrationStatus || "N/A")}</span>
       </div>
 
       <div class="kanban-actions">
+        ${nextStageButton}
         ${renderDealWorkflowDocumentButtons(deal, {
           className: "icon-button",
           includeTask: true,
@@ -6529,22 +6804,8 @@ function bindKanbanDragAndDrop() {
       if (!deal || !newStage || getKanbanStage(deal.stage) === newStage) {
         return;
       }
-
-      const validation = validateStageMove(deal, newStage);
-      if (!validation.ok) {
-        setBanner(validation.message, "warn");
-        return;
-      }
-
-      const updatedDeal = normalizeDeal({
-        ...deal,
-        stage: newStage,
-      });
-      setStageEntryDateForMove(updatedDeal, newStage);
-      state.deals = state.deals.map((item) => (item.id === updatedDeal.id ? updatedDeal : item));
-      const saved = await persistState();
-      renderAll();
-      setBanner(buildExcelBanner(saved ? `${getPrimaryOperatorName(updatedDeal)} moved to ${newStage}.` : `${getPrimaryOperatorName(updatedDeal)} moved to ${newStage} in memory.`), saved ? "success" : "warn");
+      const targetStage = getDropTargetStage(deal.stage, newStage);
+      await moveDealToStage(deal.id, targetStage);
     });
   });
 }
@@ -6558,6 +6819,74 @@ function getKanbanStage(stage) {
     return "Go Live";
   }
   return KANBAN_STAGE_ORDER.includes(normalized) ? normalized : "Lead";
+}
+
+function getNextOperationalStage(stage) {
+  const normalizedStage = normalizeDealStage(stage);
+  const index = STAGE_ORDER.indexOf(normalizedStage);
+  if (index < 0 || index >= STAGE_ORDER.length - 1) {
+    return "";
+  }
+  return STAGE_ORDER[index + 1];
+}
+
+function getDropTargetStage(currentStage, dropColumn) {
+  const normalizedCurrent = normalizeDealStage(currentStage);
+  const normalizedColumn = cleanText(dropColumn);
+  const currentIndex = STAGE_ORDER.indexOf(normalizedCurrent);
+
+  if (normalizedColumn === "Go Live" && ["Integration", "Legal Approval"].includes(normalizedCurrent)) {
+    return normalizedCurrent === "Integration" ? "Legal Approval" : "Go Live";
+  }
+
+  if (normalizedColumn === "Lead" && normalizedCurrent === "Lead") {
+    return "Qualified";
+  }
+
+  const candidates = STAGE_ORDER.filter((stage) => getKanbanStage(stage) === normalizedColumn);
+  const nextCandidate = candidates.find((stage) => STAGE_ORDER.indexOf(stage) > currentIndex);
+  return nextCandidate || normalizedColumn;
+}
+
+async function moveDealToStage(dealId, targetStage, options = {}) {
+  const deal = state.deals.find((item) => item.id === dealId);
+  const normalizedTargetStage = normalizeDealStage(targetStage);
+  if (!deal || !normalizedTargetStage || cleanText(deal.stage) === normalizedTargetStage) {
+    return false;
+  }
+
+  const validation = validateStageMove(deal, normalizedTargetStage);
+  if (!validation.ok) {
+    setBanner(validation.message, "warn");
+    return false;
+  }
+
+  const updatedDeal = normalizeDeal({
+    ...deal,
+    stage: normalizedTargetStage,
+  });
+  setStageEntryDateForMove(updatedDeal, normalizedTargetStage);
+  state.deals = state.deals.map((item) => (item.id === updatedDeal.id ? updatedDeal : item));
+  recordWorkspaceHistory("Stage moved", `${getPrimaryOperatorName(updatedDeal)} · ${deal.stage || "No stage"} -> ${normalizedTargetStage}`, {
+    entityType: "deal",
+    entityId: updatedDeal.id,
+  });
+  const saved = await persistState();
+  renderAll();
+  setBanner(
+    buildExcelBanner(
+      saved
+        ? `${getPrimaryOperatorName(updatedDeal)} moved to ${normalizedTargetStage}.`
+        : `${getPrimaryOperatorName(updatedDeal)} moved to ${normalizedTargetStage} in the current session.`
+    ),
+    saved ? "success" : "warn"
+  );
+
+  if (options.reopenEditor) {
+    openDealEditorById(updatedDeal.id);
+  }
+
+  return true;
 }
 
 function validateStageMove(deal, newStage) {
@@ -6903,15 +7232,18 @@ function getRequestHubTitle(key) {
 
 function renderTargets() {
   const year = getActiveTargetYear();
+  const annualTargets = state.targets.filter((target) => Number(target.year || 0) === year);
   elements.targetSummaryTitle.textContent = `Targets y ejecucion ${year}`;
-  elements.targetCount.textContent = `${state.targets.length} targets`;
+  elements.targetCount.textContent = `${annualTargets.length} targets · ${year}`;
   renderTargetProgress(year);
   renderTargetTable();
 }
 
 function renderTargetProgress(year) {
-  const targets = state.targets.filter((target) => target.year === year);
-  const annualDeals = state.deals.filter((deal) => !isInactiveDeal(deal) && resolveDealYear(deal) === year);
+  const targets = state.targets.filter((target) => Number(target.year || 0) === year);
+  const targetMatchedDeals = getTargetMatchedDeals(targets, state.deals);
+  const annualDeals = targetMatchedDeals.filter((deal) => !isInactiveDeal(deal) && resolveDealYear(deal) === year);
+  const annualLiveDeals = targetMatchedDeals.filter((deal) => !isInactiveDeal(deal) && getGoLiveReferenceYear(deal) === year);
   const annualTasks = getTasksForYear(year);
   const annualCampaigns = getCampaignsForYear(year);
   const taskSummary = getTaskCompletionSummary(annualTasks);
@@ -6929,9 +7261,9 @@ function renderTargetProgress(year) {
   const actual = {
     newSigned: annualDeals.filter((deal) => deal.signedFlag).length,
     integrations: annualDeals.filter((deal) => deal.stage === "Integration" || deal.integrationStartedFlag).length,
-    ddPipeline: annualDeals.filter((deal) => deal.stage === "DD").length,
-    newGoLive: state.deals.filter((deal) => yearFromDate(deal.liveSince) === year || (deal.goLiveFlag && deal.stage === "Go Live" && resolveDealYear(deal) === year)).length,
-    totalGoLive: annualDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(deal.stage)).length,
+    ddPipeline: annualDeals.filter((deal) => ["DD", "Integration", "Legal Approval", "Go Live"].includes(cleanText(deal.stage)) || deal.ddStartedFlag).length,
+    newGoLive: annualLiveDeals.filter((deal) => deal.newTraffic || String(deal.type || "").toLowerCase().includes("new")).length,
+    totalGoLive: annualLiveDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(cleanText(deal.stage)) || deal.goLiveFlag).length,
   };
 
   const cards = [
@@ -7042,6 +7374,62 @@ function buildTargetProgressCard(label, value, target, drilldownKey = "") {
     showMinimum: value > 0 && target === 0,
     drilldownKey,
   };
+}
+
+function doesTargetMatchDeal(target, deal) {
+  if (!target || !deal || isInactiveDeal(deal)) {
+    return false;
+  }
+
+  if (Number(target.year || 0) && resolveDealYear(deal) !== Number(target.year || 0) && getGoLiveReferenceYear(deal) !== Number(target.year || 0)) {
+    return false;
+  }
+
+  if (!isGlobalTarget(target)) {
+    const targetMarket = cleanText(target.market);
+    const targetType = cleanText(target.type);
+    const targetPlatform = cleanText(target.platform);
+
+    if (targetMarket && targetMarket !== "Global" && cleanText(deal.market) !== targetMarket) {
+      return false;
+    }
+
+    if (targetType && targetType !== "All" && cleanText(deal.type) !== targetType) {
+      return false;
+    }
+
+    if (targetPlatform && targetPlatform !== "All" && cleanText(deal.platform) !== targetPlatform) {
+      return false;
+    }
+
+    if (target.newTraffic && !deal.newTraffic) {
+      return false;
+    }
+
+    if (!target.newTraffic && deal.newTraffic) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function getTargetMatchedDeals(targets = [], deals = state.deals) {
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return deals.filter((deal) => !isInactiveDeal(deal));
+  }
+
+  const matched = new Map();
+  deals.forEach((deal) => {
+    if (targets.some((target) => doesTargetMatchDeal(target, deal))) {
+      matched.set(deal.id, deal);
+    }
+  });
+  return Array.from(matched.values());
+}
+
+function getGoLiveReferenceYear(deal) {
+  return yearFromDate(deal.liveDate) || yearFromDate(deal.liveSince) || (deal.goLiveFlag ? resolveDealYear(deal) : null);
 }
 
 function getActionBuckets(tasks = getVisibleTasks()) {
@@ -7449,6 +7837,7 @@ function buildDealDraftFromForm(existingDeal) {
 async function handleDealSubmit(event) {
   event.preventDefault();
 
+  const isEditing = Boolean(ui.editingDealId);
   const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
   const draft = buildDealDraftFromForm(existingDeal);
   const autosaveKey = getActiveDealAutosaveKey();
@@ -7464,6 +7853,10 @@ async function handleDealSubmit(event) {
     state.deals = [draft, ...state.deals];
   }
 
+  recordWorkspaceHistory(isEditing ? "Deal updated" : "Deal created", `${draft.deal} · ${draft.stage || "No stage"} · ${draft.market || "No market"}`, {
+    entityType: "deal",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   clearDealAutosaveEntry(autosaveKey);
   ui.dealAutosaveStatus = "idle";
@@ -7473,8 +7866,7 @@ async function handleDealSubmit(event) {
   closeDealModal();
   resetDealForm();
   renderAll();
-  ui.activeView = "pipeline";
-  renderViewState();
+  activateView("pipeline", { targetSelector: "#pipeline-board" });
   setBanner(buildExcelBanner(saved ? `Deal guardado en Excel: ${draft.deal}.` : `Deal actualizado en memoria: ${draft.deal}.`), saved ? "success" : "warn");
 }
 
@@ -7482,6 +7874,7 @@ async function handleMarketIntelSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(marketIntelForm);
+  const isEditing = Boolean(ui.editingMarketIntelId);
   const existingRecord = ui.editingMarketIntelId ? state.marketIntel.find((item) => item.id === ui.editingMarketIntelId) : null;
   const now = new Date().toISOString();
   const draft = normalizeMarketIntel({
@@ -7514,12 +7907,15 @@ async function handleMarketIntelSubmit(event) {
     state.marketIntel = [draft, ...state.marketIntel];
   }
 
+  recordWorkspaceHistory(isEditing ? "Market intelligence updated" : "Market intelligence created", `${draft.country} · ${draft.regulatoryStatus || "Status pending"}`, {
+    entityType: "market-intel",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   ui.editingMarketIntelId = null;
   resetMarketIntelForm();
   renderAll();
-  ui.activeView = "crm";
-  renderViewState();
+  activateView("crm", { targetSelector: "#market-intel-board" });
   setBanner(buildExcelBanner(saved ? `Market intelligence saved: ${draft.country}.` : `Market intelligence updated in memory: ${draft.country}.`), saved ? "success" : "warn");
 }
 
@@ -7527,6 +7923,7 @@ async function handleTargetSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(targetForm);
+  const isEditing = Boolean(ui.editingTargetId);
   const existingTarget = ui.editingTargetId ? state.targets.find((target) => target.id === ui.editingTargetId) : null;
   const draft = normalizeTarget({
     ...existingTarget,
@@ -7554,12 +7951,15 @@ async function handleTargetSubmit(event) {
     state.targets = [draft, ...state.targets];
   }
 
+  recordWorkspaceHistory(isEditing ? "Target updated" : "Target created", `${draft.market} ${draft.year} · ${draft.newSigned || 0} signed target`, {
+    entityType: "target",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   ui.editingTargetId = null;
   resetTargetForm();
   renderAll();
-  ui.activeView = "targets";
-  renderViewState();
+  activateView("targets", { targetSelector: "#target-progress" });
   setBanner(
     buildExcelBanner(saved ? `Target guardado en Excel para ${draft.market}.` : `Target actualizado en memoria para ${draft.market}.`),
     saved ? "success" : "warn"
@@ -7570,6 +7970,7 @@ async function handleTaskSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(taskForm);
+  const isEditing = Boolean(ui.editingTaskId);
   const existingTask = ui.editingTaskId ? state.tasks.find((task) => task.id === ui.editingTaskId) : null;
   const now = new Date().toISOString();
   const traceEntry = cleanText(formData.get("traceEntry"));
@@ -7612,12 +8013,15 @@ async function handleTaskSubmit(event) {
     state.workspace.taskSequence = nextSequence;
   }
 
+  recordWorkspaceHistory(isEditing ? "Task updated" : "Task created", `${draft.title} · ${draft.status} · ${draft.owner || "Unassigned"}`, {
+    entityType: "task",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   ui.editingTaskId = null;
   resetTaskForm();
   renderAll();
-  ui.activeView = "tasks";
-  renderViewState();
+  activateView("tasks", { targetSelector: "#task-board" });
   setBanner(buildExcelBanner(saved ? `Tarea guardada: ${draft.title}.` : `Tarea actualizada solo en memoria: ${draft.title}.`), saved ? "success" : "warn");
 }
 
@@ -7625,6 +8029,7 @@ async function handleCampaignSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(campaignForm);
+  const isEditing = Boolean(ui.editingCampaignId);
   const existingCampaign = ui.editingCampaignId ? state.campaigns.find((campaign) => campaign.id === ui.editingCampaignId) : null;
   const now = new Date().toISOString();
   const traceEntry = cleanText(formData.get("traceEntry"));
@@ -7673,6 +8078,10 @@ async function handleCampaignSubmit(event) {
     state.campaigns = [draft, ...state.campaigns];
   }
 
+  recordWorkspaceHistory(isEditing ? "Campaign updated" : "Campaign created", `${draft.title} · ${draft.status} · ${draft.market || "No market"}`, {
+    entityType: "campaign",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   ui.editingCampaignId = null;
   resetCampaignForm();
@@ -7699,6 +8108,10 @@ async function handleWorkspaceSubmit(event) {
     taskSequence: state.workspace.taskSequence,
   });
 
+  recordWorkspaceHistory("Workspace settings updated", `${state.workspace.workspaceName} · ${state.workspace.organizationName}`, {
+    entityType: "workspace",
+    entityId: "workspace",
+  });
   const saved = await persistState();
   renderAll();
   setBanner(buildExcelBanner(saved ? `Workspace updated: ${state.workspace.workspaceName}.` : `Workspace updated in memory only: ${state.workspace.workspaceName}.`), saved ? "success" : "warn");
@@ -7708,6 +8121,7 @@ async function handleUserSubmit(event) {
   event.preventDefault();
 
   const formData = new FormData(userForm);
+  const isEditing = Boolean(ui.editingUserId);
   const existingUser = ui.editingUserId ? state.users.find((user) => user.id === ui.editingUserId) : null;
   const now = new Date().toISOString();
   const draft = normalizeUser({
@@ -7744,6 +8158,10 @@ async function handleUserSubmit(event) {
     ui.activeUserId = draft.id;
   }
 
+  recordWorkspaceHistory(isEditing ? "User updated" : "User created", `${draft.fullName} · ${draft.role} · ${draft.status}`, {
+    entityType: "user",
+    entityId: draft.id,
+  });
   const saved = await persistState();
   ui.editingUserId = null;
   resetUserForm();
@@ -7824,9 +8242,8 @@ function openTargetProgressDrilldown(drilldownKey, year) {
       return;
     }
     ui.taskPreset = preset;
-    ui.activeView = "tasks";
     renderAll();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    activateView("tasks", { targetSelector: "#task-board" });
     setBanner(`Task list loaded for ${label}: ${matchedTasks.length} matching tasks.`, "success");
     return;
   }
@@ -7839,9 +8256,8 @@ function openTargetProgressDrilldown(drilldownKey, year) {
       return;
     }
     ui.campaignPreset = preset;
-    ui.activeView = "campaigns";
     renderAll();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    activateView("campaigns", { targetSelector: "#campaign-board" });
     setBanner(`Campaign list loaded for ${label}: ${matchedCampaigns.length} matching campaigns.`, "success");
     return;
   }
@@ -7883,9 +8299,8 @@ function openStageFunnelDrilldown(stage) {
   resetPipelineOperationalFilters();
   ui.pipelinePreset = null;
   ui.filters.stage = normalizedStage;
-  ui.activeView = "pipeline";
   renderAll();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  activateView("pipeline", { targetSelector: "#pipeline-board" });
   setBanner(`Pipeline filtered to ${normalizedStage}: ${matchedDeals.length} matching deals.`, "success");
 }
 
@@ -7972,9 +8387,8 @@ function openForecastSummaryDrilldown(forecastKey) {
       return;
     }
     ui.taskPreset = preset;
-    ui.activeView = "tasks";
     renderAll();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    activateView("tasks", { targetSelector: "#task-board" });
     setBanner(`Task list loaded for Completed Tasks: ${matchedTasks.length} matching tasks.`, "success");
     return;
   }
@@ -7988,9 +8402,8 @@ function openForecastSummaryDrilldown(forecastKey) {
       return;
     }
     ui.campaignPreset = preset;
-    ui.activeView = "campaigns";
     renderAll();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    activateView("campaigns", { targetSelector: "#campaign-board" });
     setBanner(`Campaign list loaded for ${label}: ${matchedCampaigns.length} matching campaigns.`, "success");
     return;
   }
@@ -8127,9 +8540,8 @@ function openPipelinePresetDrilldown(preset, matchedDeals, successMessage) {
   if (preset.applyMarketFilter && preset.market) {
     ui.filters.market = preset.market;
   }
-  ui.activeView = "pipeline";
   renderAll();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  activateView("pipeline", { targetSelector: "#pipeline-board" });
   setBanner(successMessage, "success");
 }
 
@@ -8310,7 +8722,10 @@ function buildTargetProgressDrilldownLabel(drilldownKey, year) {
 
 function getTargetProgressPipelineDeals(drilldownKey, year, deals = getScopedDeals()) {
   const activeYear = Number(year || getActiveTargetYear());
-  const annualDeals = deals.filter((deal) => !isInactiveDeal(deal) && resolveDealYear(deal) === activeYear);
+  const annualTargets = state.targets.filter((target) => Number(target.year || 0) === activeYear);
+  const matchedDeals = getTargetMatchedDeals(annualTargets, deals);
+  const annualDeals = matchedDeals.filter((deal) => !isInactiveDeal(deal) && resolveDealYear(deal) === activeYear);
+  const annualLiveDeals = matchedDeals.filter((deal) => !isInactiveDeal(deal) && getGoLiveReferenceYear(deal) === activeYear);
 
   if (drilldownKey === "new-signed") {
     return annualDeals.filter((deal) => deal.signedFlag);
@@ -8321,17 +8736,15 @@ function getTargetProgressPipelineDeals(drilldownKey, year, deals = getScopedDea
   }
 
   if (drilldownKey === "dd-pipeline") {
-    return annualDeals.filter((deal) => deal.stage === "DD");
+    return annualDeals.filter((deal) => ["DD", "Integration", "Legal Approval", "Go Live"].includes(cleanText(deal.stage)) || deal.ddStartedFlag);
   }
 
   if (drilldownKey === "new-go-live") {
-    return deals.filter(
-      (deal) => yearFromDate(deal.liveSince) === activeYear || (deal.goLiveFlag && deal.stage === "Go Live" && resolveDealYear(deal) === activeYear)
-    );
+    return annualLiveDeals.filter((deal) => deal.newTraffic || String(deal.type || "").toLowerCase().includes("new"));
   }
 
   if (drilldownKey === "total-go-live") {
-    return annualDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(deal.stage));
+    return annualLiveDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(cleanText(deal.stage)) || deal.goLiveFlag);
   }
 
   if (drilldownKey === "avg-stage-duration" || drilldownKey === "stage-cadence") {
@@ -8491,6 +8904,11 @@ async function handleDealAction(event) {
     openDealEditorById(id);
   }
 
+  if (action === "advance-deal-stage") {
+    await moveDealToStage(id, button.dataset.nextStage);
+    return;
+  }
+
   if (action === "delete-deal") {
     if (!window.confirm(`Delete the deal "${deal.deal}"?`)) {
       return;
@@ -8520,10 +8938,9 @@ async function handleMarketIntelAction(event) {
   }
 
   if (action === "edit-market-intel") {
-    ui.activeView = "crm";
     ui.editingMarketIntelId = id;
     fillMarketIntelForm(record);
-    renderViewState();
+    activateView("crm", { targetSelector: "#market-intel-form", focusField: true, editMode: true });
     setBanner(`Editing market intelligence: ${record.country}.`, "default");
   }
 
@@ -8563,12 +8980,18 @@ async function handleLeadTrackerSubmit(event) {
   const formData = new FormData(form);
   const updatedLead = normalizeDeal({
     ...currentLead,
+    stage: formData.get("stage"),
+    status: formData.get("status"),
     lastFollowUp: formData.get("lastFollowUp"),
     actionItems: formData.get("actionItems"),
     updates: formData.get("updates"),
   });
 
   state.deals = state.deals.map((deal) => (deal.id === leadId ? updatedLead : deal));
+  recordWorkspaceHistory("Lead tracker updated", `${updatedLead.deal} · ${updatedLead.stage} · ${updatedLead.status || "No status"}`, {
+    entityType: "deal",
+    entityId: updatedLead.id,
+  });
   const saved = await persistState();
   renderAll();
   setBanner(
@@ -8613,10 +9036,9 @@ async function handleTargetAction(event) {
   }
 
   if (action === "edit-target") {
-    ui.activeView = "targets";
     ui.editingTargetId = id;
     fillTargetForm(target);
-    renderViewState();
+    activateView("targets", { targetSelector: "#target-form", focusField: true, editMode: true });
     setBanner(`Editando target: ${target.market} ${target.year}.`, "default");
   }
 
@@ -8652,10 +9074,9 @@ async function handleTaskAction(event) {
   }
 
   if (action === "edit-task") {
-    ui.activeView = "tasks";
     ui.editingTaskId = id;
     fillTaskForm(task);
-    renderViewState();
+    activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true });
     setBanner(`Editando tarea: ${task.title}.`, "default");
   }
 
@@ -8707,7 +9128,7 @@ async function handleCampaignAction(event) {
     ui.activeView = "campaigns";
     ui.editingCampaignId = id;
     fillCampaignForm(campaign);
-    renderViewState();
+    activateView("campaigns", { targetSelector: "#campaign-form", focusField: true, editMode: true });
     setBanner(`Editing campaign: ${campaign.title}.`, "default");
   }
 
@@ -8743,7 +9164,7 @@ async function handleUserAction(event) {
     ui.activeView = "admin";
     ui.editingUserId = id;
     fillUserForm(user);
-    renderViewState();
+    activateView("admin", { targetSelector: "#user-form", focusField: true, editMode: true });
     setBanner(`Editing user: ${user.fullName}.`, "default");
   }
 
@@ -8777,9 +9198,7 @@ function handleModuleFlowAction(event) {
 }
 
 function openWorkflowModule(view) {
-  ui.activeView = view;
-  renderViewState();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  activateView(view);
 }
 
 function prefillTaskFromDeal(deal) {
@@ -8791,19 +9210,17 @@ function prefillTaskFromDeal(deal) {
     nextStep: deal.actionItems || buildDealOperationalGuide(deal).recommendation,
     notes: deal.statusText || deal.comments,
   });
-  ui.activeView = "tasks";
   ui.editingTaskId = null;
   fillTaskForm(draft);
-  renderViewState();
+  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true });
   setBanner(`Nueva tarea prefijada desde ${deal.deal}.`, "default");
 }
 
 function prefillTaskFromDealSnapshot(deal) {
   const draft = buildTaskPrefillFromSnapshot(deal);
-  ui.activeView = "tasks";
   ui.editingTaskId = null;
   fillTaskForm(draft);
-  renderViewState();
+  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true });
   setBanner(`Follow-up task prepared from ${deal.deal || deal.client || deal.operator || "current deal"}.`, "default");
 }
 
@@ -10957,6 +11374,7 @@ function buildDecisionInsights(deals) {
 function getForecastProbability(deal) {
   const explicitScore = toNullableNumber(deal.closeProbabilityScore);
   let probability = explicitScore !== null ? clampNumber(explicitScore / 100, 0, 1) : STAGE_FORECAST_WEIGHTS[deal.stage] ?? 0.15;
+  probability *= getForecastContextMultiplier(deal);
   const status = cleanText(deal.status).toLowerCase();
   const agreement = cleanText(deal.agreement).toLowerCase();
   const ddStatus = cleanText(deal.ddStatus).toLowerCase();
@@ -10998,6 +11416,49 @@ function getForecastProbability(deal) {
   }
 
   return clampNumber(probability, 0, 1);
+}
+
+function getForecastContextMultiplier(deal) {
+  const marketMultiplier = LATAM_MARKET_FORECAST_MULTIPLIERS[normalizeDealMarket(deal.market)] ?? 1;
+  const operatorTypeMultiplier = getOperatorTypeForecastMultiplier(deal);
+  return clampNumber(marketMultiplier * operatorTypeMultiplier, 0.82, 1.18);
+}
+
+function getOperatorTypeForecastMultiplier(deal) {
+  const candidates = [
+    cleanText(deal.segment),
+    cleanText(deal.type),
+    inferOperatorTypeFromPlatform(cleanText(deal.platform)),
+  ].filter(Boolean);
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = normalizeDealType(candidate);
+    if (OPERATOR_TYPE_FORECAST_MULTIPLIERS[normalizedCandidate] !== undefined) {
+      return OPERATOR_TYPE_FORECAST_MULTIPLIERS[normalizedCandidate];
+    }
+  }
+
+  return 1;
+}
+
+function inferOperatorTypeFromPlatform(platform) {
+  const normalized = cleanText(platform).toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+  if (normalized.includes("retail")) {
+    return "Retail";
+  }
+  if (normalized.includes("social")) {
+    return "Social";
+  }
+  if (normalized.includes("b2b")) {
+    return "B2B";
+  }
+  if (normalized.includes("b2c") || normalized.includes("casino") || normalized.includes("sportsbook")) {
+    return "B2C";
+  }
+  return "";
 }
 
 function hasAnyDealValue(deals) {
@@ -11866,11 +12327,9 @@ function ensureActiveUser() {
     state.users = createDefaultUsers();
   }
 
-  const storedId = getStoredActiveUserId();
-  const preferredId = ui.activeUserId || storedId;
+  const preferredId = ui.activeUserId;
   const activeUser = state.users.find((user) => user.id === preferredId) || state.users[0];
   ui.activeUserId = activeUser ? activeUser.id : "";
-  persistActiveUserSelection();
 }
 
 function getActiveUser() {
@@ -11878,19 +12337,11 @@ function getActiveUser() {
 }
 
 function getStoredActiveUserId() {
-  try {
-    return window.localStorage.getItem("salesrep-active-user") || "";
-  } catch {
-    return "";
-  }
+  return ui.activeUserId || "";
 }
 
 function persistActiveUserSelection() {
-  try {
-    window.localStorage.setItem("salesrep-active-user", ui.activeUserId || "");
-  } catch {
-    // Ignore storage limitations in file:// previews.
-  }
+  return;
 }
 
 function buildDealContextLine(deal) {
@@ -13686,6 +14137,16 @@ function setSelectOptions(select, values, currentValue) {
 
 function renderModuleFlow() {
   const items = buildModuleFlowItems();
+  if (!elements.moduleFlowGrid || !elements.moduleFlowSummary) {
+    return;
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    elements.moduleFlowSummary.textContent = "Workflow unavailable";
+    elements.moduleFlowGrid.innerHTML = '<div class="empty-state">The guided journey could not be built from the current workspace data.</div>';
+    return;
+  }
+
   const readyCount = items.filter((item) => item.status !== "Needs setup").length;
 
   elements.moduleFlowSummary.textContent = `${readyCount} of ${items.length} modules active`;
@@ -13706,7 +14167,7 @@ function renderModuleFlow() {
             <strong>${escapeHtml(item.metricValue)}</strong>
           </div>
           <p>${escapeHtml(item.nextAction)}</p>
-          <button class="button button-ghost button-small" data-module-view="${escapeHtml(item.view)}">${escapeHtml(item.cta)}</button>
+          <button type="button" class="button button-ghost button-small" data-module-view="${escapeHtml(item.view)}">${escapeHtml(item.cta)}</button>
         </article>
       `;
     })
@@ -13715,13 +14176,20 @@ function renderModuleFlow() {
 
 function buildModuleFlowItems() {
   const scopedDeals = getScopedDeals();
+  const scopedTasks = getScopedTasks();
+  const currentYear = getActiveTargetYear();
+  const annualTargets = state.targets.filter((target) => Number(target.year || 0) === currentYear);
+  const openTasks = scopedTasks.filter((task) => task.status !== "Done").length;
+  const overdueTasks = scopedTasks.filter((task) => task.status !== "Done" && isDatePast(task.dueDate)).length;
   const activeAccounts = scopedDeals.length;
-  const mappedMarkets = state.marketIntel.length;
+  const mappedMarkets = uniqueValues(state.marketIntel.map((item) => item.country || item.market || item.operatorCountry)).length;
   const activeUsers = state.users.filter((user) => user.status === "Active").length;
   const unassignedAccounts = scopedDeals.filter((deal) => !getDealOwner(deal)).length;
   const staleAccounts = scopedDeals.filter((deal) => hasStaleFollowUp(deal)).length;
-  const liveCampaigns = state.campaigns.filter((campaign) => ["Ready", "Live"].includes(campaign.status)).length;
-  const activeTargets = state.targets.filter((target) => Number(target.year || 0) === getActiveTargetYear()).length;
+  const requestLaneCount = REQUEST_HUB_DEFINITIONS.filter((item) => getRequestHubDeals(scopedDeals, item.key).length > 0).length;
+  const launchAccounts = scopedDeals.filter((deal) => ["Go Live", "Live", "Handover"].includes(cleanText(deal.stage))).length;
+  const liveCampaigns = getCampaignsForYear(currentYear).filter((campaign) => ["Ready", "Live"].includes(campaign.status)).length;
+  const activeTargets = annualTargets.length;
 
   return [
     {
@@ -13776,7 +14244,7 @@ function buildModuleFlowItems() {
       title: "Proposals & Requests",
       description: "Issue commercial proposals plus legal, DD, integration, and final legal signoff requests from one operating hub.",
       metricLabel: "Active request lanes",
-      metricValue: `${REQUEST_HUB_DEFINITIONS.filter((item) => getRequestHubDeals(scopedDeals, item.key).length > 0).length}`,
+      metricValue: `${requestLaneCount}`,
       nextAction:
         scopedDeals.length > 0
           ? "Use the hub to start the right request without hunting through the funnel for the correct document action."
@@ -13791,29 +14259,31 @@ function buildModuleFlowItems() {
       title: "Execution, Jira & Blockers",
       description: "Convert each opportunity into concrete tasks, Jira actions, blocker tracking, deadlines, and traceability.",
       metricLabel: "Open tasks",
-      metricValue: `${state.tasks.filter((task) => task.status !== "Done").length}`,
+      metricValue: `${openTasks}`,
       nextAction:
-        staleAccounts > 0
+        overdueTasks > 0
+          ? `${overdueTasks} actions are overdue and should be resolved first.`
+          : staleAccounts > 0
           ? `${staleAccounts} accounts show stale follow-up and should receive task assignments next.`
           : "Task coverage is healthy; keep trace logs and due dates disciplined.",
-      status: state.tasks.length > 0 ? "Ready" : scopedDeals.length > 0 ? "In progress" : "Needs setup",
-      pillClass: state.tasks.length > 0 ? "success" : scopedDeals.length > 0 ? "info" : "blocked",
-      tone: state.tasks.length > 0 ? "is-good" : scopedDeals.length > 0 ? "is-warn" : "is-danger",
+      status: openTasks > 0 ? (overdueTasks > 0 ? "In progress" : "Ready") : scopedDeals.length > 0 ? "In progress" : "Needs setup",
+      pillClass: openTasks > 0 ? (overdueTasks > 0 ? "traffic" : "success") : scopedDeals.length > 0 ? "info" : "blocked",
+      tone: openTasks > 0 ? (overdueTasks > 0 ? "is-warn" : "is-good") : scopedDeals.length > 0 ? "is-warn" : "is-danger",
       cta: "Open Tasks",
     },
     {
       view: "campaigns",
       title: "Growth, Live & Handover",
       description: "Track launch readiness, handover discipline, and growth initiatives for active and expanding client accounts.",
-      metricLabel: "Ready / live",
-      metricValue: `${liveCampaigns}`,
+      metricLabel: "Launch / live",
+      metricValue: `${launchAccounts}`,
       nextAction:
-        liveCampaigns > 0
-          ? "Track which activations are generating the strongest commercial lift by market and operator."
+        launchAccounts > 0
+          ? `${liveCampaigns} growth campaigns are running against active launch or live accounts.`
           : "Create your first growth activation once an account reaches execution readiness.",
-      status: state.campaigns.length > 0 ? "Ready" : activeAccounts > 0 ? "In progress" : "Needs setup",
-      pillClass: state.campaigns.length > 0 ? "success" : activeAccounts > 0 ? "info" : "blocked",
-      tone: state.campaigns.length > 0 ? "is-good" : activeAccounts > 0 ? "is-neutral" : "is-danger",
+      status: launchAccounts > 0 ? "Ready" : activeAccounts > 0 ? "In progress" : "Needs setup",
+      pillClass: launchAccounts > 0 ? "success" : activeAccounts > 0 ? "info" : "blocked",
+      tone: launchAccounts > 0 ? "is-good" : activeAccounts > 0 ? "is-neutral" : "is-danger",
       cta: "Open Growth",
     },
     {
@@ -13824,7 +14294,7 @@ function buildModuleFlowItems() {
       metricValue: `${activeTargets}`,
       nextAction:
         activeTargets > 0
-          ? "Review market gaps and coverage against the active fiscal-year commitments."
+          ? `Review plan vs actual for ${currentYear} and close the remaining coverage gaps.`
           : "Load targets to complete the full onboarding-to-performance loop.",
       status: activeTargets > 0 ? "Ready" : "Needs setup",
       pillClass: activeTargets > 0 ? "success" : "blocked",
@@ -13913,7 +14383,7 @@ async function resetDemoState() {
     try {
       const publishedResponse = await fetch(STATIC_STATE_URL, { headers: { Accept: "application/json" } });
       if (!publishedResponse.ok) {
-        throw new Error(`No fue posible leer el snapshot publicado (${publishedResponse.status}).`);
+        throw new Error(`No fue posible leer la base publicada (${publishedResponse.status}).`);
       }
 
       applyStatePayload(await publishedResponse.json());
@@ -13921,12 +14391,12 @@ async function resetDemoState() {
       ensureActiveUser();
       resetWorkspaceForm();
       resetUserForm();
-      serverMeta.workbookPath = "GitHub published snapshot";
+      serverMeta.workbookPath = "GitHub published workspace baseline";
       serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
       serverMeta.ready = false;
       serverMeta.storageMode = "static";
       renderAll();
-      setBanner(buildExcelBanner("Published GitHub snapshot restored."), "success");
+      setBanner(buildExcelBanner("Published GitHub workspace baseline restored."), "success");
     } catch (publishedError) {
       state = createDefaultState();
       const saved = await persistState();
@@ -13972,12 +14442,12 @@ async function downloadExcelWorkbook() {
       });
 
       if (!response.ok) {
-        throw new Error(`No fue posible descargar el snapshot publicado (${response.status}).`);
+        throw new Error(`No fue posible descargar la base publicada (${response.status}).`);
       }
 
       const payload = await response.text();
-      downloadBlob(buildExportFilename("salesrep-published-snapshot", "json"), payload, "application/json;charset=utf-8");
-      setBanner("Published snapshot downloaded from GitHub Pages.", "success");
+      downloadBlob(buildExportFilename("salesrep-published-workspace", "json"), payload, "application/json;charset=utf-8");
+      setBanner("Published workspace baseline downloaded from GitHub Pages.", "success");
       return;
     }
 
@@ -14006,7 +14476,7 @@ async function uploadExcelWorkbook(file) {
   }
 
   if (!serverMeta.ready) {
-    setBanner("Excel upload requires the local/server deployment. The GitHub published app works with the published snapshot plus browser storage.", "warn");
+    setBanner("Excel upload requires the local/server deployment. The published GitHub app works from the online workspace baseline and needs a workbook backend for persistent updates.", "warn");
     return;
   }
 
@@ -14147,11 +14617,11 @@ function setBanner(message, tone = "default") {
 }
 
 function buildExcelBanner(message) {
-  if (serverMeta.storageMode === "browser") {
-    return `${message} Browser storage active for this published GitHub app.`;
+  if (serverMeta.storageMode === "session") {
+    return `${message} Online workspace loaded. Changes stay in this session until a server-backed workbook is connected.`;
   }
   if (serverMeta.storageMode === "static") {
-    return `${message} Published from GitHub snapshot. Changes persist in your browser until a server-backed workbook is connected.`;
+    return `${message} Published GitHub workspace baseline loaded from the online source of truth.`;
   }
   if (!serverMeta.workbookPath) {
     return message;

@@ -35,10 +35,12 @@ const server = http.createServer(async (request, response) => {
 
     if (pathname === "/api/state" && request.method === "GET") {
       const state = await loadStateFromWorkbook(WORKBOOK_PATH);
+      const workbookStats = await fs.stat(WORKBOOK_PATH);
       return sendJson(response, 200, {
         ...state,
         workbookPath: WORKBOOK_PATH,
         workbookUrl: "/api/download",
+        savedAt: workbookStats.mtime.toISOString(),
       });
     }
 

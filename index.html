@@ -14,8 +14,8 @@
       <div class="loading-overlay-card">
         <img src="assets/cube-one-mark.svg" alt="" class="loading-overlay-logo" />
         <span class="loading-overlay-kicker">Cube One workspace</span>
-        <strong id="loading-overlay-title">Loading workbook</strong>
-        <p id="loading-overlay-copy">Syncing pipeline, tasks, market intelligence, and forecast data from Excel.</p>
+        <strong id="loading-overlay-title">Loading workspace</strong>
+        <p id="loading-overlay-copy">Syncing live pipeline, tasks, market intelligence, and forecast data.</p>
       </div>
     </div>
     <div class="shell">
@@ -51,14 +51,20 @@
                   <select id="active-user-select" class="hero-user-select"></select>
                   <small id="workspace-user-role">Administrator access</small>
                 </div>
+                <div class="hero-tenant-card hero-tenant-card-history">
+                  <span class="hero-tenant-label">Recent Activity</span>
+                  <strong id="workspace-history-summary">History starting</strong>
+                  <small id="workspace-history-copy">Changes are tracked as the workspace moves.</small>
+                  <div id="workspace-history-preview" class="hero-tenant-history"></div>
+                </div>
               </div>
             </details>
 
           <div class="hero-actions">
-            <button id="reset-demo-button" class="button button-ghost">Reload Reference</button>
-            <button id="reload-excel-button" class="button button-ghost">Refresh Workbook</button>
-            <button id="upload-excel-button" class="button button-ghost">Upload Excel</button>
-            <button id="download-excel-button" class="button button-secondary">Download Excel</button>
+            <button id="reset-demo-button" class="button button-ghost button-small" title="Reload reference data">Reload</button>
+            <button id="reload-excel-button" class="button button-ghost button-small" title="Refresh workbook state">Refresh</button>
+            <button id="upload-excel-button" class="button button-ghost button-small" title="Upload workbook">Upload</button>
+            <button id="download-excel-button" class="button button-secondary button-small" title="Download workbook">Download</button>
             <input id="upload-excel-input" type="file" accept=".xlsx,.xlsm,.xltx,.xltm" hidden />
           </div>
         </div>
@@ -165,64 +171,34 @@
         </div>
       </section>
 
-      <section class="view-nav-shell" aria-label="Primary navigation">
-        <div class="view-nav-meta">
+      <section id="operating-flow-shell" class="view-nav-shell" aria-label="Primary navigation">
+        <div class="view-nav-meta view-nav-meta-compact">
           <p class="panel-kicker">Operating flow</p>
-          <p class="view-nav-text">Follow the commercial operating flow from market intelligence and target mapping to execution, go live, handover, and performance review.</p>
+          <span class="view-nav-priority">Focus: execution, market funnel, targets</span>
         </div>
-        <nav class="view-switcher" aria-label="Secciones de la app">
-          <button class="view-tab is-active" data-view-trigger="dashboard">Dashboard</button>
-          <button class="view-tab" data-view-trigger="tasks">My Actions Today</button>
-          <button class="view-tab" data-view-trigger="admin">1. Setup</button>
-          <button class="view-tab" data-view-trigger="crm">2. Intelligence</button>
-          <button class="view-tab" data-view-trigger="pipeline">3. Funnel</button>
-          <button class="view-tab" data-view-trigger="requests">4. Proposals & Requests</button>
-          <button class="view-tab" data-view-trigger="campaigns">6. Growth & Handover</button>
-          <button class="view-tab" data-view-trigger="targets">7. Targets & Forecast</button>
-          <button class="view-tab" data-view-trigger="catalogue">8. KPIs</button>
+        <nav class="view-switcher view-switcher-primary" aria-label="Primary app sections">
+          <button class="view-tab view-tab-primary is-active" data-view-trigger="dashboard">Dashboard</button>
+          <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline Stage Funnel</button>
+          <button class="view-tab view-tab-primary" data-view-trigger="crm">Market Funnel</button>
+          <button class="view-tab view-tab-primary" data-view-trigger="targets">Targets</button>
+        </nav>
+        <nav class="view-switcher view-switcher-secondary" aria-label="Secondary app sections">
+          <button class="view-tab view-tab-secondary" data-view-trigger="tasks">My Actions</button>
+          <button class="view-tab view-tab-secondary" data-view-trigger="requests">Requests</button>
+          <button class="view-tab view-tab-secondary" data-view-trigger="campaigns">Growth</button>
+          <button class="view-tab view-tab-secondary" data-view-trigger="admin">Setup</button>
+          <button class="view-tab view-tab-secondary" data-view-trigger="catalogue">KPIs</button>
         </nav>
       </section>
-
-      <section class="module-flow-shell" aria-label="Module workflow">
-        <div class="module-flow-head">
-          <div>
-            <p class="panel-kicker">Guided journey</p>
-            <h2>Onboarding, Initiation & Progress Flow</h2>
-          </div>
-          <span id="module-flow-summary" class="chip">0 of 6 modules ready</span>
-        </div>
-        <div id="module-flow-grid" class="module-flow-grid"></div>
-      </section>
-
-      <section class="workflow-command-shell" aria-label="Workflow command bar">
-        <div class="workflow-command-main">
-          <div class="workflow-command-block">
-            <span class="workflow-label">Current module</span>
-            <strong id="workflow-current-title">Executive Dashboard</strong>
-            <p id="workflow-current-copy">Use the executive dashboard to understand the current commercial picture before jumping into action.</p>
-          </div>
-          <div class="workflow-command-block workflow-command-block-next">
-            <span class="workflow-label">Recommended next</span>
-            <strong id="workflow-next-title">System Setup</strong>
-            <p id="workflow-next-copy">Complete system setup and assign active owners before moving accounts through the commercial funnel.</p>
-          </div>
-        </div>
-        <div class="workflow-command-side">
-          <div class="workflow-progress">
-            <div class="workflow-progress-copy">
-              <span class="workflow-label">Journey progress</span>
-              <strong id="workflow-progress-label">0% complete</strong>
-            </div>
-            <div class="workflow-progress-track">
-              <span id="workflow-progress-fill"></span>
-            </div>
-          </div>
-          <div class="workflow-actions">
-            <button id="workflow-open-current" class="button button-ghost button-small">Open current module</button>
-            <button id="workflow-open-next" class="button button-primary button-small">Open recommended next</button>
-          </div>
-        </div>
-      </section>
+      <button
+        id="operating-flow-toggle"
+        class="operating-flow-toggle"
+        type="button"
+        aria-controls="operating-flow-shell"
+        aria-expanded="true"
+      >
+        Operating Flow
+      </button>
 
       <main class="views">
         <section class="view is-active" data-view="dashboard">
@@ -335,7 +311,48 @@
               </div>
             </section>
 
-            <section class="panel panel-wide">
+            <section class="module-flow-shell panel-wide panel-secondary" aria-label="Module workflow">
+              <div class="module-flow-head">
+                <div>
+                  <p class="panel-kicker">Guided journey</p>
+                  <h2>Onboarding, Initiation &amp; Progress Flow</h2>
+                </div>
+                <span id="module-flow-summary" class="chip">0 of 6 modules ready</span>
+              </div>
+              <div id="module-flow-grid" class="module-flow-grid"></div>
+            </section>
+
+            <section class="workflow-command-shell panel-wide panel-secondary" aria-label="Workflow command bar">
+              <div class="workflow-command-main">
+                <div class="workflow-command-block">
+                  <span class="workflow-label">Current module</span>
+                  <strong id="workflow-current-title">Executive Dashboard</strong>
+                  <p id="workflow-current-copy">Use the executive dashboard to understand the current commercial picture before jumping into action.</p>
+                </div>
+                <div class="workflow-command-block workflow-command-block-next">
+                  <span class="workflow-label">Recommended next</span>
+                  <strong id="workflow-next-title">System Setup</strong>
+                  <p id="workflow-next-copy">Complete system setup and assign active owners before moving accounts through the commercial funnel.</p>
+                </div>
+              </div>
+              <div class="workflow-command-side">
+                <div class="workflow-progress">
+                  <div class="workflow-progress-copy">
+                    <span class="workflow-label">Journey progress</span>
+                    <strong id="workflow-progress-label">0% complete</strong>
+                  </div>
+                  <div class="workflow-progress-track">
+                    <span id="workflow-progress-fill"></span>
+                  </div>
+                </div>
+                <div class="workflow-actions">
+                  <button id="workflow-open-current" class="button button-ghost button-small">Open current module</button>
+                  <button id="workflow-open-next" class="button button-primary button-small">Open recommended next</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="panel panel-wide panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Forecast engine</p>
@@ -346,7 +363,7 @@
               <div id="forecast-summary" class="forecast-grid"></div>
             </section>
 
-            <section class="panel panel-wide">
+            <section class="panel panel-wide panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">KPI interpretation</p>
@@ -357,7 +374,7 @@
               <div id="executive-kpi-readout" class="executive-readout-grid"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Market pulse</p>
@@ -367,7 +384,7 @@
               <div id="market-bars" class="market-bars"></div>
             </section>
 
-            <section class="panel">
+            <section class="panel panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Execution cadence</p>
@@ -377,7 +394,7 @@
               <div id="dashboard-timeline" class="timeline-bars"></div>
             </section>
 
-            <section class="panel panel-wide">
+            <section class="panel panel-wide panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Executive focus</p>
@@ -387,7 +404,7 @@
               <div id="dashboard-spotlight" class="spotlight-list"></div>
             </section>
 
-            <section class="panel panel-wide">
+            <section class="panel panel-wide panel-secondary">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Forecast drilldown</p>
