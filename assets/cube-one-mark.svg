@@ -1,0 +1,28 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="cube-top" x1="28" y1="26" x2="100" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4338FF"/>
+      <stop offset="0.48" stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="cube-left" x1="16" y1="48" x2="66" y2="114" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#4338FF"/>
+    </linearGradient>
+    <linearGradient id="cube-right" x1="64" y1="54" x2="114" y2="104" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <radialGradient id="cube-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(90 24) rotate(129.144) scale(84.2163 69.6536)">
+      <stop stop-color="white" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <path d="M64 14L108 40L64 66L20 40L64 14Z" fill="url(#cube-top)"/>
+  <path d="M18 46L58 70V116L18 92V46Z" fill="url(#cube-left)"/>
+  <path d="M70 70L110 46V92L70 116V70Z" fill="url(#cube-right)"/>
+  <path d="M64 14L108 40L64 66L20 40L64 14Z" fill="url(#cube-glow)"/>
+  <path d="M64 14L108 40L64 66L20 40L64 14Z" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+  <path d="M18 46L58 70V116L18 92V46Z" stroke="rgba(255,255,255,0.14)" stroke-width="2"/>
+  <path d="M70 70L110 46V92L70 116V70Z" stroke="rgba(255,255,255,0.14)" stroke-width="2"/>
+</svg>

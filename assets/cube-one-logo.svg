@@ -1,0 +1,30 @@
+<svg width="720" height="180" viewBox="0 0 720 180" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logo-top" x1="42" y1="36" x2="142" y2="84" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4338FF"/>
+      <stop offset="0.48" stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="logo-left" x1="24" y1="66" x2="92" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"/>
+      <stop offset="1" stop-color="#4338FF"/>
+    </linearGradient>
+    <linearGradient id="logo-right" x1="96" y1="70" x2="162" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="wordmark-one" x1="486" y1="24" x2="616" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563FF"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <path d="M88 20L158 62L88 104L18 62L88 20Z" fill="url(#logo-top)"/>
+  <path d="M14 72L78 110V178L14 140V72Z" fill="url(#logo-left)"/>
+  <path d="M98 110L162 72V140L98 178V110Z" fill="url(#logo-right)"/>
+  <path d="M88 20L158 62L88 104L18 62L88 20Z" stroke="rgba(255,255,255,0.14)" stroke-width="2"/>
+  <path d="M14 72L78 110V178L14 140V72Z" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+  <path d="M98 110L162 72V140L98 178V110Z" stroke="rgba(255,255,255,0.12)" stroke-width="2"/>
+  <text x="210" y="96" fill="#081225" font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="78" font-weight="700">Cube</text>
+  <text x="432" y="96" fill="url(#wordmark-one)" font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="78" font-weight="700">One</text>
+  <text x="214" y="138" fill="#5B6B84" font-family="Inter, Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="600" letter-spacing="7">THE OPERATING SYSTEM FOR SALES TEAMS</text>
+</svg>

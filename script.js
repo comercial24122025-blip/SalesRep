@@ -656,6 +656,8 @@ const elements = {
   focusSummary: document.getElementById("focus-summary"),
   heroStats: document.getElementById("hero-stats"),
   activeUserSelect: document.getElementById("active-user-select"),
+  workspaceDropdownTitle: document.getElementById("workspace-dropdown-title"),
+  workspaceDropdownCopy: document.getElementById("workspace-dropdown-copy"),
   workspaceBadge: document.getElementById("workspace-badge"),
   workspacePlanBadge: document.getElementById("workspace-plan-badge"),
   workspaceUserRole: document.getElementById("workspace-user-role"),
@@ -688,7 +690,10 @@ const elements = {
   commandKpiGrid: document.getElementById("command-kpi-grid"),
   fixNowCount: document.getElementById("fix-now-count"),
   fixNowAlerts: document.getElementById("fix-now-alerts"),
+  commandActionsCount: document.getElementById("command-actions-count"),
+  commandActionsToday: document.getElementById("command-actions-today"),
   commandPipelineBars: document.getElementById("command-pipeline-bars"),
+  commandTimePressure: document.getElementById("command-time-pressure"),
   commandUpcomingGoLives: document.getElementById("command-upcoming-golives"),
   forecastSummary: document.getElementById("forecast-summary"),
   executiveKpiReadout: document.getElementById("executive-kpi-readout"),
@@ -1050,7 +1055,7 @@ function bindEvents() {
   });
 
   document.getElementById("reload-excel-button").addEventListener("click", async () => {
-    setLoadingState(true, "Refreshing workbook", "Reloading Spazio from the local Excel control file.");
+    setLoadingState(true, "Refreshing workbook", "Reloading Cube One from the local Excel control file.");
     try {
       await hydrateFromExcel();
       renderAll();
@@ -1386,8 +1391,10 @@ function bindEvents() {
 
   elements.stageOverview.addEventListener("click", handleStageFunnelAction);
   elements.commandPipelineBars?.addEventListener("click", handleStageFunnelAction);
+  elements.commandTimePressure?.addEventListener("click", handleStageFunnelAction);
   elements.fixNowAlerts?.addEventListener("click", handleDealAction);
   elements.fixNowAlerts?.addEventListener("click", handleTaskAction);
+  elements.commandActionsToday?.addEventListener("click", handleTaskAction);
   elements.commandUpcomingGoLives?.addEventListener("click", handleDealAction);
   elements.heroStats.addEventListener("click", handleExecutiveKpiAction);
   elements.marketBars.addEventListener("click", handleDashboardDrilldownAction);
@@ -2736,7 +2743,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-admin",
       fullName: "LATAM Workspace Admin",
-      email: "admin@spazio.local",
+      email: "admin@cubeone.local",
       role: "Administrator",
       status: "Active",
       team: "Revenue Operations",
@@ -2745,7 +2752,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-manager",
       fullName: "Commercial Manager",
-      email: "manager@spazio.local",
+      email: "manager@cubeone.local",
       role: "Sales Manager",
       status: "Active",
       team: "Commercial",
@@ -2754,7 +2761,7 @@ function createDefaultUsers() {
     normalizeUser({
       id: "user-ops",
       fullName: "Integration Ops",
-      email: "ops@spazio.local",
+      email: "ops@cubeone.local",
       role: "Revenue Ops",
       status: "Active",
       team: "Operations",
@@ -2765,10 +2772,10 @@ function createDefaultUsers() {
 
 function createDefaultWorkspace(year = new Date().getFullYear()) {
   return normalizeWorkspace({
-    workspaceName: "Spazio LATAM",
+    workspaceName: "Cube One LATAM",
     organizationName: "Evolution LATAM",
     adminName: "LATAM Workspace Admin",
-    adminEmail: "admin@spazio.local",
+    adminEmail: "admin@cubeone.local",
     subscriptionPlan: "Enterprise",
     crmModel: "New + Existing Accounts",
     fiscalYear: year,
@@ -3110,10 +3117,10 @@ function normalizeWorkspace(input) {
   const year = new Date().getFullYear();
   const source = input && typeof input === "object" ? input : {};
   return {
-    workspaceName: cleanText(source.workspaceName) || "Spazio LATAM",
+    workspaceName: cleanText(source.workspaceName) || "Cube One LATAM",
     organizationName: cleanText(source.organizationName) || "Evolution LATAM",
     adminName: cleanText(source.adminName) || "LATAM Workspace Admin",
-    adminEmail: cleanText(source.adminEmail) || "admin@spazio.local",
+    adminEmail: cleanText(source.adminEmail) || "admin@cubeone.local",
     subscriptionPlan: cleanText(source.subscriptionPlan) || "Enterprise",
     crmModel: cleanText(source.crmModel) || "New + Existing Accounts",
     fiscalYear: toNullableNumber(source.fiscalYear) || year,
@@ -3504,7 +3511,7 @@ function renderAll() {
   renderCompanyProfileDrawer();
 }
 
-function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing Spazio from the local Excel workspace.") {
+function setLoadingState(isLoading, title = "Loading workbook", copy = "Syncing Cube One from the local Excel workspace.") {
   ui.isHydrating = Boolean(isLoading);
   document.body.classList.toggle("app-loading", ui.isHydrating);
   elements.loadingOverlay.classList.toggle("is-visible", ui.isHydrating);
@@ -3557,6 +3564,14 @@ function renderWorkspaceChrome() {
   elements.workspaceUserRole.textContent = activeUser
     ? `${activeUser.role} · ${activeUser.status}`
     : "No active user selected";
+  if (elements.workspaceDropdownTitle) {
+    elements.workspaceDropdownTitle.textContent = workspace.workspaceName;
+  }
+  if (elements.workspaceDropdownCopy) {
+    elements.workspaceDropdownCopy.textContent = activeUser
+      ? `${activeUser.fullName} · ${activeUser.role}`
+      : `${workspace.organizationName} · ${workspace.subscriptionPlan}`;
+  }
 
   const ownerSelect = taskForm?.elements?.owner;
   if (ownerSelect) {
@@ -3894,6 +3909,7 @@ function renderHeroMetrics() {
 
 function renderDashboard() {
   const scopedDeals = getScopedDeals();
+  const visibleTasks = getScopedTasks();
   const usesValue = hasAnyDealValue(scopedDeals);
   const stageDurationMap = getStageDurationMap(scopedDeals);
   const stageStats = STAGE_ORDER.map((stage) => {
@@ -3901,12 +3917,12 @@ function renderDashboard() {
     return {
       stage,
       count: deals.length,
-      value: sumValues(deals.map((deal) => deal.dealValue)),
+      value: sumValues(deals.map((deal) => getDealValueAmount(deal))),
       weightedCount: sumValues(deals.map((deal) => getForecastProbability(deal))),
     };
   });
 
-  renderCommandCenter(scopedDeals, stageStats);
+  renderCommandCenter(scopedDeals, visibleTasks, stageStats, stageDurationMap);
 
   const totalDeals = scopedDeals.length;
   elements.dashboardStageSummary.textContent = `${totalDeals} deals · ${buildTimeWindowLabel()}`;
@@ -3956,28 +3972,190 @@ function renderDashboard() {
   renderRiskList(scopedDeals);
 }
 
-function renderCommandCenter(deals, stageStats = []) {
-  if (!elements.commandKpiGrid || !elements.fixNowAlerts || !elements.commandPipelineBars || !elements.commandUpcomingGoLives) {
+function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMap = new Map()) {
+  if (
+    !elements.commandKpiGrid ||
+    !elements.fixNowAlerts ||
+    !elements.commandActionsToday ||
+    !elements.commandPipelineBars ||
+    !elements.commandTimePressure ||
+    !elements.commandUpcomingGoLives
+  ) {
     return;
   }
 
   const activeDeals = deals.filter((deal) => !isInactiveDeal(deal));
-  const snapshot = buildForecastSnapshot(activeDeals);
-  const taskBuckets = getActionBuckets(getVisibleTasks());
-  const overdueActionAlerts = buildActionAlerts(taskBuckets.overdue);
-  const goLiveAlerts = buildGoLiveMonthAlerts(activeDeals);
-  const alerts = [...buildExecutionAlerts(activeDeals), ...overdueActionAlerts, ...goLiveAlerts].sort(compareExecutionAlerts);
-  const delayedIntegrations = activeDeals.filter((deal) => getStageSlaState(deal).stage === "Integration" && getStageSlaState(deal).tone === "stuck").length;
-  const goLivesThisMonth = activeDeals.filter((deal) => isGoLiveThisMonth(deal)).length;
-  const todayActions = taskBuckets.overdue.length + taskBuckets.today.length;
+  const scopedTasks = Array.isArray(tasks) ? tasks : [];
+  const taskBuckets = getActionBuckets(scopedTasks);
+  const fixNowAlerts = getFixNowAlerts(activeDeals, scopedTasks);
+  const revenue = getCockpitRevenue(activeDeals);
+  const stageData = getPipelineStageData(activeDeals, stageStats);
+  const upcoming = getUpcomingGoLiveDeals(activeDeals, 60);
 
-  elements.commandCenterSummary.textContent = `${todayActions} actions today`;
-  elements.fixNowCount.textContent = `${alerts.length} alerts`;
+  renderCockpitKpis(revenue, fixNowAlerts, taskBuckets, activeDeals);
+  renderFixNowPanel(fixNowAlerts);
+  renderActionsTodayPanel(taskBuckets);
+  renderPipelineValueChart(stageData);
+  renderTimePressurePanel(stageDurationMap);
+  renderUpcomingGoLives(upcoming);
+}
+
+function getFixNowAlerts(deals, tasks = []) {
+  const alerts = [];
+
+  deals.forEach((deal) => {
+    const dealName = getPrimaryOperatorName(deal);
+    const stage = cleanText(deal.stage) || "No stage";
+    const sla = getStageSlaState(deal);
+    const explicitNextAction = cleanText(deal.actionItems || deal.followUpNotes || deal.updates || deal.statusText || deal.comments);
+    const owner = cleanText(deal.followUpOwner || getDealOwner(deal));
+    const dueDate = cleanText(deal.nextFollowUpDate);
+    const hygieneGaps = [];
+
+    if (!explicitNextAction) {
+      hygieneGaps.push("next action");
+    }
+    if (!owner) {
+      hygieneGaps.push("owner");
+    }
+    if (!dueDate) {
+      hygieneGaps.push("due date");
+    }
+
+    if (sla.tone === "stuck") {
+      alerts.push({
+        id: `sla-${deal.id}`,
+        priority: 0,
+        tone: "danger",
+        title: `${dealName} is over SLA`,
+        message: `${stage} needs intervention now.`,
+        detail: `${stage}: ${sla.days} / ${sla.limit} days`,
+        dealId: deal.id,
+      });
+    } else if (sla.tone === "at-risk") {
+      alerts.push({
+        id: `sla-risk-${deal.id}`,
+        priority: 4,
+        tone: "warning",
+        title: `${dealName} is nearing SLA`,
+        message: `${stage} is approaching the limit.`,
+        detail: `${stage}: ${sla.days} / ${sla.limit} days`,
+        dealId: deal.id,
+      });
+    }
+
+    if (isBlockedDeal(deal) && sla.tone !== "stuck") {
+      alerts.push({
+        id: `blocked-${deal.id}`,
+        priority: 2,
+        tone: "danger",
+        title: `${dealName} is blocked`,
+        message: `${stage} has a blocker that needs resolution.`,
+        detail: `${deal.market || "No market"} · unblock the current dependency`,
+        dealId: deal.id,
+      });
+    }
+
+    if (hygieneGaps.length > 0) {
+      alerts.push({
+        id: `missing-${deal.id}`,
+        priority: 3,
+        tone: "danger",
+        title: `${dealName} is missing execution inputs`,
+        message: `Complete ${hygieneGaps.join(", ")} to keep the deal moving.`,
+        detail: `${stage} · ${deal.market || "No market"}`,
+        dealId: deal.id,
+      });
+    }
+  });
+
+  tasks
+    .filter((task) => task.status !== "Done" && isDatePast(task.dueDate))
+    .forEach((task) => {
+      const relatedDeal = getTaskRelatedDeal(task);
+      alerts.push({
+        id: `task-${task.id}`,
+        priority: 1,
+        tone: "danger",
+        title: task.title || "Overdue action",
+        message: `${task.owner || "No owner"} still owes this action.`,
+        detail: `${relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "Unlinked"} · due ${formatDate(task.dueDate)}`,
+        taskId: task.id,
+        dealId: relatedDeal?.id || "",
+      });
+    });
+
+  const toneWeight = { danger: 0, warning: 1, info: 2 };
+  return alerts
+    .sort((left, right) => {
+      const toneDelta = (toneWeight[left.tone] ?? 3) - (toneWeight[right.tone] ?? 3);
+      const priorityDelta = (left.priority ?? 9) - (right.priority ?? 9);
+      return priorityDelta || toneDelta || left.title.localeCompare(right.title);
+    })
+    .slice(0, 8);
+}
+
+function getCockpitRevenue(deals) {
+  return deals.reduce(
+    (accumulator, deal) => {
+      const pipelineValue = getDealValueAmount(deal);
+      const weightedValue = getForecastValue(deal);
+      const stage = cleanText(deal.stage);
+      const sla = getStageSlaState(deal);
+
+      accumulator.pipeline += pipelineValue;
+      accumulator.weighted += weightedValue;
+
+      if (["DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"].includes(stage)) {
+        accumulator.commit += weightedValue;
+      }
+
+      if (["stuck", "at-risk"].includes(sla.tone)) {
+        accumulator.atRisk += weightedValue;
+      }
+
+      return accumulator;
+    },
+    { pipeline: 0, weighted: 0, commit: 0, atRisk: 0 }
+  );
+}
+
+function getPipelineStageData(deals, stageStats = []) {
+  const stats = stageStats.length
+    ? stageStats
+    : STAGE_ORDER.map((stage) => {
+        const stageDeals = deals.filter((deal) => deal.stage === stage);
+        return {
+          stage,
+          count: stageDeals.length,
+          value: sumValues(stageDeals.map((deal) => getDealValueAmount(deal))),
+        };
+      });
+
+  return stats
+    .map((item) => {
+      const stageDeals = deals.filter((deal) => deal.stage === item.stage);
+      return {
+        stage: item.stage,
+        count: item.count,
+        value: Number(item.value || 0),
+        stuckCount: stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length,
+      };
+    })
+    .filter((item) => item.count > 0);
+}
+
+function renderCockpitKpis(revenue, alerts, taskBuckets, deals) {
+  const fixes = alerts.filter((item) => item.tone === "danger").length;
+  const actionsToday = taskBuckets.overdue.length + taskBuckets.today.length;
+  const goLivesThisMonth = deals.filter((deal) => isGoLiveThisMonth(deal)).length;
+
+  elements.commandCenterSummary.textContent = `${fixes} fix now · ${actionsToday} actions today · ${goLivesThisMonth} go lives this month`;
   elements.commandKpiGrid.innerHTML = [
-    ["Weighted Forecast", formatForecastUnits(snapshot.weightedCount), "Expected revenue-weighted execution output", "forecast"],
-    ["Deals at Risk", String(buildExecutionAlerts(activeDeals).length), "SLA, blocker, or missing-action pressure", "risk"],
-    ["Integrations Delayed", String(delayedIntegrations), "Integration records beyond 45 days", "delay"],
-    ["Go Lives This Month", String(goLivesThisMonth), "Launches landing in the active month", "golive"],
+    ["Pipeline", formatCurrency(revenue.pipeline), "Total open value across visible deals", "forecast"],
+    ["Weighted Forecast", formatCurrency(revenue.weighted), "Stage-weighted revenue in motion", "forecast"],
+    ["Commit", formatCurrency(revenue.commit), "High-confidence execution value", "golive"],
+    ["At Risk", formatCurrency(revenue.atRisk), `${alerts.length} issues require action`, "risk"],
   ]
     .map(([label, value, note, tone]) => `
       <article class="command-kpi-card tone-${escapeAttribute(tone)}">
@@ -3987,38 +4165,149 @@ function renderCommandCenter(deals, stageStats = []) {
       </article>
     `)
     .join("");
+}
 
+function renderFixNowPanel(alerts) {
+  elements.fixNowCount.textContent = `${alerts.length} alerts`;
   elements.fixNowAlerts.innerHTML = alerts.length
-    ? alerts.slice(0, 6).map(renderExecutionAlertCard).join("")
-    : '<div class="empty-state">No urgent execution gaps under the active filters.</div>';
+    ? alerts.map(renderFixNowAlertCard).join("")
+    : '<div class="empty-state">No critical execution gaps under the active filters.</div>';
+}
 
-  const maxStageValue = Math.max(...stageStats.map((item) => Number(item.value || 0)), 1);
-  elements.commandPipelineBars.innerHTML = stageStats
-    .filter((item) => item.count > 0)
+function renderFixNowAlertCard(item) {
+  const toneClass = item.tone === "danger" ? "is-danger" : item.tone === "warning" ? "is-warn" : "is-info";
+  const primaryAction = item.taskId
+    ? `<button type="button" class="icon-button success" data-action="mark-task-done" data-id="${escapeAttribute(item.taskId)}">Mark Done</button>`
+    : `<button type="button" class="icon-button" data-action="edit-deal" data-id="${escapeAttribute(item.dealId)}">Open Deal</button>`;
+  const secondaryAction = item.taskId && item.dealId
+    ? `<button type="button" class="icon-button" data-action="open-company-profile" data-id="${escapeAttribute(item.dealId)}">Open Deal</button>`
+    : "";
+
+  return `
+    <article class="execution-alert-card ${toneClass}">
+      <div>
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.message)}</p>
+        <small>${escapeHtml(item.detail)}</small>
+      </div>
+      <div class="execution-alert-actions">
+        ${primaryAction}
+        ${secondaryAction}
+      </div>
+    </article>
+  `;
+}
+
+function renderActionsTodayPanel(taskBuckets) {
+  const sections = [
+    ["Overdue", "danger", taskBuckets.overdue],
+    ["Due Today", "warning", taskBuckets.today],
+    ["Upcoming", "success", taskBuckets.upcoming],
+    ["Blocked", "neutral", taskBuckets.blocked],
+  ];
+  const totalActions = sections.reduce((count, [, , tasks]) => count + tasks.length, 0);
+
+  elements.commandActionsCount.textContent = `${totalActions} actions`;
+  elements.commandActionsToday.innerHTML = sections
+    .map(([label, tone, tasks]) => `
+      <section class="command-action-section tone-${escapeAttribute(tone)}">
+        <header>
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(tasks.length)}</span>
+        </header>
+        <div class="command-action-stack">
+          ${tasks.length ? tasks.slice(0, 4).map(renderCommandActionCard).join("") : `<div class="command-action-empty">No ${escapeHtml(label.toLowerCase())} actions.</div>`}
+        </div>
+      </section>
+    `)
+    .join("");
+}
+
+function renderCommandActionCard(task) {
+  const relatedDeal = getTaskRelatedDeal(task);
+  const operator = relatedDeal ? getPrimaryOperatorName(relatedDeal) : task.deal || task.client || task.operator || "No linked deal";
+  const contextParts = [relatedDeal?.market, relatedDeal?.stage, task.owner].filter(Boolean);
+  const dueLabel = cleanText(task.dueDate) ? formatDate(task.dueDate) : "No due date";
+
+  return `
+    <article class="command-action-card">
+      <div class="command-action-copy">
+        <strong>${escapeHtml(task.title || "Untitled action")}</strong>
+        <span>${escapeHtml(operator)}</span>
+        <small>${escapeHtml(contextParts.join(" · ") || "No owner or stage assigned")}</small>
+      </div>
+      <div class="command-action-meta">
+        <em>${escapeHtml(dueLabel)}</em>
+        <div class="command-action-buttons">
+          <button type="button" class="icon-button success" data-action="mark-task-done" data-id="${escapeAttribute(task.id)}">Mark Done</button>
+          ${relatedDeal ? `<button type="button" class="icon-button" data-action="open-task-deal" data-id="${escapeAttribute(task.id)}">Open Deal</button>` : ""}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderPipelineValueChart(stageData) {
+  if (!stageData.length) {
+    elements.commandPipelineBars.innerHTML = '<div class="empty-state">No visible pipeline value in the current scope.</div>';
+    return;
+  }
+
+  const maxValue = Math.max(...stageData.map((item) => item.value), 1);
+  elements.commandPipelineBars.innerHTML = stageData
     .map((item) => {
-      const stageDeals = activeDeals.filter((deal) => deal.stage === item.stage);
-      const stuckCount = stageDeals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
-      const width = Math.max(8, Math.round((Number(item.value || 0) / maxStageValue) * 100));
+      const width = Math.max(8, Math.round((item.value / maxValue) * 100));
       return `
-        <button type="button" class="command-stage-row" data-action="open-stage-funnel" data-stage="${escapeAttribute(item.stage)}">
-          <span>${escapeHtml(item.stage)}</span>
-          <strong>${escapeHtml(item.count)} deals</strong>
-          <div class="command-stage-track"><i style="width:${width}%"></i></div>
-          <small>${escapeHtml(formatCurrency(item.value))}${stuckCount ? ` · ${stuckCount} stuck` : ""}</small>
+        <button type="button" class="salesforce-bar-row" data-action="open-stage-funnel" data-stage="${escapeAttribute(item.stage)}">
+          <div class="salesforce-bar-label">
+            <strong>${escapeHtml(item.stage)}</strong>
+            <span>${escapeHtml(item.count)} deals · ${escapeHtml(formatCurrency(item.value))}${item.stuckCount ? ` · ${item.stuckCount} stuck` : ""}</span>
+          </div>
+          <div class="salesforce-bar-track"><span style="width:${width}%"></span></div>
         </button>
       `;
     })
-    .join("") || '<div class="empty-state">No visible pipeline value in the current scope.</div>';
+    .join("");
+}
 
-  const upcoming = getUpcomingGoLiveDeals(activeDeals, 60);
-  elements.commandUpcomingGoLives.innerHTML = upcoming.length
-    ? upcoming.slice(0, 6).map((deal) => {
+function renderTimePressurePanel(stageDurationMap = new Map()) {
+  const stages = ["Legal", "DD", "Integration"];
+  elements.commandTimePressure.innerHTML = stages
+    .map((stage) => {
+      const limit = STAGE_SLA_DAYS[stage];
+      const stageEntry = stageDurationMap.get(stage);
+      const averageDays = Number(stageEntry?.averageDays || 0);
+      const ratio = limit ? averageDays / limit : 0;
+      const tone = ratio > 1 ? "danger" : ratio >= 0.7 ? "warning" : "healthy";
+      const width = Math.min(100, Math.max(stageEntry ? 12 : 0, Math.round(ratio * 100)));
+      const metricLabel = stageEntry ? `${Math.round(averageDays)}d / ${limit}d` : `No cycle data / ${limit}d`;
+      const helper = stageEntry ? `${stageEntry.count} deals measured` : "Waiting for dated deals";
+
+      return `
+        <button type="button" class="command-time-row tone-${escapeAttribute(tone)}" data-action="open-stage-funnel" data-stage="${escapeAttribute(stage)}">
+          <div class="command-time-copy">
+            <strong>${escapeHtml(stage)} Avg</strong>
+            <span>${escapeHtml(metricLabel)}</span>
+          </div>
+          <div class="command-time-track"><i style="width:${width}%"></i></div>
+          <small>${escapeHtml(helper)}</small>
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function renderUpcomingGoLives(upcomingDeals) {
+  elements.commandUpcomingGoLives.innerHTML = upcomingDeals.length
+    ? upcomingDeals.slice(0, 6).map((deal) => {
         const dateText = cleanText(deal.liveDate || deal.liveSince || deal.signedEta || deal.signingEta);
         return `
           <article class="command-go-live-card">
-            ${renderCompanyProfileTrigger(deal, getPrimaryOperatorName(deal), buildDealContextLine(deal), "entity-trigger entity-trigger-block entity-trigger-compact")}
+            <div>
+              ${renderCompanyProfileTrigger(deal, getPrimaryOperatorName(deal), buildDealContextLine(deal), "entity-trigger entity-trigger-block entity-trigger-compact")}
+              <small>${escapeHtml(deal.productsFuture || deal.productsCurrent || deal.platform || "Launch scope pending")}</small>
+            </div>
             <span>${escapeHtml(formatDate(dateText))}</span>
-            <small>${escapeHtml(deal.productsFuture || deal.productsCurrent || deal.platform || "Launch scope pending")}</small>
           </article>
         `;
       }).join("")
@@ -5424,7 +5713,7 @@ function openCompanyFinderBestMatch() {
 function createNewAccountFromCompanyQuery(query) {
   const normalizedQuery = cleanText(query);
   if (!normalizedQuery) {
-    setBanner("Type a company name first so Spazio can prefill a new account workspace.", "warn");
+    setBanner("Type a company name first so Cube One can prefill a new account workspace.", "warn");
     return;
   }
 
@@ -5459,7 +5748,7 @@ function createNewAccountFromCompanyQuery(query) {
   ui.companyFinder.selectedDealId = null;
   renderCompanyFinder(normalizedQuery);
   window.scrollTo({ top: 0, behavior: "smooth" });
-  setBanner(`New account workspace prepared for ${normalizedQuery}. Complete the deal form to create the company in Spazio.`, "success");
+  setBanner(`New account workspace prepared for ${normalizedQuery}. Complete the deal form to create the company in Cube One.`, "success");
 }
 
 const COMPANY_PROFILE_EDIT_SECTIONS = [
@@ -10099,6 +10388,13 @@ function getDealNextAction(deal) {
   return cleanText(deal.actionItems || deal.followUpNotes || deal.updates || deal.statusText || deal.comments || "Define next action");
 }
 
+function isDatePast(dateValue) {
+  if (!cleanText(dateValue)) {
+    return false;
+  }
+  return daysUntil(dateValue) < 0;
+}
+
 function getUpcomingGoLiveDeals(deals, windowDays = 60) {
   return deals
     .filter((deal) => ["Integration", "Legal Approval", "Go Live", "Live"].includes(cleanText(deal.stage)))
@@ -12869,7 +13165,7 @@ function isRtfHeadingLine(line, index) {
 }
 
 function buildWordCompatibleHtml(kind, deal, template) {
-  const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "Spazio Request");
+  const title = cleanText(template?.exportLabel || getStageDocumentActionLabel(kind) || "Cube One Request");
   const subtitle = [buildDocumentClientName(deal), cleanText(deal.market), new Date().toLocaleDateString("en-US")].filter(Boolean).join(" · ");
   const lines = String(template?.content || "").split("\n");
   const blocks = [];
@@ -12907,8 +13203,8 @@ function buildWordCompatibleHtml(kind, deal, template) {
   <head>
     <meta charset="utf-8" />
     <meta name="ProgId" content="Word.Document" />
-    <meta name="Generator" content="Spazio" />
-    <meta name="Originator" content="Spazio" />
+    <meta name="Generator" content="Cube One" />
+    <meta name="Originator" content="Cube One" />
     <title>${escapeHtml(title)}</title>
     <style>
       @page {
@@ -12965,11 +13261,11 @@ function buildWordCompatibleHtml(kind, deal, template) {
   </head>
   <body>
     <div class="doc-shell">
-      <p class="doc-kicker">Spazio Request Export</p>
+      <p class="doc-kicker">Cube One Request Export</p>
       <h1>${escapeHtml(title)}</h1>
       ${subtitle ? `<p class="doc-subtitle">${escapeHtml(subtitle)}</p>` : ""}
       ${blocks.join("\n")}
-      <p class="doc-footer">Generated from Spazio as a Word-compatible document.</p>
+      <p class="doc-footer">Generated from Cube One as a Word-compatible document.</p>
     </div>
   </body>
 </html>`;
@@ -13156,7 +13452,7 @@ async function exportDealDocx(kind, sourceDeal = null) {
 
   if (!serverMeta.ready) {
     downloadWordCompatibleRequest(kind, deal, template);
-    setBanner("Stage saved and a Word request file was exported. Full DOCX with your template still requires the local Spazio server.", "success");
+    setBanner("Stage saved and a Word request file was exported. Full DOCX with your template still requires the local Cube One server.", "success");
     return;
   }
 
@@ -13590,7 +13886,7 @@ function getWorkflowCurrentAndNext() {
 }
 
 async function resetDemoState() {
-  setLoadingState(true, "Reloading reference workbook", "Refreshing Spazio from your Excel reference files.");
+  setLoadingState(true, "Reloading reference workbook", "Refreshing Cube One from your Excel reference files.");
   try {
     const response = await fetch(API_RESET_DEMO_URL, {
       method: "POST",
@@ -13720,7 +14016,7 @@ async function uploadExcelWorkbook(file) {
     setBanner("This upload requires a modern Excel workbook (.xlsx or .xlsm). Please resave the file and try again.", "danger");
     return;
   }
-  setLoadingState(true, "Importing Excel", `Loading ${safeName} into Spazio and rebuilding the local workbook.`);
+  setLoadingState(true, "Importing Excel", `Loading ${safeName} into Cube One and rebuilding the local workbook.`);
 
   try {
     const response = await fetch(`${API_UPLOAD_URL}?filename=${encodeURIComponent(safeName)}`, {
@@ -13813,7 +14109,7 @@ function buildUploadSummary(payload) {
     return `Source workbook imported: ${filename}. Refreshed ${deals} deals and ${targets} targets while preserving tasks, campaigns, users, and workspace settings.${mappingNote}${warningNote}`;
   }
 
-  return `Excel imported: ${filename}. Spazio data has been refreshed.`;
+  return `Excel imported: ${filename}. Cube One data has been refreshed.`;
 }
 
 function buildExportFilename(baseName, extension) {

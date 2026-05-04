@@ -3,17 +3,17 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Spazio</title>
-    <meta name="theme-color" content="#091220" />
-    <link rel="icon" type="image/svg+xml" href="assets/spazio-favicon.svg" />
-    <link rel="shortcut icon" href="assets/spazio-favicon.svg" />
+    <title>Cube One</title>
+    <meta name="theme-color" content="#0b1224" />
+    <link rel="icon" type="image/svg+xml" href="assets/cube-one-favicon.svg" />
+    <link rel="shortcut icon" href="assets/cube-one-favicon.svg" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="app-loading-overlay" class="loading-overlay is-visible" aria-live="polite" aria-hidden="false">
       <div class="loading-overlay-card">
-        <img src="assets/spazio-mark.svg" alt="" class="loading-overlay-logo" />
-        <span class="loading-overlay-kicker">Spazio workspace</span>
+        <img src="assets/cube-one-mark.svg" alt="" class="loading-overlay-logo" />
+        <span class="loading-overlay-kicker">Cube One workspace</span>
         <strong id="loading-overlay-title">Loading workbook</strong>
         <p id="loading-overlay-copy">Syncing pipeline, tasks, market intelligence, and forecast data from Excel.</p>
       </div>
@@ -23,30 +23,36 @@
           <div class="hero-topline">
             <div class="hero-copy">
               <div class="brand-lockup">
-                <img src="assets/spazio-mark.svg" alt="Spazio" class="brand-lockup-mark" />
+                <img src="assets/cube-one-mark.svg" alt="Cube One" class="brand-lockup-mark" />
                 <div class="brand-lockup-copy">
-                  <p class="eyebrow">Commercial operating cloud</p>
-                  <h1>Spazio</h1>
+                  <p class="eyebrow">The operating system for sales teams</p>
+                  <h1>Cube One</h1>
                 </div>
               </div>
               <p class="hero-text">
-                Manage new and existing accounts in a premium CRM cockpit with user administration,
-                operator control, forecast management, and execution tracking from Market Intelligence through Go Live, Live, and Handover.
+                Run your entire sales operation in one independent app. Pipeline, team, deals and insights stay fully connected across execution, integration, go live, live, and handover.
               </p>
             </div>
 
-            <div class="hero-tenant">
-              <div class="hero-tenant-card">
+            <details class="hero-tenant-dropdown">
+              <summary class="hero-tenant-summary">
                 <span class="hero-tenant-label">Workspace</span>
-                <strong id="workspace-badge">Spazio LATAM</strong>
-                <small id="workspace-plan-badge">Enterprise plan</small>
+                <strong id="workspace-dropdown-title">Cube One LATAM</strong>
+                <small id="workspace-dropdown-copy">Administrator access</small>
+              </summary>
+              <div class="hero-tenant">
+                <div class="hero-tenant-card">
+                  <span class="hero-tenant-label">Workspace</span>
+                  <strong id="workspace-badge">Cube One LATAM</strong>
+                  <small id="workspace-plan-badge">Enterprise plan</small>
+                </div>
+                <div class="hero-tenant-card">
+                  <label for="active-user-select" class="hero-tenant-label">Active User</label>
+                  <select id="active-user-select" class="hero-user-select"></select>
+                  <small id="workspace-user-role">Administrator access</small>
+                </div>
               </div>
-              <div class="hero-tenant-card">
-                <label for="active-user-select" class="hero-tenant-label">Active User</label>
-                <select id="active-user-select" class="hero-user-select"></select>
-                <small id="workspace-user-role">Administrator access</small>
-              </div>
-            </div>
+            </details>
 
           <div class="hero-actions">
             <button id="reset-demo-button" class="button button-ghost">Reload Reference</button>
@@ -110,7 +116,7 @@
         </section>
 
         <p id="app-banner" class="banner" aria-live="polite">
-          The app saves your changes to a local Excel workbook through the bundled server.
+          Cube One runs independently and saves your changes to a local Excel workbook through the bundled server.
         </p>
       </header>
 
@@ -243,12 +249,26 @@
                 </section>
                 <section class="command-block">
                   <div class="subpanel-head">
+                    <h3>My Actions Today</h3>
+                    <span id="command-actions-count" class="chip">0 actions</span>
+                  </div>
+                  <div id="command-actions-today" class="command-actions-list"></div>
+                </section>
+                <section class="command-block command-block-wide">
+                  <div class="subpanel-head">
                     <h3>Pipeline by Stage</h3>
                     <span class="chip">Value + SLA pressure</span>
                   </div>
                   <div id="command-pipeline-bars" class="command-pipeline-bars"></div>
                 </section>
-                <section class="command-block">
+                <section class="command-block command-block-wide">
+                  <div class="subpanel-head">
+                    <h3>Time Pressure</h3>
+                    <span class="chip">Avg days vs SLA</span>
+                  </div>
+                  <div id="command-time-pressure" class="command-time-list"></div>
+                </section>
+                <section class="command-block command-block-wide">
                   <div class="subpanel-head">
                     <h3>Upcoming Go Lives</h3>
                     <span class="chip">Next 60 days</span>
@@ -258,15 +278,61 @@
               </div>
             </section>
 
-            <section class="panel panel-wide">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-kicker">Execution radar</p>
-                  <h2>Stage Funnel</h2>
+            <section class="dashboard-priority-grid panel-wide">
+              <section class="panel dashboard-stage-panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="panel-kicker">Execution radar</p>
+                    <h2>Stage Funnel</h2>
+                  </div>
+                  <span id="dashboard-stage-summary" class="chip">0 deals</span>
                 </div>
-                <span id="dashboard-stage-summary" class="chip">0 deals</span>
+                <div id="stage-overview" class="stage-overview"></div>
+              </section>
+
+              <div class="dashboard-priority-stack">
+                <section class="panel dashboard-signals-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="panel-kicker">Weekly control</p>
+                      <h2>Operating Signals</h2>
+                    </div>
+                  </div>
+                  <div id="dashboard-signals" class="signal-grid">
+                    <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="legal">
+                      <span>Deals in Legal</span>
+                      <strong id="signal-legal">0</strong>
+                      <small>Accounts currently under legal review and contract negotiation</small>
+                    </button>
+                    <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="dd">
+                      <span>Deals in DD</span>
+                      <strong id="signal-dd">0</strong>
+                      <small>Active due diligence workload</small>
+                    </button>
+                    <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="integration">
+                      <span>Clients in Integration</span>
+                      <strong id="signal-integration">0</strong>
+                      <small>Implementations in active execution</small>
+                    </button>
+                    <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="handover-pending">
+                      <span>Handover Pending</span>
+                      <strong id="signal-new-traffic">0</strong>
+                      <small>Go live accounts still pending formal transfer</small>
+                    </button>
+                  </div>
+                </section>
+
+                <section class="panel dashboard-risk-panel">
+                  <div class="panel-head">
+                    <div>
+                      <p class="panel-kicker">Immediate action</p>
+                      <h2>Deals at Risk</h2>
+                    </div>
+                    <span id="risk-count" class="chip">0 alerts</span>
+                  </div>
+                  <div id="risk-list" class="risk-list"></div>
+                </section>
               </div>
-              <div id="stage-overview" class="stage-overview"></div>
             </section>
 
             <section class="panel panel-wide">
@@ -289,37 +355,6 @@
                 <span class="chip">What the numbers mean</span>
               </div>
               <div id="executive-kpi-readout" class="executive-readout-grid"></div>
-            </section>
-
-            <section class="panel">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-kicker">Weekly control</p>
-                  <h2>Operating Signals</h2>
-                </div>
-              </div>
-              <div id="dashboard-signals" class="signal-grid">
-                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="legal">
-                  <span>Deals in Legal</span>
-                  <strong id="signal-legal">0</strong>
-                  <small>Accounts currently under legal review and contract negotiation</small>
-                </button>
-                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="dd">
-                  <span>Deals in DD</span>
-                  <strong id="signal-dd">0</strong>
-                  <small>Active due diligence workload</small>
-                </button>
-                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="integration">
-                  <span>Clients in Integration</span>
-                  <strong id="signal-integration">0</strong>
-                  <small>Implementations in active execution</small>
-                </button>
-                <button type="button" class="signal-card is-clickable" data-action="open-operating-signal" data-signal-key="handover-pending">
-                  <span>Handover Pending</span>
-                  <strong id="signal-new-traffic">0</strong>
-                  <small>Go live accounts still pending formal transfer</small>
-                </button>
-              </div>
             </section>
 
             <section class="panel">
@@ -427,16 +462,6 @@
               </div>
             </section>
 
-            <section class="panel panel-wide">
-              <div class="panel-head">
-                <div>
-                  <p class="panel-kicker">Follow-up queue</p>
-                  <h2>Deals at Risk</h2>
-                </div>
-                <span id="risk-count" class="chip">0 alerts</span>
-              </div>
-              <div id="risk-list" class="risk-list"></div>
-            </section>
           </div>
         </section>
 
@@ -829,7 +854,7 @@
                     </label>
                   </div>
 
-                  <p class="form-note">Complexity scores use higher values for higher complexity. Spazio converts them into simplicity inside the weighted score.</p>
+                  <p class="form-note">Complexity scores use higher values for higher complexity. Cube One converts them into simplicity inside the weighted score.</p>
 
                   <div class="form-grid form-grid-4">
                     <label>
@@ -939,7 +964,7 @@
                     <div class="form-section-head">
                       <div>
                         <h4>Follow-Up Planner</h4>
-                        <p class="form-note">Plan a weekly, biweekly, or monthly operating cadence and let Spazio create the follow-up sequence for the account.</p>
+                        <p class="form-note">Plan a weekly, biweekly, or monthly operating cadence and let Cube One create the follow-up sequence for the account.</p>
                       </div>
                       <div class="quick-fill-strip">
                         <span>Cadence</span>
@@ -2170,7 +2195,7 @@
                   <div class="form-grid form-grid-2">
                     <label>
                       Workspace Name
-                      <input name="workspaceName" type="text" placeholder="Spazio LATAM" required />
+                      <input name="workspaceName" type="text" placeholder="Cube One LATAM" required />
                     </label>
                     <label>
                       Organization

@@ -1,6 +1,6 @@
-# Pipeline Command Center
+# Cube One
 
-App standalone para gestionar pipeline comercial y operativo en HTML, con almacenamiento persistente en un archivo Excel `.xlsx`.
+App independiente para gestionar pipeline comercial y operativo en HTML, con almacenamiento persistente en un archivo Excel `.xlsx`. No requiere Linear ni depende de un workspace externo para operar.
 
 ## Incluye
 
@@ -8,7 +8,8 @@ App standalone para gestionar pipeline comercial y operativo en HTML, con almace
 - CRUD local para deals con Legal, DD, Integration y Go Live.
 - Gestion de targets con comparacion plan vs actual.
 - KPI catalogue basado en tu matriz operativa.
-- Paquete Airtable listo para construir un Revenue Execution System con tablas, vistas, formulas, automations, interfaces y CSVs de arranque en [airtable/REVENUE_EXECUTION_SYSTEM_AIRTABLE.md](/Users/erickmendez/Documents/Codex/pipeline-manager-app/airtable/REVENUE_EXECUTION_SYSTEM_AIRTABLE.md:1), mas el wireframe funcional en [airtable/SALES_EXECUTION_SYSTEM_UI_WIREFRAME.md](/Users/erickmendez/Documents/Codex/pipeline-manager-app/airtable/SALES_EXECUTION_SYSTEM_UI_WIREFRAME.md:1).
+- Arquitectura standalone con frontend propio, servidor local minimo en Node y workbook local como capa de persistencia.
+- Paquete Airtable como referencia opcional para estructura operativa en [airtable/REVENUE_EXECUTION_SYSTEM_AIRTABLE.md](/Users/erickmendez/Documents/Codex/pipeline-manager-app/airtable/REVENUE_EXECUTION_SYSTEM_AIRTABLE.md:1), mas el wireframe funcional en [airtable/SALES_EXECUTION_SYSTEM_UI_WIREFRAME.md](/Users/erickmendez/Documents/Codex/pipeline-manager-app/airtable/SALES_EXECUTION_SYSTEM_UI_WIREFRAME.md:1).
 - Persistencia en un workbook Excel real.
 - Si el workbook local no existe, la app se siembra usando tus archivos de referencia en `/Users/erickmendez/Documents/Sales/`.
 - El dashboard tambien toma como referencia `/Users/erickmendez/Documents/Sales/latam_market_dashboard_automated.xlsx` para prioridades regionales y mezcla de etapas.
