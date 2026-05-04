@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
+import unicodedata
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -113,6 +115,11 @@ DEAL_COLUMNS = [
     ("Signed ETA", "signedEta"),
     ("Live Since", "liveSince"),
     ("Last Follow Up", "lastFollowUp"),
+    ("Follow-Up Cadence", "followUpCadence"),
+    ("Next Follow-Up Date", "nextFollowUpDate"),
+    ("Follow-Up Owner", "followUpOwner"),
+    ("Follow-Up Notes", "followUpNotes"),
+    ("Follow-Up Notifications Enabled", "followUpNotificationsEnabled"),
     ("Handover", "handover"),
     ("Brands", "brands"),
     ("Entity & Company Info", "entityInfo"),
@@ -348,6 +355,78 @@ KPI_BOOTSTRAP = [
     {"block": "Growth", "name": "Campaign Growth %", "definition": "Forecast Lift EUR / Budget EUR x 100", "stage": "Campaigns / Growth", "frequency": "Weekly / Monthly", "notes": "Projected incremental lift relative to committed campaign investment"},
 ]
 
+SOURCE_ACCOUNTS_HEADER_ALIASES = {
+    "siteUrl": ["SITE (URL)", "Site URL", "Site", "Website", "Website URL"],
+    "operatorName": ["Operator Name", "Operator", "Client", "Client Name", "Account Name", "Company Name"],
+    "casinoName": ["Casino Name (BO)", "Casino Name", "Brand", "Brand Name", "Site Name"],
+    "status": ["STATUS", "Status", "Deal Status", "Account Status", "Opportunity Status"],
+    "prospectDate": ["Prospect Date", "Lead Date", "Mapped Date", "Created Date"],
+    "offerDate": ["Offer Date", "Proposal Date", "Commercial Proposal Date", "Proposal Sent Date"],
+    "integrationDate": ["Integration Date", "Onboarding Date", "Implementation Date", "Integration Start Date"],
+    "liveDate": ["Live Date", "Go Live Date", "Launch Date"],
+    "country": ["Country", "Market", "Territory"],
+    "groupName": ["GROUP", "Group", "Operator Group", "Holding Group"],
+    "jurisdiction": ["Jurisdiction", "Licensing Jurisdiction"],
+    "legalEntity": ["LEGAL ENTITY", "Legal Entity", "Entity"],
+    "kam": ["LATAM KAM", "KAM", "Owner", "Sales Rep", "Account Manager"],
+    "accountScope": ["R/.COM", "R / .COM", "R COM", "Account Scope", "Scope", "Dotcom Retail"],
+    "type": ["B2B/B2C", "Client Type", "Type", "Business Model"],
+    "platform": ["Platform", "Tech Platform", "Provider Platform"],
+    "url": ["URL", "Account URL"],
+    "ezugiId": ["Ezugi ID"],
+    "evoInstance": ["Evo Instance"],
+    "evoSkinId": ["Evo Skin ID(if applicable)", "Evo Skin ID (if applicable)", "Evo Skin ID"],
+    "ezugiSkin": ["Ezugi Skin (if applicable)", "Ezugi Skin"],
+}
+SOURCE_ACCOUNTS_PRIORITY_FIELDS = ["operatorName", "casinoName", "country", "status", "offerDate", "integrationDate", "liveDate", "kam", "legalEntity", "url"]
+
+SOURCE_HOT_LEADS_HEADER_ALIASES = {
+    "month": ["mo", "Month"],
+    "evo": ["Evo", "New Traffic Source"],
+    "client": ["Client", "Client Name", "Operator", "Operator Name", "Deal", "Account"],
+    "type": ["type", "Type", "Segment", "Client Type"],
+    "market": ["Market", "Country", "Territory"],
+    "platform": ["Platform"],
+    "status": ["Status", "Stage", "Raw Status", "Deal Status"],
+    "agreement": ["Agreement", "Contract", "Legal", "Legal Status"],
+    "integration": ["Integration", "Integration Status"],
+    "dd": ["DD", "Due Diligence", "DD Status"],
+    "signedEta": ["Signed ETA", "Signing ETA", "Sign ETA", "Contract ETA"],
+    "liveSince": ["Live since", "Live Since", "Live Date", "Go Live Date"],
+    "lastFollowUp": ["Last follow up", "Last Follow Up", "Last Follow-up", "Follow Up", "Last Contact", "Last Activity"],
+    "handover": ["Handover", "Handover Date"],
+    "dealValue": ["Deal_Value", "Deal Value", "Deal Value EUR", "Deal Value (EUR)", "Commercial Value", "Value"],
+    "brands": ["Brands", "Brand"],
+    "entityInfo": ["Entity & Company Info", "Entity Info", "Company Info"],
+    "url": ["URL", "Website"],
+    "jira": ["Jira", "Jira Ticket", "Jira TKT"],
+    "ddTicket": ["DD TKT", "DD Ticket"],
+    "skype": ["Skype", "Teams", "Integration Chat"],
+    "dealValueAlt": ["Deal value2", "Deal Value 2", "Alternative Deal Value"],
+    "integrationEmail": ["Integration email", "Integration Email", "Onboarding Email", "Tech Contact Email"],
+    "updates": ["Updates", "Notes", "Comments", "Last Update"],
+}
+SOURCE_HOT_LEADS_PRIORITY_FIELDS = ["client", "market", "status", "agreement", "dd", "integration", "signedEta", "dealValue", "lastFollowUp", "updates"]
+
+SOURCE_TARGET_HEADER_ALIASES = {
+    "year": ["Year", "Fiscal Year", "FY"],
+    "market": ["Market", "Country"],
+    "type": ["Type", "Segment"],
+    "platform": ["Platform"],
+    "newTraffic": ["New Traffic", "New Business", "New Rev"],
+    "newSigned": ["New Signed", "Signed", "New Clients Signed", "Signed Accounts"],
+    "newSignedValue": ["New Signed €", "New Signed EUR", "New Signed Value", "Signed Value", "Signed Value EUR"],
+    "integrations": ["Integrations", "Integration Count"],
+    "integrationsValue": ["Integrations €", "Integrations EUR", "Integrations Value", "Integration Value"],
+    "ddPipeline": ["DD Pipeline", "DD Count", "DD in Pipeline"],
+    "ddPipelineValue": ["DD Pipeline €", "DD Pipeline EUR", "DD Value"],
+    "newGoLive": ["New Go Live", "Go Live"],
+    "newGoLiveValue": ["New Go Live €", "New Go Live EUR", "Go Live Value"],
+    "totalGoLive": ["Total Go Live", "Total Live"],
+    "totalGoLiveValue": ["Total Go Live €", "Total Go Live EUR", "Total Live Value"],
+}
+SOURCE_TARGET_PRIORITY_FIELDS = ["year", "market", "newSigned", "integrations", "ddPipeline", "newGoLive", "totalGoLive"]
+
 
 def main() -> None:
     if len(sys.argv) < 2:
@@ -483,15 +562,48 @@ def import_workbook(path: Path) -> dict[str, Any]:
             },
         }
 
-    if accounts_sheet_name or hot_leads_sheet_name or targets_legacy_sheet_name:
-        deals_input: list[dict[str, Any]] = []
-        if accounts_sheet_name:
-            deals_input.extend(read_accounts_sheet(wb[accounts_sheet_name]))
-        if hot_leads_sheet_name:
-            deals_input.extend(read_hot_leads_sheet(wb[hot_leads_sheet_name]))
+    accounts_detection = detect_sheet_by_headers(
+        wb,
+        accounts_sheet_name,
+        SOURCE_ACCOUNTS_HEADER_ALIASES,
+        min_matches=4,
+        validator=validate_accounts_header,
+    )
+    hot_leads_detection = detect_sheet_by_headers(
+        wb,
+        hot_leads_sheet_name,
+        SOURCE_HOT_LEADS_HEADER_ALIASES,
+        min_matches=5,
+        validator=validate_hot_leads_header,
+    )
+    targets_detection = detect_sheet_by_headers(
+        wb,
+        targets_legacy_sheet_name,
+        SOURCE_TARGET_HEADER_ALIASES,
+        min_matches=4,
+        validator=validate_targets_header,
+    )
 
-        targets_input = read_opportunities_targets_sheet(wb[targets_legacy_sheet_name]) if targets_legacy_sheet_name else []
+    if accounts_detection or hot_leads_detection or targets_legacy_sheet_name or targets_detection:
+        deals_input: list[dict[str, Any]] = []
+        if accounts_detection:
+            deals_input.extend(read_accounts_sheet(wb[accounts_detection["sheetName"]], detected=accounts_detection))
+        if hot_leads_detection:
+            deals_input.extend(read_hot_leads_sheet(wb[hot_leads_detection["sheetName"]], detected=hot_leads_detection))
+
+        targets_sheet_name = (targets_detection or {}).get("sheetName") or targets_legacy_sheet_name
+        targets_input = read_opportunities_targets_sheet(wb[targets_sheet_name], detected=targets_detection) if targets_sheet_name else []
         latam_reference = load_latam_reference()
+        coverage = {
+            "accounts": build_import_coverage("Accounts", accounts_detection, SOURCE_ACCOUNTS_HEADER_ALIASES, SOURCE_ACCOUNTS_PRIORITY_FIELDS),
+            "hotLeads": build_import_coverage("Hot Leads", hot_leads_detection, SOURCE_HOT_LEADS_HEADER_ALIASES, SOURCE_HOT_LEADS_PRIORITY_FIELDS),
+            "targets": build_import_coverage("Targets", targets_detection, SOURCE_TARGET_HEADER_ALIASES, SOURCE_TARGET_PRIORITY_FIELDS),
+        }
+        warnings = [
+            f"{item['label']}: missing recommended columns {', '.join(item['missing'])}"
+            for item in coverage.values()
+            if item and item.get("missing")
+        ]
         state = {
             "deals": normalize_deal_collection(deals_input),
             "marketIntel": normalize_market_intel_collection(build_market_intelligence_from_reference(latam_reference) or bootstrap.get("marketIntel", [])),
@@ -508,6 +620,13 @@ def import_workbook(path: Path) -> dict[str, Any]:
             "meta": {
                 "mode": "opportunities-source",
                 "sheetNames": sheetnames,
+                "sheetMatches": {
+                    "accounts": accounts_detection["sheetName"] if accounts_detection else "",
+                    "hotLeads": hot_leads_detection["sheetName"] if hot_leads_detection else "",
+                    "targets": targets_sheet_name or "",
+                },
+                "coverage": {key: value for key, value in coverage.items() if value},
+                "warnings": warnings,
                 "counts": {
                     "deals": len(state.get("deals", [])),
                     "marketIntel": len(state.get("marketIntel", [])),
@@ -690,14 +809,13 @@ def read_deals_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return []
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     deals: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in DEAL_COLUMNS}
+        raw = {key: cell_value_by_header(row, index, label) for label, key in DEAL_COLUMNS}
         deals.append(normalize_deal(raw))
 
     return deals
@@ -708,14 +826,13 @@ def read_market_intel_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return []
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     items: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in MARKET_INTEL_COLUMNS}
+        raw = {key: cell_value_by_header(row, index, label) for label, key in MARKET_INTEL_COLUMNS}
         items.append(normalize_market_intel(raw))
 
     return items
@@ -754,14 +871,13 @@ def read_tasks_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return []
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     tasks: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in TASK_COLUMNS}
+        raw = {key: cell_value_by_header(row, index, label) for label, key in TASK_COLUMNS}
         tasks.append(normalize_task(raw))
 
     return tasks
@@ -772,14 +888,13 @@ def read_users_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return []
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     users: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in USER_COLUMNS}
+        raw = {key: cell_value_by_header(row, index, label) for label, key in USER_COLUMNS}
         users.append(normalize_user(raw))
 
     return users
@@ -790,10 +905,9 @@ def read_workspace_sheet(ws) -> dict[str, Any]:
     if len(rows) < 2:
         return empty_workspace()
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
     values = rows[1]
-    index = {label: position for position, label in enumerate(header)}
-    raw = {key: values[index[label]] if label in index and index[label] < len(values) else None for label, key in WORKSPACE_COLUMNS}
+    index = build_header_index(list(rows[0]))
+    raw = {key: cell_value_by_header(values, index, label) for label, key in WORKSPACE_COLUMNS}
     return normalize_workspace(raw)
 
 
@@ -802,39 +916,35 @@ def read_campaigns_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return []
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     campaigns: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        raw = {key: row[index[label]] if label in index and index[label] < len(row) else None for label, key in CAMPAIGN_COLUMNS}
+        raw = {key: cell_value_by_header(row, index, label) for label, key in CAMPAIGN_COLUMNS}
         campaigns.append(normalize_campaign(raw))
 
     return campaigns
 
 
 def read_target_detail_rows(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
-    header_index = None
-
-    for position, row in enumerate(rows):
-        header = [stringify(cell).strip() for cell in row]
-        if header[: len(TARGET_DETAIL_COLUMNS)] == [label for label, _ in TARGET_DETAIL_COLUMNS]:
-            header_index = position
-            break
-
-    if header_index is None:
+    detected = detect_header_table(
+        rows,
+        alias_map_from_columns(TARGET_DETAIL_COLUMNS),
+        min_matches=4,
+        validator=lambda candidate: "market" in candidate.get("matchedFields", []),
+    )
+    if not detected:
         return []
 
     detail_targets: list[dict[str, Any]] = []
-    labels = [label for label, _ in TARGET_DETAIL_COLUMNS]
-    index = {label: position for position, label in enumerate(labels)}
+    index = detected["index"]
 
-    for row in rows[header_index + 1 :]:
+    for row in rows[detected["headerRowIndex"] + 1 :]:
         if not row or not any(cell not in (None, "") for cell in row):
             continue
-        raw = {key: row[index[label]] if index[label] < len(row) else None for label, key in TARGET_DETAIL_COLUMNS}
+        raw = {key: row[index[key]] if key in index and index[key] < len(row) else None for _, key in TARGET_DETAIL_COLUMNS}
         detail_targets.append(normalize_target(raw))
 
     return detail_targets
@@ -845,16 +955,207 @@ def read_kpi_sheet(ws) -> list[dict[str, Any]]:
     if not rows:
         return KPI_BOOTSTRAP
 
-    header = [str(cell) if cell is not None else "" for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header)}
+    index = build_header_index(list(rows[0]))
     items: list[dict[str, Any]] = []
 
     for row in rows[1:]:
         if not row or not any(cell is not None and str(cell).strip() for cell in row):
             continue
-        items.append({key: stringify(row[index[label]]) if label in index and index[label] < len(row) else "" for label, key in KPI_COLUMNS})
+        items.append({key: stringify(cell_value_by_header(row, index, label)) for label, key in KPI_COLUMNS})
 
     return merge_kpi_catalogue(items or KPI_BOOTSTRAP)
+
+
+def alias_map_from_columns(columns: list[tuple[str, str]]) -> dict[str, list[str]]:
+    return {key: [label] for label, key in columns}
+
+
+def normalize_header_key(value: Any) -> str:
+    text = clean_text(value)
+    if not text:
+        return ""
+
+    normalized = unicodedata.normalize("NFKD", text)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.lower().replace("&", " and ").replace("€", " eur ").replace("%", " percent ")
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+    return normalized
+
+
+def build_header_index(header: list[Any]) -> dict[str, int]:
+    index: dict[str, int] = {}
+    for position, cell in enumerate(header):
+        key = normalize_header_key(cell)
+        if key and key not in index:
+            index[key] = position
+    return index
+
+
+def resolve_header_position(index: dict[str, int], labels: Any) -> int | None:
+    candidates = labels if isinstance(labels, (list, tuple, set)) else [labels]
+    for label in candidates:
+        key = normalize_header_key(label)
+        if not key:
+            continue
+        position = index.get(key)
+        if position is not None:
+            return position
+    return None
+
+
+def cell_value_by_header(row: tuple[Any, ...], index: dict[str, int], labels: Any) -> Any:
+    position = resolve_header_position(index, labels)
+    if position is None or position >= len(row):
+        return None
+    return row[position]
+
+
+def build_alias_lookup(alias_map: dict[str, list[str]]) -> dict[str, str]:
+    lookup: dict[str, str] = {}
+    for field, labels in alias_map.items():
+        for label in labels:
+            key = normalize_header_key(label)
+            if key and key not in lookup:
+                lookup[key] = field
+    return lookup
+
+
+def detect_header_table(
+    rows: list[tuple[Any, ...]],
+    alias_map: dict[str, list[str]],
+    *,
+    scan_limit: int = 20,
+    min_matches: int = 1,
+    validator=None,
+) -> dict[str, Any] | None:
+    alias_lookup = build_alias_lookup(alias_map)
+    best_match: dict[str, Any] | None = None
+
+    for row_index, row in enumerate(rows[:scan_limit]):
+        header_index: dict[str, int] = {}
+        matched_fields: list[str] = []
+
+        for position, cell in enumerate(row):
+            normalized = normalize_header_key(cell)
+            field = alias_lookup.get(normalized)
+            if field and field not in header_index:
+                header_index[field] = position
+                matched_fields.append(field)
+
+        if len(matched_fields) < min_matches:
+            continue
+
+        candidate = {
+            "headerRowIndex": row_index,
+            "index": header_index,
+            "matchedFields": matched_fields,
+            "matchedCount": len(matched_fields),
+            "rows": rows,
+        }
+        if validator and not validator(candidate):
+            continue
+
+        if best_match is None or candidate["matchedCount"] > best_match["matchedCount"]:
+            best_match = candidate
+
+    return best_match
+
+
+def detect_sheet_by_headers(
+    wb,
+    preferred_sheet_name: str | None,
+    alias_map: dict[str, list[str]],
+    *,
+    min_matches: int = 1,
+    validator=None,
+) -> dict[str, Any] | None:
+    def inspect_sheet(sheet_name: str) -> dict[str, Any] | None:
+        rows = list(wb[sheet_name].iter_rows(values_only=True))
+        detected = detect_header_table(rows, alias_map, min_matches=min_matches, validator=validator)
+        if not detected:
+            return None
+        return {**detected, "sheetName": sheet_name}
+
+    if preferred_sheet_name and preferred_sheet_name in wb.sheetnames:
+        preferred = inspect_sheet(preferred_sheet_name)
+        if preferred:
+            return preferred
+
+    best_match: dict[str, Any] | None = None
+    for sheet_name in wb.sheetnames:
+        if preferred_sheet_name and sheet_name == preferred_sheet_name:
+            continue
+        detected = inspect_sheet(sheet_name)
+        if not detected:
+            continue
+        if best_match is None or detected["matchedCount"] > best_match["matchedCount"]:
+            best_match = detected
+
+    return best_match
+
+
+def build_import_coverage(
+    label: str,
+    detected: dict[str, Any] | None,
+    alias_map: dict[str, list[str]],
+    priority_fields: list[str],
+) -> dict[str, Any] | None:
+    if not detected:
+        return None
+
+    matched = detected.get("matchedFields", [])
+    missing_priority = [alias_map[field][0] for field in priority_fields if field in alias_map and field not in matched]
+    return {
+        "label": label,
+        "sheet": detected.get("sheetName", ""),
+        "matched": len(matched),
+        "expected": len(alias_map),
+        "missing": missing_priority,
+    }
+
+
+def validate_accounts_header(candidate: dict[str, Any]) -> bool:
+    fields = set(candidate.get("matchedFields", []))
+    return "country" in fields and ("operatorName" in fields or "casinoName" in fields)
+
+
+def validate_hot_leads_header(candidate: dict[str, Any]) -> bool:
+    fields = set(candidate.get("matchedFields", []))
+    return "client" in fields and "market" in fields
+
+
+def validate_targets_header(candidate: dict[str, Any]) -> bool:
+    fields = set(candidate.get("matchedFields", []))
+    metric_fields = {"newSigned", "integrations", "ddPipeline", "newGoLive", "totalGoLive"}
+    return "market" in fields and bool(fields.intersection(metric_fields))
+
+
+def find_year_in_rows(rows: list[tuple[Any, ...]]) -> int | None:
+    for row in rows[:25]:
+        for cell in row:
+            year = to_int(cell)
+            if year and 2000 <= year <= 2100:
+                return year
+    return None
+
+
+def looks_like_market_value(value: Any) -> bool:
+    text = clean_text(value)
+    if not text:
+        return False
+    normalized = normalize_header_key(text)
+    blocked = {"market", "country", "territory", "target", "totals", "total", "new signed", "signed"}
+    if normalized in blocked:
+        return False
+    if normalized.startswith("target ") or normalized.startswith("total "):
+        return False
+    return True
+
+
+def build_import_source_label(sheet_name: str, canonical_name: str) -> str:
+    if normalize_sheet_name(sheet_name) == normalize_sheet_name(canonical_name):
+        return f"Imported source: {canonical_name}"
+    return f"Imported source: {sheet_name}"
 
 
 def find_sheet_name(sheetnames: list[str], *, exact: set[str] | None = None, contains: set[str] | None = None) -> str | None:
@@ -903,18 +1204,58 @@ def load_opportunities_targets() -> list[dict[str, Any]]:
     return read_opportunities_targets_sheet(wb[targets_sheet_name])
 
 
-def read_opportunities_targets_sheet(ws) -> list[dict[str, Any]]:
-    year = to_int(ws["C24"].value) or 2025
+def read_opportunities_targets_sheet(ws, detected: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    rows = list(ws.iter_rows(values_only=True))
+    detected = detected or detect_header_table(rows, SOURCE_TARGET_HEADER_ALIASES, min_matches=4, validator=validate_targets_header)
+    if detected:
+        detail_targets: list[dict[str, Any]] = []
+        index = detected["index"]
+        default_year = find_year_in_rows(rows) or 2025
+
+        for row in rows[detected["headerRowIndex"] + 1 :]:
+            if not row or not any(cell not in (None, "") for cell in row):
+                continue
+
+            market = normalize_market(cell_value_by_header(row, index, ["Market", "Country"]))
+            if not market or not looks_like_market_value(market):
+                continue
+
+            payload = {
+                "id": f"target-{to_int(cell_value_by_header(row, index, ['Year', 'Fiscal Year', 'FY'])) or default_year}-{normalize_market(market).lower().replace(' ', '-')}",
+                "year": to_int(cell_value_by_header(row, index, ["Year", "Fiscal Year", "FY"])) or default_year,
+                "market": market,
+                "type": cell_value_by_header(row, index, ["Type", "Segment"]),
+                "platform": cell_value_by_header(row, index, "Platform"),
+                "newTraffic": cell_value_by_header(row, index, ["New Traffic", "New Business", "New Rev"]),
+                "newSigned": cell_value_by_header(row, index, ["New Signed", "Signed", "New Clients Signed", "Signed Accounts"]),
+                "newSignedValue": cell_value_by_header(row, index, ["New Signed €", "New Signed EUR", "New Signed Value", "Signed Value", "Signed Value EUR"]),
+                "integrations": cell_value_by_header(row, index, ["Integrations", "Integration Count"]),
+                "integrationsValue": cell_value_by_header(row, index, ["Integrations €", "Integrations EUR", "Integrations Value", "Integration Value"]),
+                "ddPipeline": cell_value_by_header(row, index, ["DD Pipeline", "DD Count", "DD in Pipeline"]),
+                "ddPipelineValue": cell_value_by_header(row, index, ["DD Pipeline €", "DD Pipeline EUR", "DD Value"]),
+                "newGoLive": cell_value_by_header(row, index, ["New Go Live", "Go Live"]),
+                "newGoLiveValue": cell_value_by_header(row, index, ["New Go Live €", "New Go Live EUR", "Go Live Value"]),
+                "totalGoLive": cell_value_by_header(row, index, ["Total Go Live", "Total Live"]),
+                "totalGoLiveValue": cell_value_by_header(row, index, ["Total Go Live €", "Total Go Live EUR", "Total Live Value"]),
+            }
+            detail_targets.append(normalize_target(payload))
+
+        if detail_targets:
+            return detail_targets
+
+    year = to_int(ws["C24"].value) or find_year_in_rows(rows) or 2025
     targets: list[dict[str, Any]] = []
 
-    for row_index in range(25, ws.max_row + 1):
-        market = clean_text(ws.cell(row_index, 2).value)
+    for row in rows:
+        market = clean_text(row[1] if len(row) > 1 else None)
         if not market:
             continue
-        if market.upper().startswith("TARGET"):
+        if market.upper().startswith("TARGET") and targets:
             break
+        if not looks_like_market_value(market):
+            continue
 
-        new_signed = to_int(ws.cell(row_index, 3).value)
+        new_signed = to_int(row[2] if len(row) > 2 else None)
         if new_signed is None:
             continue
 
@@ -935,33 +1276,39 @@ def read_opportunities_targets_sheet(ws) -> list[dict[str, Any]]:
     return targets
 
 
-def read_hot_leads_sheet(ws) -> list[dict[str, Any]]:
+def read_hot_leads_sheet(ws, detected: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return []
 
-    header = [stringify(cell).strip() for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header) if label}
+    detected = detected or detect_header_table(rows, SOURCE_HOT_LEADS_HEADER_ALIASES, min_matches=5, validator=validate_hot_leads_header)
+    if not detected:
+        return []
+
+    index = detected["index"]
     deals: list[dict[str, Any]] = []
 
-    for row in rows[1:]:
-        client = cell_value(row, index, "Client")
+    for row in rows[detected["headerRowIndex"] + 1 :]:
+        client = cell_value_by_header(row, index, ["Client", "Client Name", "Operator", "Operator Name", "Deal", "Account"])
         if not clean_text(client):
             continue
 
-        market = normalize_market(cell_value(row, index, "Market"))
+        market = normalize_market(cell_value_by_header(row, index, ["Market", "Country", "Territory"]))
         if not market:
             continue
 
-        status = clean_text(cell_value(row, index, "Status"))
-        agreement = clean_text(cell_value(row, index, "Agreement"))
-        integration = clean_text(cell_value(row, index, "Integration"))
-        dd_value = clean_text(cell_value(row, index, "DD"))
-        live_since = cell_value(row, index, "Live since")
-        signed_eta = cell_value(row, index, "Signed ETA")
-        last_follow_up = cell_value(row, index, "Last follow up")
+        status = clean_text(cell_value_by_header(row, index, ["Status", "Stage", "Raw Status", "Deal Status"]))
+        agreement = clean_text(cell_value_by_header(row, index, ["Agreement", "Contract", "Legal", "Legal Status"]))
+        integration = clean_text(cell_value_by_header(row, index, ["Integration", "Integration Status"]))
+        dd_value = clean_text(cell_value_by_header(row, index, ["DD", "Due Diligence", "DD Status"]))
+        live_since = cell_value_by_header(row, index, ["Live since", "Live Since", "Live Date", "Go Live Date"])
+        signed_eta = cell_value_by_header(row, index, ["Signed ETA", "Signing ETA", "Sign ETA", "Contract ETA"])
+        last_follow_up = cell_value_by_header(row, index, ["Last follow up", "Last Follow Up", "Last Follow-up", "Follow Up", "Last Contact", "Last Activity"])
 
-        deal_value = choose_numeric_value(cell_value(row, index, "Deal_Value"), cell_value(row, index, "Deal value2"))
+        deal_value = choose_numeric_value(
+            cell_value_by_header(row, index, ["Deal_Value", "Deal Value", "Deal Value EUR", "Deal Value (EUR)", "Commercial Value", "Value"]),
+            cell_value_by_header(row, index, ["Deal value2", "Deal Value 2", "Alternative Deal Value"]),
+        )
         stage = infer_hot_lead_stage(status, agreement, integration, dd_value, live_since)
         signed_eta_text = normalize_date(signed_eta)
 
@@ -970,35 +1317,35 @@ def read_hot_leads_sheet(ws) -> list[dict[str, Any]]:
                 {
                     "deal": client,
                     "client": client,
-                    "type": cell_value(row, index, "type"),
+                    "type": cell_value_by_header(row, index, ["type", "Type", "Segment", "Client Type"]),
                     "market": market,
-                    "platform": cell_value(row, index, "Platform"),
+                    "platform": cell_value_by_header(row, index, "Platform"),
                     "stage": stage,
                     "signingEta": signed_eta_text,
                     "signedEta": signed_eta_text,
                     "signingYear": extract_year(signed_eta),
                     "signingMonth": extract_month(signed_eta),
                     "dealValue": deal_value,
-                    "dealValueAlt": cell_value(row, index, "Deal value2"),
+                    "dealValueAlt": cell_value_by_header(row, index, ["Deal value2", "Deal Value 2", "Alternative Deal Value"]),
                     "status": status,
                     "agreement": agreement,
                     "integration": integration,
                     "dd": dd_value,
                     "liveSince": normalize_date(live_since),
                     "lastFollowUp": normalize_date(last_follow_up),
-                    "handover": normalize_date(cell_value(row, index, "Handover")),
-                    "month": cell_value(row, index, "mo"),
-                    "evo": cell_value(row, index, "Evo"),
-                    "brands": cell_value(row, index, "Brands"),
-                    "entityInfo": cell_value(row, index, "Entity & Company Info"),
-                    "url": cell_value(row, index, "URL"),
-                    "jira": cell_value(row, index, "Jira"),
-                    "ddTicket": cell_value(row, index, "DD TKT"),
-                    "skype": cell_value(row, index, "Skype"),
-                    "integrationEmail": cell_value(row, index, "Integration email"),
-                    "updates": cell_value(row, index, "Updates"),
-                    "source": "Opportunities-2026: Hot_Leads",
-                    "statusText": build_hot_lead_status_text(status, agreement, integration, dd_value, cell_value(row, index, "Updates")),
+                    "handover": normalize_date(cell_value_by_header(row, index, ["Handover", "Handover Date"])),
+                    "month": cell_value_by_header(row, index, ["mo", "Month"]),
+                    "evo": cell_value_by_header(row, index, ["Evo", "New Traffic Source"]),
+                    "brands": cell_value_by_header(row, index, ["Brands", "Brand"]),
+                    "entityInfo": cell_value_by_header(row, index, ["Entity & Company Info", "Entity Info", "Company Info"]),
+                    "url": cell_value_by_header(row, index, ["URL", "Website"]),
+                    "jira": cell_value_by_header(row, index, ["Jira", "Jira Ticket", "Jira TKT"]),
+                    "ddTicket": cell_value_by_header(row, index, ["DD TKT", "DD Ticket"]),
+                    "skype": cell_value_by_header(row, index, ["Skype", "Teams", "Integration Chat"]),
+                    "integrationEmail": cell_value_by_header(row, index, ["Integration email", "Integration Email", "Onboarding Email", "Tech Contact Email"]),
+                    "updates": cell_value_by_header(row, index, ["Updates", "Notes", "Comments", "Last Update"]),
+                    "source": build_import_source_label(ws.title, "Hot_Leads"),
+                    "statusText": build_hot_lead_status_text(status, agreement, integration, dd_value, cell_value_by_header(row, index, ["Updates", "Notes", "Comments", "Last Update"])),
                     "leadFlag": True,
                     "signedFlag": stage_in_or_after(stage, "Signed"),
                     "ddStartedFlag": has_process_started(dd_value) or stage_in_or_after(stage, "DD"),
@@ -1006,9 +1353,9 @@ def read_hot_leads_sheet(ws) -> list[dict[str, Any]]:
                     "integrationStartedFlag": has_process_started(integration) or stage_in_or_after(stage, "Integration"),
                     "integrationCompletedFlag": stage in {"Go Live", "Live"},
                     "goLiveFlag": stage in {"Go Live", "Live"},
-                    "newTraffic": clean_text(cell_value(row, index, "Evo")).lower() == "new rev",
+                    "newTraffic": clean_text(cell_value_by_header(row, index, ["Evo", "New Traffic Source"])).lower() == "new rev",
                     "comments": status,
-                    "actionItems": cell_value(row, index, "Updates"),
+                    "actionItems": cell_value_by_header(row, index, ["Updates", "Notes", "Comments", "Last Update"]),
                 }
             )
         )
@@ -1016,28 +1363,31 @@ def read_hot_leads_sheet(ws) -> list[dict[str, Any]]:
     return deals
 
 
-def read_accounts_sheet(ws) -> list[dict[str, Any]]:
+def read_accounts_sheet(ws, detected: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
         return []
 
-    header = [stringify(cell).strip() for cell in rows[0]]
-    index = {label: position for position, label in enumerate(header) if label}
+    detected = detected or detect_header_table(rows, SOURCE_ACCOUNTS_HEADER_ALIASES, min_matches=4, validator=validate_accounts_header)
+    if not detected:
+        return []
+
+    index = detected["index"]
     deals: list[dict[str, Any]] = []
 
-    for row in rows[1:]:
-        site_status = clean_text(cell_value(row, index, "SITE (URL)"))
-        operator_name = clean_text(cell_value(row, index, "Operator Name"))
-        casino_name = clean_text(cell_value(row, index, "Casino Name (BO)"))
+    for row in rows[detected["headerRowIndex"] + 1 :]:
+        site_status = clean_text(cell_value_by_header(row, index, ["SITE (URL)", "Site URL", "Site", "Website", "Website URL"]))
+        operator_name = clean_text(cell_value_by_header(row, index, ["Operator Name", "Operator", "Client", "Client Name", "Account Name", "Company Name"]))
+        casino_name = clean_text(cell_value_by_header(row, index, ["Casino Name (BO)", "Casino Name", "Brand", "Brand Name", "Site Name"]))
         deal_name = casino_name or operator_name
         if not deal_name:
             continue
 
-        status = clean_text(cell_value(row, index, "STATUS"))
-        prospect_date = cell_value(row, index, "Prospect Date")
-        offer_date = cell_value(row, index, "Offer Date")
-        integration_date = cell_value(row, index, "Integration Date")
-        live_date = cell_value(row, index, "Live Date")
+        status = clean_text(cell_value_by_header(row, index, ["STATUS", "Status", "Deal Status", "Account Status", "Opportunity Status"]))
+        prospect_date = cell_value_by_header(row, index, ["Prospect Date", "Lead Date", "Mapped Date", "Created Date"])
+        offer_date = cell_value_by_header(row, index, ["Offer Date", "Proposal Date", "Commercial Proposal Date", "Proposal Sent Date"])
+        integration_date = cell_value_by_header(row, index, ["Integration Date", "Onboarding Date", "Implementation Date", "Integration Start Date"])
+        live_date = cell_value_by_header(row, index, ["Live Date", "Go Live Date", "Launch Date"])
         has_progress_dates = any(normalize_date(value) for value in [offer_date, integration_date, live_date])
 
         if status.lower() == "" and not has_progress_dates and site_status.lower() not in {"active", "prospect", "retail", "landbased"}:
@@ -1047,21 +1397,21 @@ def read_accounts_sheet(ws) -> list[dict[str, Any]]:
         if status.lower() in {"canceled", "cancelled"} and not has_progress_dates and site_status.lower() != "active":
             continue
 
-        market = normalize_market(cell_value(row, index, "Country"))
+        market = normalize_market(cell_value_by_header(row, index, ["Country", "Market", "Territory"]))
         if not market:
             continue
 
         stage = infer_account_stage(status, offer_date, integration_date, live_date, site_status)
         primary_date = offer_date or prospect_date
-        group_name = clean_text(cell_value(row, index, "GROUP"))
-        jurisdiction = clean_text(cell_value(row, index, "Jurisdiction"))
-        legal_entity = clean_text(cell_value(row, index, "LEGAL ENTITY"))
-        kam = clean_text(cell_value(row, index, "LATAM KAM"))
-        account_scope = clean_text(cell_value(row, index, "R/.COM"))
-        ezugi_id = clean_text(cell_value(row, index, "Ezugi ID"))
-        evo_instance = clean_text(cell_value(row, index, "Evo Instance"))
-        evo_skin_id = clean_text(cell_value(row, index, "Evo Skin ID(if applicable)"))
-        ezugi_skin = clean_text(cell_value(row, index, "Ezugi Skin (if applicable)"))
+        group_name = clean_text(cell_value_by_header(row, index, ["GROUP", "Group", "Operator Group", "Holding Group"]))
+        jurisdiction = clean_text(cell_value_by_header(row, index, ["Jurisdiction", "Licensing Jurisdiction"]))
+        legal_entity = clean_text(cell_value_by_header(row, index, ["LEGAL ENTITY", "Legal Entity", "Entity"]))
+        kam = clean_text(cell_value_by_header(row, index, ["LATAM KAM", "KAM", "Owner", "Sales Rep", "Account Manager"]))
+        account_scope = clean_text(cell_value_by_header(row, index, ["R/.COM", "R / .COM", "R COM", "Account Scope", "Scope", "Dotcom Retail"]))
+        ezugi_id = clean_text(cell_value_by_header(row, index, ["Ezugi ID"]))
+        evo_instance = clean_text(cell_value_by_header(row, index, ["Evo Instance"]))
+        evo_skin_id = clean_text(cell_value_by_header(row, index, ["Evo Skin ID(if applicable)", "Evo Skin ID (if applicable)", "Evo Skin ID"]))
+        ezugi_skin = clean_text(cell_value_by_header(row, index, ["Ezugi Skin (if applicable)", "Ezugi Skin"]))
         agreement_status = infer_account_agreement(status, offer_date, integration_date, live_date, site_status)
         legal_status = infer_account_legal_status(stage)
         dd_status = infer_account_dd_status(stage)
@@ -1077,9 +1427,9 @@ def read_accounts_sheet(ws) -> list[dict[str, Any]]:
                     "operator": operator_name or deal_name,
                     "groupName": group_name,
                     "kam": kam,
-                    "type": cell_value(row, index, "B2B/B2C"),
+                    "type": cell_value_by_header(row, index, ["B2B/B2C", "Client Type", "Type", "Business Model"]),
                     "market": market,
-                    "platform": cell_value(row, index, "Platform"),
+                    "platform": cell_value_by_header(row, index, ["Platform", "Tech Platform", "Provider Platform"]),
                     "stage": stage,
                     "signingEta": normalize_date(primary_date),
                     "signedEta": normalize_date(offer_date),
@@ -1107,26 +1457,26 @@ def read_accounts_sheet(ws) -> list[dict[str, Any]]:
                     "ddStatus": dd_status,
                     "integrationStatus": integration_status,
                     "goLiveStatus": go_live_status,
-                    "source": "Opportunities-2026: Accounts",
+                    "source": build_import_source_label(ws.title, "Accounts"),
                     "statusText": build_account_status_text(site_status, status, group_name, jurisdiction, legal_entity, kam),
                     "comments": legal_entity,
                     "entityInfo": " | ".join(part for part in [jurisdiction, legal_entity] if part),
                     "brands": deal_name,
-                    "url": cell_value(row, index, "URL"),
-                    "dbColumn1": cell_value(row, index, "Column1"),
-                    "dbColumn2": cell_value(row, index, "Column2"),
-                    "dbColumn3": cell_value(row, index, "Column3"),
-                    "dbColumn4": cell_value(row, index, "Column4"),
-                    "dbColumn5": cell_value(row, index, "Column5"),
-                    "dbColumn6": cell_value(row, index, "Column6"),
-                    "dbColumn7": cell_value(row, index, "Column7"),
-                    "dbColumn8": cell_value(row, index, "Column8"),
-                    "dbColumn9": cell_value(row, index, "Column9"),
-                    "dbColumn10": cell_value(row, index, "Column10"),
-                    "dbColumn11": cell_value(row, index, "Column11"),
-                    "dbColumn12": cell_value(row, index, "Column12"),
-                    "dbColumn13": cell_value(row, index, "Column13"),
-                    "dbColumn14": cell_value(row, index, "Column14"),
+                    "url": cell_value_by_header(row, index, ["URL", "Account URL"]),
+                    "dbColumn1": cell_value_by_header(row, index, ["Column1", "Column 1"]),
+                    "dbColumn2": cell_value_by_header(row, index, ["Column2", "Column 2"]),
+                    "dbColumn3": cell_value_by_header(row, index, ["Column3", "Column 3"]),
+                    "dbColumn4": cell_value_by_header(row, index, ["Column4", "Column 4"]),
+                    "dbColumn5": cell_value_by_header(row, index, ["Column5", "Column 5"]),
+                    "dbColumn6": cell_value_by_header(row, index, ["Column6", "Column 6"]),
+                    "dbColumn7": cell_value_by_header(row, index, ["Column7", "Column 7"]),
+                    "dbColumn8": cell_value_by_header(row, index, ["Column8", "Column 8"]),
+                    "dbColumn9": cell_value_by_header(row, index, ["Column9", "Column 9"]),
+                    "dbColumn10": cell_value_by_header(row, index, ["Column10", "Column 10"]),
+                    "dbColumn11": cell_value_by_header(row, index, ["Column11", "Column 11"]),
+                    "dbColumn12": cell_value_by_header(row, index, ["Column12", "Column 12"]),
+                    "dbColumn13": cell_value_by_header(row, index, ["Column13", "Column 13"]),
+                    "dbColumn14": cell_value_by_header(row, index, ["Column14", "Column 14"]),
                     "leadFlag": True,
                     "signedFlag": stage_in_or_after(stage, "Signed") or agreement_status == "Signed",
                     "ddStartedFlag": stage_in_or_after(stage, "DD"),
@@ -1480,6 +1830,11 @@ def normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
         "signedEta": normalize_date(record.get("signedEta")),
         "liveSince": normalize_date(record.get("liveSince")),
         "lastFollowUp": normalize_date(record.get("lastFollowUp")),
+        "followUpCadence": clean_text(record.get("followUpCadence")),
+        "nextFollowUpDate": normalize_date(record.get("nextFollowUpDate")),
+        "followUpOwner": clean_text(record.get("followUpOwner")),
+        "followUpNotes": clean_text(record.get("followUpNotes")),
+        "followUpNotificationsEnabled": to_bool(record.get("followUpNotificationsEnabled")),
         "handover": normalize_date(record.get("handover")),
         "brands": clean_text(record.get("brands")),
         "entityInfo": clean_text(record.get("entityInfo")),
@@ -2209,6 +2564,8 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
         "agreement",
         "integration",
         "dd",
+        "followUpCadence",
+        "followUpOwner",
         "brands",
         "entityInfo",
         "url",
@@ -2226,6 +2583,7 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
         "statusText",
         "comments",
         "actionItems",
+        "followUpNotes",
         "updates",
         "legalSignoffRequest",
         "productsCurrent",
@@ -2271,10 +2629,10 @@ def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     for key in ["signingYear", "signingMonth"]:
         result[key] = choose_numeric_value(left.get(key), right.get(key))
 
-    for key in ["signingEta", "signedEta", "liveSince", "lastFollowUp", "handover", "prospectDate", "offerDate", "ddDate", "integrationDate", "legalApprovalDate", "liveDate", "proposalValidUntil"]:
+    for key in ["signingEta", "signedEta", "liveSince", "lastFollowUp", "nextFollowUpDate", "handover", "prospectDate", "offerDate", "ddDate", "integrationDate", "legalApprovalDate", "liveDate", "proposalValidUntil"]:
         result[key] = choose_preferred_string(preferred.get(key), secondary.get(key))
 
-    for key in ["newTraffic", "leadFlag", "signedFlag", "ddStartedFlag", "ddCompletedFlag", "integrationStartedFlag", "integrationCompletedFlag", "goLiveFlag"]:
+    for key in ["newTraffic", "leadFlag", "signedFlag", "ddStartedFlag", "ddCompletedFlag", "integrationStartedFlag", "integrationCompletedFlag", "goLiveFlag", "followUpNotificationsEnabled"]:
         result[key] = bool(left.get(key) or right.get(key))
 
     result["stage"] = choose_stage(left.get("stage"), right.get("stage"))

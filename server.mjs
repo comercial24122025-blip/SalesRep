@@ -4,6 +4,7 @@ import path from "node:path";
 import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { ensureWorkbook, importStateFromWorkbook, loadReferenceSeedState, loadStateFromWorkbook, saveStateToWorkbook } from "./excelStore.mjs";
+import { buildDealBriefDocx } from "./docxStore.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +107,23 @@ const server = http.createServer(async (request, response) => {
       } finally {
         await fs.rm(tmpDir, { recursive: true, force: true });
       }
+    }
+
+    if (pathname === "/api/export-docx" && request.method === "POST") {
+      const kind = String(url.searchParams.get("kind") || "").trim().toLowerCase();
+      const payload = await readJsonBody(request);
+      const deal = payload?.deal && typeof payload.deal === "object" ? payload.deal : {};
+      const { content, filename } = await buildDealBriefDocx(kind, deal);
+      response.writeHead(200, {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+        "Content-Length": content.byteLength,
+      });
+      response.end(content);
+      return;
     }
 
     if (pathname.startsWith("/api/")) {
