@@ -32,6 +32,7 @@ const COMMERCIAL_BUILDER_FIELD_IDS = [
   "commercial-builder-notes",
 ];
 const STAGE_ORDER = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Live", "Handover"];
+const KANBAN_STAGE_ORDER = ["Lead", "Proposal", "Legal", "DD", "Integration", "Go Live", "Live", "Handover"];
 const ALL_STAGES = [...STAGE_ORDER];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DEFAULT_DASHBOARD_YEARS = ["2024", "2025", "2026"];
@@ -752,6 +753,9 @@ const elements = {
   pipelineOperatingStageChip: document.getElementById("pipeline-operating-stage-chip"),
   pipelineFollowUpSummary: document.getElementById("pipeline-follow-up-summary"),
   pipelineFollowUpNotifications: document.getElementById("pipeline-follow-up-notifications"),
+  dealModalShell: document.getElementById("deal-modal-shell"),
+  dealModalCloseButton: document.getElementById("deal-modal-close-button"),
+  openNewDealModalButton: document.getElementById("open-new-deal-modal-button"),
   targetFormTitle: document.getElementById("target-form-title"),
   targetSubmitButton: document.getElementById("target-submit-button"),
   targetSummaryTitle: document.getElementById("target-summary-title"),
@@ -837,6 +841,7 @@ const ui = {
   dealAutosaveSavedAt: "",
   dealAutosaveBaseline: null,
   dealAutosaveRestored: false,
+  dealModalOpen: false,
 };
 
 let state = {
@@ -1113,6 +1118,7 @@ function bindEvents() {
     clearActiveDealAutosave(true);
     ui.editingDealId = null;
     resetDealForm();
+    closeDealModal();
     setBanner("Deal form cleared and autosave draft discarded.", "default");
   });
   elements.restoreDealDraftButton?.addEventListener("click", () => {
@@ -1456,8 +1462,24 @@ function bindEvents() {
   elements.campaignTableBody.addEventListener("click", handleCampaignAction);
   elements.userBoard.addEventListener("click", handleUserAction);
   elements.userTableBody.addEventListener("click", handleUserAction);
+  elements.openNewDealModalButton?.addEventListener("click", () => {
+    ui.activeView = "pipeline";
+    resetDealForm();
+    openDealModal();
+    renderViewState();
+  });
+  elements.dealModalCloseButton?.addEventListener("click", closeDealModal);
+  elements.dealModalShell?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-deal-modal-close]")) {
+      closeDealModal();
+    }
+  });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && ui.dealModalOpen) {
+      closeDealModal();
+      return;
+    }
     if (event.key === "Escape" && ui.companyProfileDealId) {
       closeCompanyProfile();
     }
@@ -3499,6 +3521,10 @@ function renderViewState() {
   views.forEach((view) => {
     view.classList.toggle("is-active", view.dataset.view === ui.activeView);
   });
+
+  elements.dealModalShell?.toggleAttribute("hidden", !ui.dealModalOpen);
+  elements.dealModalShell?.setAttribute("aria-hidden", ui.dealModalOpen ? "false" : "true");
+  document.body.classList.toggle("deal-modal-open", ui.dealModalOpen);
 }
 
 function renderWorkspaceChrome() {
@@ -6071,78 +6097,207 @@ function selectPipelineFinderSuggestion(index) {
 }
 
 function renderPipelineBoard(deals) {
-  const columns = STAGE_ORDER.map((stage) => {
-    const stageDeals = deals.filter((deal) => deal.stage === stage);
+  const columns = KANBAN_STAGE_ORDER.map((stage) => {
+    const stageDeals = deals.filter((deal) => getKanbanStage(deal.stage) === stage);
     const totalValue = sumValues(stageDeals.map((deal) => deal.dealValue));
     return { stage, stageDeals, totalValue };
-  }).filter((column) => column.stageDeals.length > 0);
+  });
 
-  if (columns.length === 0) {
-    elements.pipelineBoard.innerHTML = '<div class="empty-state">No deals match the current pipeline filters.</div>';
+  elements.pipelineBoard.innerHTML = `
+    <div class="kanban-board">
+      ${columns
+        .map(({ stage, stageDeals, totalValue }) => {
+          return `
+            <section class="kanban-column" data-stage="${escapeAttribute(stage)}">
+              <header class="kanban-column-header">
+                <div>
+                  <h3>${escapeHtml(stage)}</h3>
+                  <p>${stageDeals.length} deals · ${escapeHtml(formatCurrency(totalValue))}</p>
+                </div>
+                <span class="kanban-stage-count">${stageDeals.length}</span>
+              </header>
+              <div class="kanban-dropzone" data-kanban-dropzone="${escapeAttribute(stage)}">
+                ${
+                  stageDeals.length
+                    ? stageDeals.map((deal) => renderKanbanDealCard(deal)).join("")
+                    : `<div class="kanban-empty">No deals in ${escapeHtml(stage)}.</div>`
+                }
+              </div>
+            </section>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  bindKanbanDragAndDrop();
+}
+
+function renderKanbanDealCard(deal) {
+  const sla = getStageSlaState(deal);
+  const owner = getDealOwner(deal) || "Unassigned";
+  const nextAction = getDealNextAction(deal);
+  const riskTone = sla.tone === "stuck" ? "stuck" : sla.tone === "at-risk" ? "risk" : "healthy";
+
+  return `
+    <article
+      class="kanban-card kanban-card-${riskTone}"
+      draggable="true"
+      data-deal-id="${escapeAttribute(deal.id)}"
+      data-current-stage="${escapeAttribute(deal.stage || "")}"
+    >
+      <div class="kanban-card-top">
+        ${renderCompanyProfileTrigger(
+          deal,
+          getPrimaryOperatorName(deal),
+          `${deal.market || "No market"} · ${owner}`,
+          "entity-trigger entity-trigger-block entity-trigger-compact"
+        )}
+        <span class="kanban-risk-pill">${escapeHtml(getRiskDisplayLabel(riskTone))}</span>
+      </div>
+
+      <div class="kanban-card-value">${escapeHtml(formatDealCommercialMetric(deal))}</div>
+
+      <div class="kanban-card-meta">
+        <span>${escapeHtml(deal.market || "No market")}</span>
+        <span>${escapeHtml(owner)}</span>
+      </div>
+
+      <div class="kanban-sla">
+        ${renderSlaTimer(deal)}
+      </div>
+
+      <div class="kanban-next-action">
+        <strong>Next:</strong> ${escapeHtml(nextAction || "No next action defined")}
+      </div>
+
+      <div class="kanban-card-footer">
+        <span>Prob. ${escapeHtml(formatPercent(getForecastProbability(deal)))}</span>
+        <span>DD: ${escapeHtml(deal.ddStatus || "N/A")}</span>
+        <span>Int: ${escapeHtml(deal.integrationStatus || "N/A")}</span>
+      </div>
+
+      <div class="kanban-actions">
+        ${renderDealWorkflowDocumentButtons(deal, {
+          className: "icon-button",
+          includeTask: true,
+          includeEdit: true,
+          editLabel: "Open Deal",
+        })}
+      </div>
+    </article>
+  `;
+}
+
+function bindKanbanDragAndDrop() {
+  const cards = elements.pipelineBoard.querySelectorAll(".kanban-card");
+  const zones = elements.pipelineBoard.querySelectorAll(".kanban-dropzone");
+
+  cards.forEach((card) => {
+    card.addEventListener("dragstart", (event) => {
+      event.dataTransfer.setData("text/plain", card.dataset.dealId);
+      event.dataTransfer.effectAllowed = "move";
+      card.classList.add("is-dragging");
+    });
+
+    card.addEventListener("dragend", () => {
+      card.classList.remove("is-dragging");
+    });
+  });
+
+  zones.forEach((zone) => {
+    zone.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      zone.classList.add("is-over");
+    });
+
+    zone.addEventListener("dragleave", () => {
+      zone.classList.remove("is-over");
+    });
+
+    zone.addEventListener("drop", async (event) => {
+      event.preventDefault();
+      zone.classList.remove("is-over");
+
+      const dealId = event.dataTransfer.getData("text/plain");
+      const newStage = cleanText(zone.dataset.kanbanDropzone);
+      const deal = state.deals.find((item) => item.id === dealId);
+
+      if (!deal || !newStage || getKanbanStage(deal.stage) === newStage) {
+        return;
+      }
+
+      const validation = validateStageMove(deal, newStage);
+      if (!validation.ok) {
+        setBanner(validation.message, "warn");
+        return;
+      }
+
+      const updatedDeal = normalizeDeal({
+        ...deal,
+        stage: newStage,
+      });
+      setStageEntryDateForMove(updatedDeal, newStage);
+      state.deals = state.deals.map((item) => (item.id === updatedDeal.id ? updatedDeal : item));
+      const saved = await persistState();
+      renderAll();
+      setBanner(buildExcelBanner(saved ? `${getPrimaryOperatorName(updatedDeal)} moved to ${newStage}.` : `${getPrimaryOperatorName(updatedDeal)} moved to ${newStage} in memory.`), saved ? "success" : "warn");
+    });
+  });
+}
+
+function getKanbanStage(stage) {
+  const normalized = normalizeDealStage(stage);
+  if (normalized === "Qualified") {
+    return "Lead";
+  }
+  if (normalized === "Legal Approval") {
+    return "Go Live";
+  }
+  return KANBAN_STAGE_ORDER.includes(normalized) ? normalized : "Lead";
+}
+
+function validateStageMove(deal, newStage) {
+  if (newStage === "DD") {
+    if (!deal.dealValue) {
+      return { ok: false, message: "Cannot move to DD: Deal Value is required." };
+    }
+
+    if (!deal.legalStatus || ["Not Started", "Blocked"].includes(deal.legalStatus)) {
+      return { ok: false, message: "Cannot move to DD: Legal status must be active or approved." };
+    }
+  }
+
+  if (newStage === "Integration") {
+    if (!["Completed", "Approved"].includes(cleanText(deal.ddStatus))) {
+      return { ok: false, message: "Cannot move to Integration: DD must be completed or approved." };
+    }
+  }
+
+  if (newStage === "Go Live") {
+    if (!["Completed", "Live"].includes(cleanText(deal.integrationStatus))) {
+      return { ok: false, message: "Cannot move to Go Live: Integration must be completed." };
+    }
+  }
+
+  if (newStage === "Handover") {
+    if (!deal.liveDate && !deal.liveSince) {
+      return { ok: false, message: "Cannot move to Handover: Live date is required." };
+    }
+  }
+
+  return { ok: true };
+}
+
+function setStageEntryDateForMove(deal, newStage) {
+  const field = STAGE_ENTRY_FIELDS[newStage];
+  if (!field) {
     return;
   }
 
-  elements.pipelineBoard.innerHTML = columns
-    .map(({ stage, stageDeals, totalValue }) => {
-    const stageClass = stageClassName(stage);
-    const cards = stageDeals.length
-      ? stageDeals
-          .map((deal) => {
-            const health = getDealHealth(deal);
-            const sla = getStageSlaState(deal);
-            const owner = getDealOwner(deal) || "Unassigned";
-            const nextAction = getDealNextAction(deal);
-            return `
-              <article class="kanban-card execution-deal-card ${sla.cardClass || health.cardClass}">
-                <div class="pipeline-card-head">
-                  <div>
-                    ${renderCompanyProfileTrigger(
-                      deal,
-                      getPrimaryOperatorName(deal),
-                      `${deal.market || "No market"} · ${owner}`,
-                      "entity-trigger entity-trigger-block entity-trigger-compact"
-                    )}
-                  </div>
-                  <strong>${escapeHtml(formatDealCommercialMetric(deal))}</strong>
-                </div>
-                <div class="pill-row">
-                  <span class="pill stage">${escapeHtml(deal.market || "No market")}</span>
-                  <span class="pill neutral">${escapeHtml(owner)}</span>
-                  <span class="pill ${sla.pillClass || health.pillClass}">${escapeHtml(getRiskDisplayLabel(sla.tone === "neutral" ? health.label : sla.tone))}</span>
-                </div>
-                ${renderSlaTimer(deal)}
-                <p class="deal-next-action"><strong>Next Action:</strong> ${escapeHtml(nextAction)}</p>
-                <div class="pipeline-meta-grid execution-meta-grid">
-                  <span><strong>Stage:</strong> ${escapeHtml(deal.stage || "N/A")}</span>
-                  <span><strong>Probability:</strong> ${escapeHtml(formatPercent(getForecastProbability(deal)))}</span>
-                  <span><strong>DD:</strong> ${escapeHtml(deal.ddStatus || "N/A")}</span>
-                  <span><strong>Integration:</strong> ${escapeHtml(deal.integrationStatus || "N/A")}</span>
-                </div>
-                <div class="kanban-actions">
-                  ${renderDealWorkflowDocumentButtons(deal, {
-                    className: "icon-button",
-                    includeTask: true,
-                    includeEdit: true,
-                    editLabel: "Open Deal",
-                  })}
-                </div>
-              </article>
-            `;
-          })
-          .join("")
-      : '<div class="empty-state">No deals are currently mapped to this stage.</div>';
-
-    return `
-      <section class="kanban-column ${stageClass}">
-        <header>
-          <strong>${escapeHtml(stage)}</strong>
-          <span>${stageDeals.length} / ${formatCurrency(totalValue)}</span>
-        </header>
-        ${cards}
-      </section>
-    `;
-    })
-    .join("");
+  if (!deal[field]) {
+    deal[field] = new Date().toISOString().slice(0, 10);
+  }
 }
 
 function renderDealTable(deals) {
@@ -7012,6 +7167,7 @@ async function handleDealSubmit(event) {
   ui.dealAutosaveSavedAt = "";
   ui.dealAutosaveRestored = false;
   ui.editingDealId = null;
+  closeDealModal();
   resetDealForm();
   renderAll();
   ui.activeView = "pipeline";
@@ -7923,9 +8079,20 @@ function openDealEditorById(id) {
   ui.activeView = "pipeline";
   ui.editingDealId = id;
   fillDealForm(deal);
+  openDealModal();
   renderViewState();
   window.scrollTo({ top: 0, behavior: "smooth" });
   setBanner(`Editing deal: ${deal.deal}.`, "default");
+}
+
+function openDealModal() {
+  ui.dealModalOpen = true;
+  renderViewState();
+}
+
+function closeDealModal() {
+  ui.dealModalOpen = false;
+  renderViewState();
 }
 
 async function handleDealAction(event) {

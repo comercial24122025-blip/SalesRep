@@ -597,14 +597,19 @@
         </section>
 
         <section class="view pipeline-view" data-view="pipeline">
-          <div class="workspace">
-            <section class="panel form-panel sticky-panel pipeline-form-panel">
+          <div class="workspace pipeline-workspace">
+            <section id="deal-modal-shell" class="deal-modal-shell" hidden aria-hidden="true">
+              <div class="deal-modal-backdrop" data-deal-modal-close></div>
+              <section class="panel form-panel pipeline-form-panel deal-modal-panel" role="dialog" aria-modal="true" aria-labelledby="deal-form-title">
               <div class="panel-head">
                 <div>
                   <p class="panel-kicker">Deal workspace</p>
                   <h2 id="deal-form-title">New Deal</h2>
                 </div>
-                <span class="chip">Local workspace</span>
+                <div class="head-actions">
+                  <span class="chip">Local workspace</span>
+                  <button type="button" id="deal-modal-close-button" class="button button-ghost button-small" data-deal-modal-close>Close</button>
+                </div>
               </div>
 
               <form id="deal-form" class="entity-form">
@@ -1515,6 +1520,7 @@
                 </datalist>
               </form>
             </section>
+            </section>
 
             <section class="panel content-panel pipeline-panel">
               <div class="panel-head">
@@ -1524,6 +1530,7 @@
                 </div>
                 <div class="head-actions">
                   <span id="pipeline-count" class="chip">0 deals</span>
+                  <button id="open-new-deal-modal-button" class="button button-primary button-small">New Lead / Client / Operator</button>
                   <button id="export-pipeline-csv" class="button button-ghost button-small">Export CSV</button>
                 </div>
               </div>
