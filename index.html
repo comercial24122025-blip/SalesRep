@@ -102,12 +102,12 @@
           <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="weighted-forecast">
             <span>Weighted Forecast</span>
             <strong id="hero-pipeline-value">€0</strong>
-            <small>Probability-weighted expected account output</small>
+            <small>Projected weighted revenue through year-end</small>
           </button>
           <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="commit-forecast">
             <span>Commit Forecast</span>
             <strong id="hero-signed-count">0</strong>
-            <small>Deals carrying high execution confidence</small>
+            <small>High-confidence weighted revenue in motion</small>
           </button>
           <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="active-accounts">
             <span>Active Accounts</span>
@@ -117,7 +117,7 @@
           <button type="button" class="stat-card accent-card is-clickable" data-action="open-executive-kpi" data-kpi-key="at-risk">
             <span>At Risk</span>
             <strong id="hero-dd-aging">0</strong>
-            <small>Accounts with blockers or overdue follow-up</small>
+            <small>Revenue exposed to blockers or overdue execution</small>
           </button>
         </section>
 
@@ -958,18 +958,6 @@
                         <input name="liveDate" type="date" />
                       </label>
                       <label>
-                        Signing ETA
-                        <input name="signingEta" type="date" />
-                      </label>
-                      <label>
-                        Signing Year
-                        <input name="signingYear" type="number" min="2024" max="2035" />
-                      </label>
-                      <label>
-                        Signing Month
-                        <input name="signingMonth" type="number" min="1" max="12" />
-                      </label>
-                      <label>
                         Signed ETA
                         <input name="signedEta" type="date" />
                       </label>
@@ -1135,7 +1123,8 @@
                   <p class="form-note">Use this block to prepare structured internal handoffs for Legal, Proposal, Integration, and commercial negotiation. Core client type, market, platform, owner, license status, and product scope are inherited from the deal header above.</p>
 
                   <div class="form-subsection">
-                    <h4>Legal &amp; DD intake</h4>
+                    <h4>DD Request · Required Information</h4>
+                    <p class="field-help">Keep this pack complete before moving to DD: Company Name, Company Registration Number, Company Registered Address, Company Legal Representative, Company License, and DD Contact Email.</p>
                     <div class="form-grid form-grid-3">
                       <label>
                         Company Name
@@ -1454,6 +1443,10 @@
                       <label class="full-span">
                         Integration Request
                         <textarea name="integrationRequest" rows="4" placeholder="Technical setup, product activation, teams involved, API scope, launch dependencies"></textarea>
+                        <div class="field-inline-actions">
+                          <button type="button" id="seed-integration-template-button" class="button button-ghost button-small">Use Integration Template</button>
+                        </div>
+                        <span class="field-help">Seeds the internal integration request with client background, products, team ownership, integration scope, and commercial context.</span>
                       </label>
                       <label class="full-span">
                         Other Info

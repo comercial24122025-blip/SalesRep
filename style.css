@@ -236,7 +236,7 @@ body.app-loading {
 .shell {
   position: relative;
   z-index: 1;
-  width: min(1420px, calc(100% - 40px));
+  width: min(1720px, calc(100% - 40px));
   margin: 20px auto 48px;
 }
 
@@ -275,7 +275,7 @@ body.app-loading {
 .hero-copy {
   display: grid;
   gap: 10px;
-  max-width: 880px;
+  max-width: 960px;
 }
 
 .brand-lockup {
@@ -657,16 +657,16 @@ button.stat-card {
 
 .view-nav-shell {
   position: sticky;
-  top: 14px;
+  top: 8px;
   z-index: 15;
   display: grid;
-  gap: 10px;
-  margin: 18px 0 16px;
-  padding: 12px 14px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(8, 18, 37, 0.96), rgba(15, 27, 56, 0.92));
+  gap: 8px;
+  margin: 14px 0 14px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(8, 18, 37, 0.985), rgba(13, 24, 48, 0.965));
   border-color: rgba(96, 165, 250, 0.16);
-  box-shadow: 0 18px 38px rgba(8, 18, 37, 0.18);
+  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.14);
   transform-origin: top center;
   transition:
     opacity var(--transition),
@@ -694,8 +694,8 @@ button.stat-card {
 .view-nav-meta {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
+  align-items: center;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -727,18 +727,25 @@ button.stat-card {
 
 .view-switcher {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
   gap: 6px;
   margin: 0;
-  padding: 6px;
-  border-radius: 12px;
+  padding: 4px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(147, 197, 253, 0.14);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.view-switcher::-webkit-scrollbar {
+  display: none;
 }
 
 .view-switcher-secondary {
-  padding-top: 4px;
+  padding-top: 2px;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -746,16 +753,18 @@ button.stat-card {
 
 .view-tab {
   border: 0;
-  border-radius: 10px;
-  padding: 10px 13px;
+  border-radius: 9px;
+  padding: 8px 11px;
   background: transparent;
   color: rgba(226, 232, 240, 0.72);
   font-weight: 800;
-  font-size: 0.8rem;
+  font-size: 0.77rem;
   letter-spacing: 0.01em;
   text-transform: none;
   cursor: pointer;
   transition: background var(--transition), color var(--transition), transform var(--transition), box-shadow var(--transition);
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .view-tab-primary {
@@ -764,11 +773,11 @@ button.stat-card {
 }
 
 .view-tab-secondary {
-  padding: 7px 10px;
+  padding: 6px 9px;
   border-radius: 9px;
   background: rgba(255, 255, 255, 0.04);
   color: rgba(226, 232, 240, 0.68);
-  font-size: 0.73rem;
+  font-size: 0.71rem;
 }
 
 .operating-flow-toggle {
@@ -1828,7 +1837,7 @@ textarea {
 
 .field-help {
   margin-top: -2px;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
   font-size: 0.78rem;
   line-height: 1.45;
   font-weight: 600;
@@ -5289,6 +5298,95 @@ button.stage-card {
   text-align: center;
   background: var(--surface-soft);
   border: 1px dashed var(--line-strong);
+}
+
+@media (min-width: 1600px) {
+  .shell {
+    width: min(1820px, calc(100% - 56px));
+    margin: 24px auto 56px;
+  }
+
+  .hero {
+    padding: 36px;
+  }
+
+  .hero-topline {
+    grid-template-columns: minmax(0, 1.2fr) minmax(290px, 0.52fr) minmax(250px, 0.48fr);
+    gap: 24px;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1.14fr) minmax(420px, 0.86fr);
+    gap: 22px;
+  }
+
+  .dashboard-priority-grid {
+    grid-template-columns: minmax(0, 1.35fr) minmax(380px, 0.9fr);
+    gap: 20px;
+  }
+
+  .workspace {
+    grid-template-columns: minmax(420px, 500px) minmax(0, 1fr);
+  }
+
+  .latam-reference-layout {
+    grid-template-columns: minmax(0, 1.45fr) minmax(360px, 0.7fr);
+  }
+
+  .lead-market-layout {
+    grid-template-columns: minmax(360px, 0.82fr) minmax(0, 1.28fr);
+  }
+
+  .panel {
+    padding: 24px;
+  }
+
+  .command-kpi-grid {
+    grid-template-columns: repeat(4, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .command-center-grid,
+  .command-breakdown-grid {
+    gap: 16px;
+  }
+
+  .command-kpi-card,
+  .command-block {
+    padding: 20px;
+  }
+
+  .command-kpi-card strong {
+    font-size: clamp(2.1rem, 3vw, 3.35rem);
+  }
+
+  .command-action-card,
+  .command-breakdown-card,
+  .salesforce-bar-row,
+  .command-time-row,
+  .execution-alert-card,
+  .command-go-live-card {
+    padding: 14px;
+  }
+
+  .kanban-board {
+    grid-auto-columns: minmax(310px, 360px);
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1900px) {
+  .shell {
+    width: min(1920px, calc(100% - 64px));
+  }
+
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1.18fr) minmax(460px, 0.82fr);
+  }
+
+  .dashboard-priority-grid {
+    grid-template-columns: minmax(0, 1.42fr) minmax(420px, 0.88fr);
+  }
 }
 
 @media (max-width: 1280px) {

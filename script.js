@@ -1227,6 +1227,9 @@ function bindEvents() {
   document.getElementById("seed-proposal-template-button")?.addEventListener("click", () => {
     seedProposalRequestFromTemplate();
   });
+  document.getElementById("seed-integration-template-button")?.addEventListener("click", () => {
+    seedIntegrationRequestFromTemplate();
+  });
   document.getElementById("copy-integration-brief-button").addEventListener("click", () => {
     void copyDealBrief("integration");
   });
@@ -3803,7 +3806,7 @@ function handleOperatingFlowScroll() {
   const currentScrollY = window.scrollY || 0;
   const delta = currentScrollY - ui.lastScrollY;
 
-  if (currentScrollY <= 140) {
+  if (currentScrollY <= 72) {
     if (ui.operatingFlowCollapsed) {
       ui.operatingFlowCollapsed = false;
       renderOperatingFlowVisibility();
@@ -3812,10 +3815,10 @@ function handleOperatingFlowScroll() {
     return;
   }
 
-  if (delta > 14 && !ui.operatingFlowCollapsed) {
+  if (delta > 8 && !ui.operatingFlowCollapsed) {
     ui.operatingFlowCollapsed = true;
     renderOperatingFlowVisibility();
-  } else if (delta < -14 && ui.operatingFlowCollapsed) {
+  } else if (delta < -8 && ui.operatingFlowCollapsed) {
     ui.operatingFlowCollapsed = false;
     renderOperatingFlowVisibility();
   }
@@ -4140,15 +4143,13 @@ function renderAdminView() {
 
 function renderHeroMetrics() {
   const scopedDeals = getScopedDeals();
-  const snapshot = buildForecastSnapshot(scopedDeals);
-  const signedCount = snapshot.commitCount;
+  const revenue = getCockpitRevenue(scopedDeals.filter((deal) => !isInactiveDeal(deal)));
   const liveCount = scopedDeals.filter((deal) => isLiveAccountStage(deal.stage)).length;
-  const atRisk = getRiskDeals(scopedDeals).length;
 
-  elements.heroPipelineValue.textContent = formatForecastUnits(snapshot.weightedCount);
-  elements.heroSignedCount.textContent = String(signedCount);
+  elements.heroPipelineValue.textContent = formatCurrency(revenue.weighted);
+  elements.heroSignedCount.textContent = formatCurrency(revenue.commit);
   elements.heroLiveCount.textContent = String(liveCount);
-  elements.heroDdAging.textContent = String(atRisk);
+  elements.heroDdAging.textContent = formatCurrency(revenue.atRisk);
 }
 
 function renderDashboard() {
@@ -5939,7 +5940,7 @@ function renderRiskList(deals) {
 }
 
 function renderPipelineSummary(deals) {
-  const snapshot = buildForecastSnapshot(deals);
+  const revenue = getCockpitRevenue(deals.filter((deal) => !isInactiveDeal(deal)));
   const riskCount = getRiskDeals(deals).length;
   const upcomingCount = deals.filter((deal) => {
     const timeline = getDealTimeParts(deal);
@@ -5951,8 +5952,8 @@ function renderPipelineSummary(deals) {
   }).length;
   const summaryCards = [
     ["Visible Accounts", `${deals.length}`, buildTimeWindowLabel(), "visible-accounts"],
-    ["Weighted Forecast", formatForecastUnits(snapshot.weightedCount), "Expected output within the current review window", "weighted-forecast"],
-    ["Commit", `${snapshot.commitCount}`, "Deals carrying the strongest execution probability", "commit-forecast"],
+    ["Weighted Forecast", formatCurrency(revenue.weighted), `Projected weighted revenue through ${getForecastPeriodEndLabel()}`, "weighted-forecast"],
+    ["Commit", formatCurrency(revenue.commit), "High-confidence weighted revenue in motion", "commit-forecast"],
     ["Attention", `${riskCount}`, "Deals with blockers or delayed follow-up", "at-risk"],
     ["Next 30 Days", `${upcomingCount}`, "ETAs landing inside the next 30 days", "next-30-days"],
   ];
@@ -11071,7 +11072,7 @@ function getStageSlaState(deal) {
     return {
       stage,
       limit,
-      days,
+      days: null,
       ratio: 0,
       label: limit ? `No ${stage} start date` : "No SLA",
       tone: "neutral",
@@ -11138,11 +11139,21 @@ function renderSlaTimer(deal) {
   if (!sla.limit) {
     return `<div class="sla-timer is-neutral"><span>Stage SLA</span><strong>No active SLA</strong><small>${escapeHtml(getDealVisibleStage(deal) || "No stage")}</small></div>`;
   }
-  const percentage = sla.days === null ? 0 : Math.min(140, Math.round(sla.ratio * 100));
+  if (sla.days === null) {
+    return `
+      <div class="sla-timer is-neutral">
+        <span>${escapeHtml(sla.stage)} SLA</span>
+        <strong>No start date</strong>
+        <div class="sla-track"><i style="width:0%"></i></div>
+        <small>Stage date required</small>
+      </div>
+    `;
+  }
+  const percentage = Math.min(140, Math.round(sla.ratio * 100));
   return `
     <div class="sla-timer is-${escapeAttribute(sla.tone)}">
       <span>${escapeHtml(sla.stage)} SLA</span>
-      <strong>${escapeHtml(sla.days === null ? "No start date" : `${sla.days} / ${sla.limit} days`)}</strong>
+      <strong>${escapeHtml(`${sla.days} / ${sla.limit} days`)}</strong>
       <div class="sla-track"><i style="width:${Math.min(100, percentage)}%"></i></div>
       <small>${escapeHtml(sla.tone === "stuck" ? "Over SLA" : sla.tone === "at-risk" ? "Near SLA" : sla.tone === "healthy" ? "On track" : "Stage date required")}</small>
     </div>
@@ -13189,11 +13200,16 @@ function getRequestPackStatusItems(deal) {
       { label: "Activation Requirements", value: deal.activationRequirements },
     ]),
     buildRequestPackStatusItem("DD Request", [
+      { label: "Company Name", value: deal.companyName || buildDocumentClientName(deal) },
+      { label: "Company Registration", value: deal.companyRegistrationNumber },
+      { label: "Registered Address", value: deal.companyRegisteredAddress },
+      { label: "Legal Representative", value: deal.companyLegalRepresentative || deal.legalRepresentativeName },
+      { label: "Company License", value: deal.companyLicense || deal.licenseStatus },
+      { label: "DD Contact Email", value: deal.ddContactEmail },
       { label: "DD Date", value: deal.ddDate },
       { label: "DD Status", value: deal.ddStatus },
       { label: "DD Contact", value: deal.ddContactName && deal.ddContactEmail ? `${deal.ddContactName} ${deal.ddContactEmail}` : deal.ddContactName || deal.ddContactEmail },
       { label: "DD Ticket", value: deal.ddTicket },
-      { label: "License", value: deal.companyLicense || deal.licenseStatus },
       { label: "Deductions Allowed", value: deal.deductionsAllowed || deal.deductionTerms },
     ]),
     buildRequestPackStatusItem("Integration Request", [
@@ -13506,8 +13522,8 @@ function buildStageOperationalRecommendation(stage, deal, checklist, blueprint) 
   return `This account is operationally ready to move from ${stage} to ${blueprint.nextStage}.`;
 }
 
-function buildDealOperationalGuide(deal) {
-  const stage = getDealVisibleStage(deal) || "Lead";
+function buildDealOperationalGuide(deal, stageOverride = "") {
+  const stage = cleanText(stageOverride) || getDealVisibleStage(deal) || cleanText(deal.stage) || "Lead";
   const blueprint = getStageOperationBlueprint(stage);
   const checklist = buildStageOperationalChecklist(stage, deal);
   const readyCount = checklist.filter((item) => item.ready).length;
@@ -13560,7 +13576,7 @@ function renderDealWorkflowGuideFromForm() {
 
   const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
   const draft = buildDealDraftFromForm(existingDeal);
-  const guide = buildDealOperationalGuide(draft);
+  const guide = buildDealOperationalGuide(draft, draft.stage);
   const badgeTone = guide.toneClass === "is-ready" ? "success" : guide.toneClass === "is-blocked" ? "blocked" : "info";
 
   elements.dealWorkflowStageBadge.className = `pill ${badgeTone}`;
@@ -14006,6 +14022,124 @@ function seedProposalRequestFromTemplate() {
   setBanner("Proposal Request seeded from the commercial proposal template.", "success");
 }
 
+function buildIntegrationProductsTemplate(deal) {
+  return cleanText(deal.negotiatedProducts || deal.productsPotential || deal.productsCurrent) || "Evo, Ezugi, NE, RT, BTG, NLC, RB, SS";
+}
+
+function buildIntegrationCommercialsTemplate(deal) {
+  const scheduleLines = buildCommercialScheduleBriefLines(deal);
+  if (scheduleLines.length) {
+    return [
+      cleanText(deal.commercialTerms) ? `Commercial terms: ${cleanText(deal.commercialTerms)}` : "",
+      ...scheduleLines,
+      cleanText(deal.marketingCommitments) ? `Marketing commitments: ${cleanText(deal.marketingCommitments)}` : "",
+      cleanText(deal.liveGamesTopPosition) ? `Live Casino main supplier / position: ${cleanText(deal.liveGamesTopPosition)}` : "",
+      cleanText(deal.slotsTopPosition) ? `Slots top position: ${cleanText(deal.slotsTopPosition)}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    "Evolution: tiered",
+    "12% EUR 0 -1M + Premium: 1% - 5%",
+    "11% EUR 1 -3M + Premium: 1% - 5%",
+    "10% EUR 3 onwards + Premium: 1% - 5%",
+    "Growth tables EUR 0.15",
+    "High Stake tables EUR 0.55",
+    "First Person 11%",
+    "",
+    "Ezugi:",
+    "10% EUR 0 -1M + Premium: 1% - 5%",
+    "9% EUR 1 -3M + Premium: 1% - 5%",
+    "8% EUR 3 onwards + Premium: 1% - 5%",
+    "",
+    "Slots: NetEnt, RedTiger, NLC, BTG, Sneaky Slots, RedBaron",
+    "10% EUR 0 -1M + Premium: 1% - 5%",
+    "9% EUR 1 -3M + Premium: 1% - 5%",
+    "8% EUR 3 onwards + Premium: 1% - 5%",
+  ].join("\n");
+}
+
+function buildIntegrationRequestTemplate(deal) {
+  const clientName = buildDocumentClientName(deal);
+  const owner = cleanText(deal.kam) || "TBC";
+  const products = buildIntegrationProductsTemplate(deal);
+  const integrationTeam = cleanText(deal.integrationTeam) || "@Mariana\n@Andrei";
+  const teamsGroup = cleanText(deal.teamsGroup) || "1 Teams group for all brands";
+  const integrationScope =
+    cleanText(deal.integrationRequest) ||
+    `They will integrate Evolution API with ${products}, Promotion Suite.`;
+  const otherInfo = [
+    cleanText(deal.liveGamesTopPosition) ? `Live Casino main supplier / position: ${cleanText(deal.liveGamesTopPosition)}` : "Live Casino main supplier, slots top position",
+    cleanText(deal.slotsTopPosition) ? `Slots top position: ${cleanText(deal.slotsTopPosition)}` : "",
+    "Commercials:",
+    buildIntegrationCommercialsTemplate(deal),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return [
+    `New Client ${clientName} Integration Request`,
+    "",
+    `Hello team, please start supporting a new integration client ${clientName}`,
+    `for sites ${buildBriefValue(deal.url)}`,
+    "",
+    "Client Background",
+    `• Client Type: ${buildBriefValue(deal.type, "B2C/B2B")}`,
+    `• URL: ${buildBriefValue(deal.url)}`,
+    `• Client based: ${buildBriefValue(deal.clientBased, deal.jurisdiction)}`,
+    `• Name: ${clientName}`,
+    `• Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
+    `• Market: ${buildBriefValue(deal.market)}`,
+    `• Platform: ${buildBriefValue(deal.platform)}`,
+    `• Other live suppliers: ${buildBriefValue(deal.otherLiveSuppliers)}`,
+    `• Potential: ${buildBriefValue(deal.priorityClass, "HIGH")}`,
+    `• Priority: ${buildBriefValue(deal.targetPriority, "Normal")}`,
+    `• Owner: ${owner}`,
+    `• License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus, "yes/no/In Progress + territory")}`,
+    `Integration team: ${buildBriefValue(deal.integrationTeam, "@Mariana, @Andrei")}`,
+    `• Products: ${products}`,
+    `• ${integrationTeam.split("\n").join("\n• ")}`,
+    `• ${teamsGroup}`,
+    "",
+    `• Integration: ${integrationScope}`,
+    "",
+    "Other info:",
+    otherInfo,
+  ].join("\n");
+}
+
+function seedIntegrationRequestFromTemplate() {
+  const existingDeal = ui.editingDealId ? state.deals.find((deal) => deal.id === ui.editingDealId) : null;
+  const draft = buildDealDraftFromForm(existingDeal);
+  const integrationField = dealForm.elements.integrationRequest;
+  const otherInfoField = dealForm.elements.otherInfo;
+  if (!integrationField) {
+    return;
+  }
+
+  integrationField.value = buildIntegrationRequestTemplate(draft);
+  integrationField.dispatchEvent(new Event("input", { bubbles: true }));
+  integrationField.dispatchEvent(new Event("change", { bubbles: true }));
+
+  if (otherInfoField && !cleanText(otherInfoField.value)) {
+    otherInfoField.value = [
+      cleanText(draft.liveGamesTopPosition) ? `Live Casino main supplier / position: ${cleanText(draft.liveGamesTopPosition)}` : "Live Casino main supplier, slots top position",
+      cleanText(draft.slotsTopPosition) ? `Slots top position: ${cleanText(draft.slotsTopPosition)}` : "",
+      "Commercials:",
+      buildIntegrationCommercialsTemplate(draft),
+    ]
+      .filter(Boolean)
+      .join("\n");
+    otherInfoField.dispatchEvent(new Event("input", { bubbles: true }));
+    otherInfoField.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  refreshDealFieldHighlights();
+  setBanner("Integration Request seeded from the internal integration template.", "success");
+}
+
 function parseCommercialScheduleRows(value) {
   return String(value ?? "")
     .replace(/\u00a0/g, " ")
@@ -14114,34 +14248,14 @@ function buildLegalRequestBrief(deal) {
 }
 
 function buildIntegrationRequestBrief(deal) {
+  const baseTemplate = cleanText(deal.integrationRequest) || buildIntegrationRequestTemplate(deal);
   return [
-    `New Client ${buildDocumentClientName(deal)} Integration Request`,
+    baseTemplate,
     "",
-    `Hello team, please start supporting a new integration client ${buildDocumentClientName(deal)}.`,
-    "",
-    "Client Background",
-    `Client Type: ${buildBriefValue(deal.type)}`,
-    `URL: ${buildBriefValue(deal.url, deal.siteStatus)}`,
-    `Client based: ${buildBriefValue(deal.clientBased, deal.jurisdiction)}`,
-    `Name: ${buildDocumentClientName(deal)}`,
-    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
-    `Market: ${buildBriefValue(deal.market)}`,
-    `Platform: ${buildBriefValue(deal.platform)}`,
-    `Other live suppliers: ${buildBriefValue(deal.otherLiveSuppliers)}`,
-    `Potential: ${buildBriefValue(deal.priorityClass, deal.targetPriority)}`,
-    `Priority: ${buildBriefValue(deal.targetPriority)}`,
-    `Owner: ${buildBriefValue(deal.kam)}`,
-    `License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
-    `Integration team: ${buildBriefValue(deal.integrationTeam)}`,
-    `Products: ${buildNegotiatedProductsValue(deal)}`,
-    `Teams group: ${buildBriefValue(deal.teamsGroup)}`,
-    "",
-    `Integration request: ${buildBriefValue(deal.integrationRequest)}`,
     `Integration email: ${buildBriefValue(deal.integrationEmail)}`,
     `Integration chat: ${buildBriefValue(deal.skype)}`,
     `Jira ticket: ${buildBriefValue(deal.jira)}`,
-    "",
-    `Other info: ${buildBriefValue(deal.otherInfo, deal.entityInfo, deal.comments)}`,
+    `Additional notes: ${buildBriefValue(deal.otherInfo, deal.entityInfo, deal.comments)}`,
   ].join("\n");
 }
 
@@ -14187,15 +14301,17 @@ function buildDdRequestBrief(deal) {
     `Stage: ${buildBriefValue(deal.stage)}`,
     `DD Initiated: ${buildBriefValue(deal.ddDate || new Date().toISOString().slice(0, 10))}`,
     "",
-    "Corporate and Licensing",
-    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
-    `Company Registration Number: ${buildBriefValue(deal.companyRegistrationNumber)}`,
-    `Company Registered Address: ${buildBriefValue(deal.companyRegisteredAddress)}`,
+    "Required Information",
+    `Company Name: ${buildBriefValue(deal.companyName, buildDocumentClientName(deal))}`,
+    `Company registration number: ${buildBriefValue(deal.companyRegistrationNumber)}`,
+    `Company registered address: ${buildBriefValue(deal.companyRegisteredAddress)}`,
+    `Company Legal Representative: ${buildBriefValue(deal.companyLegalRepresentative, deal.legalRepresentativeName, deal.decisionMaker)}`,
     `Company License: ${buildBriefValue(deal.companyLicense, deal.licenseStatus)}`,
-    "",
-    "DD Contacts",
-    `DD Contact Name: ${buildBriefValue(deal.ddContactName)}`,
     `DD Contact Email: ${buildBriefValue(deal.ddContactEmail)}`,
+    "",
+    "Supporting Context",
+    `Legal Entity: ${buildBriefValue(deal.legalEntity)}`,
+    `DD Contact Name: ${buildBriefValue(deal.ddContactName)}`,
     `Legal Representative: ${buildBriefValue(deal.legalRepresentativeName, deal.companyLegalRepresentative)}`,
     `Legal Representative Email: ${buildBriefValue(deal.legalRepresentativeEmail)}`,
     "",
