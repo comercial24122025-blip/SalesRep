@@ -253,6 +253,17 @@ USER_COLUMNS = [
     ("Updated At", "updatedAt"),
 ]
 
+HISTORY_COLUMNS = [
+    ("ID", "id"),
+    ("Action", "action"),
+    ("Detail", "detail"),
+    ("Storage Mode", "storageMode"),
+    ("Entity Type", "entityType"),
+    ("Entity ID", "entityId"),
+    ("Actor", "actor"),
+    ("Created At", "createdAt"),
+]
+
 WORKSPACE_COLUMNS = [
     ("Workspace Name", "workspaceName"),
     ("Organization Name", "organizationName"),
@@ -473,6 +484,7 @@ def read_workbook(path: Path) -> dict[str, Any]:
     users_sheet_name = find_sheet_name(wb.sheetnames, exact={"Users"})
     workspace_sheet_name = find_sheet_name(wb.sheetnames, exact={"Workspace"})
     campaigns_sheet_name = find_sheet_name(wb.sheetnames, exact={"Campaigns"})
+    history_sheet_name = find_sheet_name(wb.sheetnames, exact={"History"})
 
     deals = normalize_deal_collection(read_deals_sheet(wb[deals_sheet_name])) if deals_sheet_name else []
     market_intel = normalize_market_intel_collection(read_market_intel_sheet(wb[market_intel_sheet_name])) if market_intel_sheet_name else normalize_market_intel_collection(bootstrap.get("marketIntel", []))
@@ -484,6 +496,7 @@ def read_workbook(path: Path) -> dict[str, Any]:
         users = normalize_user_collection(bootstrap["users"])
     workspace = normalize_workspace(read_workspace_sheet(wb[workspace_sheet_name])) if workspace_sheet_name else normalize_workspace(bootstrap["workspace"])
     campaigns = normalize_campaign_collection(read_campaigns_sheet(wb[campaigns_sheet_name])) if campaigns_sheet_name else []
+    history = read_history_sheet(wb[history_sheet_name]) if history_sheet_name else normalize_history_collection(bootstrap.get("history", []))
     tasks, workspace = sync_task_numbers(tasks, workspace)
     return {
         "deals": deals,
@@ -494,6 +507,7 @@ def read_workbook(path: Path) -> dict[str, Any]:
         "campaigns": campaigns,
         "users": users,
         "workspace": workspace,
+        "history": history,
         "latamReference": load_latam_reference(),
     }
 
@@ -513,6 +527,7 @@ def load_reference_seed_state() -> dict[str, Any]:
         "campaigns": normalize_campaign_collection(bootstrap.get("campaigns", [])),
         "users": normalize_user_collection(bootstrap.get("users", [])),
         "workspace": normalize_workspace(bootstrap.get("workspace", {})),
+        "history": normalize_history_collection(bootstrap.get("history", [])),
         "latamReference": latam_reference,
     }
 
@@ -613,6 +628,7 @@ def import_workbook(path: Path) -> dict[str, Any]:
             "campaigns": normalize_campaign_collection(bootstrap.get("campaigns", [])),
             "users": normalize_user_collection(bootstrap.get("users", [])),
             "workspace": normalize_workspace(bootstrap.get("workspace", {})),
+            "history": normalize_history_collection(bootstrap.get("history", [])),
             "latamReference": latam_reference,
         }
         return {
@@ -657,6 +673,7 @@ def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
     users_sheet = wb.create_sheet("Users")
     workspace_sheet = wb.create_sheet("Workspace")
     campaigns_sheet = wb.create_sheet("Campaigns")
+    history_sheet = wb.create_sheet("History")
     lists_sheet = wb.create_sheet("Lists")
     kpi_sheet = wb.create_sheet("KPI Catalogue")
 
@@ -670,6 +687,7 @@ def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
         users = normalize_user_collection(create_bootstrap_state()["users"])
     workspace = normalize_workspace(state.get("workspace", {}))
     campaigns = normalize_campaign_collection([normalize_campaign(item) for item in state.get("campaigns", [])])
+    history = normalize_history_collection([normalize_history_entry(item) for item in state.get("history", [])])[:250]
     tasks, workspace = sync_task_numbers(tasks, workspace)
 
     write_dashboard_sheet(dashboard, deals, targets)
@@ -680,6 +698,7 @@ def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
     write_users_sheet(users_sheet, users)
     write_workspace_sheet(workspace_sheet, workspace)
     write_campaigns_sheet(campaigns_sheet, campaigns)
+    write_history_sheet(history_sheet, history)
     write_lists_sheet(lists_sheet, deals, targets)
     write_kpi_sheet(kpi_sheet, kpis)
 
@@ -770,6 +789,12 @@ def write_campaigns_sheet(ws, campaigns) -> None:
     ws.append([label for label, _ in CAMPAIGN_COLUMNS])
     for campaign in campaigns:
         ws.append([excel_cell_value(campaign.get(key)) for _, key in CAMPAIGN_COLUMNS])
+
+
+def write_history_sheet(ws, history) -> None:
+    ws.append([label for label, _ in HISTORY_COLUMNS])
+    for entry in history:
+        ws.append([excel_cell_value(entry.get(key)) for _, key in HISTORY_COLUMNS])
 
 
 def write_lists_sheet(ws, deals, targets) -> None:
@@ -926,6 +951,23 @@ def read_campaigns_sheet(ws) -> list[dict[str, Any]]:
         campaigns.append(normalize_campaign(raw))
 
     return campaigns
+
+
+def read_history_sheet(ws) -> list[dict[str, Any]]:
+    rows = list(ws.iter_rows(values_only=True))
+    if not rows:
+        return []
+
+    index = build_header_index(list(rows[0]))
+    history: list[dict[str, Any]] = []
+
+    for row in rows[1:]:
+        if not row or not any(cell is not None and str(cell).strip() for cell in row):
+            continue
+        raw = {key: cell_value_by_header(row, index, label) for label, key in HISTORY_COLUMNS}
+        history.append(normalize_history_entry(raw))
+
+    return normalize_history_collection(history)
 
 
 def read_target_detail_rows(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
@@ -1713,6 +1755,7 @@ def create_bootstrap_state() -> dict[str, Any]:
         ],
         "tasks": [],
         "campaigns": [],
+        "history": [],
         "users": [
             normalize_user(
                 {
@@ -2044,6 +2087,19 @@ def normalize_campaign(record: dict[str, Any]) -> dict[str, Any]:
         "traceLog": clean_text(record.get("traceLog")),
         "createdAt": clean_text(record.get("createdAt")),
         "updatedAt": clean_text(record.get("updatedAt")),
+    }
+
+
+def normalize_history_entry(record: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": clean_text(record.get("id")) or f"history-{datetime.utcnow().timestamp()}",
+        "action": clean_text(record.get("action")) or "Workspace updated",
+        "detail": clean_text(record.get("detail")) or "Change recorded",
+        "storageMode": clean_text(record.get("storageMode")) or "excel",
+        "entityType": clean_text(record.get("entityType")),
+        "entityId": clean_text(record.get("entityId")),
+        "actor": clean_text(record.get("actor")) or "Workspace user",
+        "createdAt": normalize_datetime_text(record.get("createdAt")),
     }
 
 
@@ -2404,6 +2460,16 @@ def normalize_campaign_collection(campaigns: list[dict[str, Any]]) -> list[dict[
     return sorted(merged.values(), key=campaign_sort_key)
 
 
+def normalize_history_collection(history_entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+
+    for item in history_entries:
+        entry = normalize_history_entry(item)
+        merged[entry["id"]] = entry
+
+    return sorted(merged.values(), key=history_sort_key, reverse=True)
+
+
 def normalize_market_intel_collection(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Any]] = {}
 
@@ -2529,6 +2595,11 @@ def campaign_sort_key(campaign: dict[str, Any]) -> tuple[int, int, str, str]:
         start_date,
         campaign.get("title", ""),
     )
+
+
+def history_sort_key(entry: dict[str, Any]) -> tuple[str, str]:
+    created_at = normalize_datetime_text(entry.get("createdAt")) or ""
+    return (created_at, entry.get("id", ""))
 
 
 def merge_deals(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
@@ -2800,6 +2871,22 @@ def normalize_date(value: Any) -> str:
         except Exception:
             continue
     return text
+
+
+def normalize_datetime_text(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time()).isoformat()
+    text = stringify(value).strip()
+    if not text:
+        return ""
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).isoformat()
+    except Exception:
+        return text
 
 
 def to_bool(value: Any) -> bool:

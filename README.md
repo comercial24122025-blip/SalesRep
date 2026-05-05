@@ -34,7 +34,7 @@ URL esperada de publicacion:
 https://comercial24122025-blip.github.io/SalesRep/
 ```
 
-En la version publicada, Cube One carga la base `data/published-state.json` como workspace baseline y guarda cambios con historial local en el navegador cuando no hay backend conectado.
+En la version publicada, Cube One carga la base `data/published-state.json` como workspace baseline. Si no hay backend conectado, los cambios quedan visibles solo en la sesion activa y no se persisten al workbook.
 
 ## Abrir la app localmente
 

@@ -1,15 +1,15 @@
 :root {
-  --bg: #eef3fb;
-  --bg-strong: #e2eaf7;
-  --surface: rgba(255, 255, 255, 0.84);
-  --surface-soft: rgba(255, 255, 255, 0.74);
-  --surface-muted: rgba(245, 248, 253, 0.96);
-  --surface-strong: rgba(255, 255, 255, 0.94);
+  --bg: #edf3fb;
+  --bg-strong: #dde8f6;
+  --surface: rgba(255, 255, 255, 0.72);
+  --surface-soft: rgba(255, 255, 255, 0.64);
+  --surface-muted: rgba(245, 248, 253, 0.9);
+  --surface-strong: rgba(255, 255, 255, 0.86);
   --ink: #0f172a;
   --ink-soft: #4f5f77;
   --ink-faint: #6f8097;
   --line: rgba(15, 23, 42, 0.07);
-  --line-strong: rgba(15, 23, 42, 0.12);
+  --line-strong: rgba(15, 23, 42, 0.14);
   --accent: #2563eb;
   --accent-strong: #1d4ed8;
   --accent-soft: rgba(37, 99, 235, 0.12);
@@ -17,26 +17,26 @@
   --accent-cyan: #28b6d8;
   --shell-dark: linear-gradient(180deg, rgba(8, 18, 37, 0.96), rgba(15, 27, 56, 0.92));
   --shell-dark-strong: linear-gradient(180deg, rgba(6, 14, 30, 0.98), rgba(12, 23, 49, 0.96));
-  --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 249, 255, 0.78) 100%);
-  --surface-card-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(249, 251, 255, 0.84) 100%);
-  --surface-card-soft: rgba(255, 255, 255, 0.76);
-  --border-soft: rgba(204, 219, 238, 0.72);
-  --border-brand: rgba(96, 165, 250, 0.2);
-  --glow-brand: 0 18px 42px rgba(37, 99, 255, 0.14);
+  --surface-card: linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(246, 249, 255, 0.72) 100%);
+  --surface-card-strong: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(248, 251, 255, 0.8) 100%);
+  --surface-card-soft: rgba(255, 255, 255, 0.7);
+  --border-soft: rgba(204, 219, 238, 0.78);
+  --border-brand: rgba(96, 165, 250, 0.24);
+  --glow-brand: 0 18px 42px rgba(37, 99, 255, 0.16);
   --success: #13795b;
   --success-soft: rgba(17, 132, 91, 0.12);
   --warning: #b7791f;
   --warning-soft: rgba(184, 116, 19, 0.12);
   --danger: #c2413b;
   --danger-soft: rgba(194, 61, 55, 0.12);
-  --shadow-lg: 0 22px 56px rgba(15, 23, 42, 0.1);
-  --shadow-md: 0 14px 32px rgba(15, 23, 42, 0.08);
-  --shadow-sm: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 24px 64px rgba(15, 23, 42, 0.12);
+  --shadow-md: 0 16px 36px rgba(15, 23, 42, 0.1);
+  --shadow-sm: 0 10px 22px rgba(15, 23, 42, 0.08);
   --radius-xl: 22px;
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 8px;
-  --glass-blur: blur(24px) saturate(1.15);
+  --glass-blur: blur(28px) saturate(1.22);
   --transition: 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
   --font-sans: "Inter", "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
   --font-heading: "Inter", "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
@@ -148,9 +148,9 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.08), transparent 24%),
-    radial-gradient(circle at top right, rgba(40, 182, 216, 0.05), transparent 20%),
-    linear-gradient(180deg, #f7f9fc 0%, var(--bg) 52%, #eaf0fa 100%);
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 24%),
+    radial-gradient(circle at top right, rgba(40, 182, 216, 0.07), transparent 20%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 52%, #e8eff9 100%);
 }
 
 body::before {
@@ -245,7 +245,7 @@ body.app-loading {
 .view-nav-shell,
 .view-switcher {
   background: var(--surface);
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.74);
   box-shadow: var(--shadow-lg);
   backdrop-filter: var(--glass-blur);
 }
@@ -261,7 +261,7 @@ body.app-loading {
     radial-gradient(circle at 88% 82%, rgba(124, 58, 237, 0.24), transparent 28%),
     linear-gradient(135deg, #081225 0%, #102247 56%, #142e63 100%);
   border-color: rgba(96, 165, 250, 0.16);
-  box-shadow: 0 34px 84px rgba(8, 18, 37, 0.24);
+  box-shadow: 0 38px 90px rgba(8, 18, 37, 0.28);
   color: #f8fbff;
 }
 
@@ -662,6 +662,7 @@ button.stat-card {
   display: grid;
   gap: 10px;
   margin: 14px 0 14px;
+  filter: drop-shadow(0 18px 28px rgba(8, 18, 37, 0.08));
 }
 
 .view-nav-shell {
@@ -670,9 +671,9 @@ button.stat-card {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 16px;
-  background: linear-gradient(180deg, rgba(8, 18, 37, 0.985), rgba(13, 24, 48, 0.965));
-  border-color: rgba(96, 165, 250, 0.16);
-  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.14);
+  background: linear-gradient(180deg, rgba(8, 18, 37, 0.86), rgba(13, 24, 48, 0.8));
+  border-color: rgba(147, 197, 253, 0.18);
+  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.18);
   transform-origin: top center;
   transition:
     opacity var(--transition),
@@ -787,11 +788,12 @@ button.stat-card {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid rgba(96, 165, 250, 0.22);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(8, 18, 37, 0.96), rgba(15, 27, 56, 0.94));
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(8, 18, 37, 0.84), rgba(15, 27, 56, 0.8));
   color: #e2e8f0;
   text-align: left;
-  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.14);
+  box-shadow: 0 14px 32px rgba(8, 18, 37, 0.18);
+  backdrop-filter: blur(22px) saturate(1.15);
   cursor: pointer;
   transition: background var(--transition), box-shadow var(--transition), border-color var(--transition);
 }
@@ -1273,7 +1275,7 @@ body.deal-modal-open .operating-flow-dropdown {
   padding: 22px;
   border-radius: var(--radius-xl);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(251, 252, 255, 0.7)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(251, 252, 255, 0.62)),
     var(--surface);
   border-color: var(--border-soft);
   box-shadow: var(--shadow-md);
@@ -1327,12 +1329,12 @@ body.deal-modal-open .operating-flow-dropdown {
 
 .button {
   border: 1px solid rgba(255, 255, 255, 0.74);
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 11px 16px;
   font-size: 0.9rem;
   font-weight: 800;
   cursor: pointer;
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px) saturate(1.08);
   transition: transform var(--transition), box-shadow var(--transition), background var(--transition), color var(--transition), border-color var(--transition);
 }
 
@@ -1350,7 +1352,7 @@ body.deal-modal-open .operating-flow-dropdown {
 }
 
 .button-secondary {
-  background: rgba(8, 18, 37, 0.94);
+  background: linear-gradient(180deg, rgba(8, 18, 37, 0.94), rgba(15, 27, 56, 0.92));
   color: #fff;
   border-color: rgba(37, 99, 255, 0.14);
 }
@@ -4444,9 +4446,9 @@ button.stage-card {
 .cockpit-command-center {
   color: var(--ink);
   background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 28%),
-    radial-gradient(circle at top left, rgba(40, 182, 216, 0.08), transparent 24%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.9));
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.16), transparent 28%),
+    radial-gradient(circle at top left, rgba(40, 182, 216, 0.1), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(243, 248, 255, 0.8));
   border-color: var(--border-soft);
   box-shadow: var(--shadow-lg);
 }
@@ -4475,9 +4477,10 @@ button.stage-card {
   gap: 10px;
   padding: 18px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.9));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(248, 251, 255, 0.72));
   border: 1px solid var(--border-soft);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+  backdrop-filter: blur(20px) saturate(1.08);
 }
 
 .command-kpi-card span {

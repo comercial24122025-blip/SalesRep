@@ -236,5 +236,6 @@ function normalizeIncomingState(payload) {
     campaigns: Array.isArray(body.campaigns) ? body.campaigns : [],
     users: Array.isArray(body.users) ? body.users : [],
     workspace: body.workspace && typeof body.workspace === "object" ? body.workspace : {},
+    history: Array.isArray(body.history) ? body.history : [],
   };
 }

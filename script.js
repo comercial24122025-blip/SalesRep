@@ -1738,6 +1738,7 @@ async function persistState() {
         campaigns: state.campaigns,
         users: state.users,
         workspace: state.workspace,
+        history: state.history,
       }),
     });
 
