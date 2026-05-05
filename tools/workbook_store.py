@@ -4,7 +4,7 @@ import json
 import re
 import sys
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +14,10 @@ from openpyxl import Workbook, load_workbook
 LATAM_REFERENCE_WORKBOOK = Path("/Users/erickmendez/Documents/Sales/latam_market_dashboard_automated.xlsx")
 OPPORTUNITIES_WORKBOOK = Path("/Users/erickmendez/Documents/Sales/Opportunities-2026.xlsx")
 DEFAULT_MISSING_DEAL_VALUE = 25000.0
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 STAGE_SEQUENCE = ["Lead", "Qualified", "Proposal", "Legal", "DD", "Integration", "Legal Approval", "Go Live", "Handover", "On Hold", "Closed Lost"]
 STAGE_RANK = {stage: index for index, stage in enumerate(STAGE_SEQUENCE, start=1)}
@@ -703,7 +707,7 @@ def write_workbook(path: Path, state: dict[str, Any]) -> dict[str, Any]:
     write_kpi_sheet(kpi_sheet, kpis)
 
     wb.save(path)
-    return {"workbookPath": str(path), "savedAt": datetime.utcnow().isoformat() + "Z"}
+    return {"workbookPath": str(path), "savedAt": utc_now().isoformat().replace("+00:00", "Z")}
 
 
 def write_dashboard_sheet(ws, deals, targets) -> None:
@@ -869,7 +873,7 @@ def read_targets_sheet(ws) -> list[dict[str, Any]]:
     if detail_targets:
         return detail_targets
 
-    year = to_int(ws["B1"].value) or datetime.utcnow().year
+    year = to_int(ws["B1"].value) or utc_now().year
     summary_rows = list(ws.iter_rows(min_row=4, max_col=3, values_only=True))
     by_kpi = {stringify(row[0]).strip().lower(): row for row in summary_rows if row and stringify(row[0]).strip()}
 
@@ -1689,7 +1693,7 @@ def build_market_intelligence_from_reference(reference: dict[str, Any]) -> list[
 
 
 def create_bootstrap_state() -> dict[str, Any]:
-    year = datetime.utcnow().year
+    year = utc_now().year
     return {
         "deals": [
             normalize_deal({"id": "bootstrap-1", "deal": "Betcris.mx", "type": "B2C", "market": "Mexico", "platform": "TBC", "stage": "Integration", "signingEta": f"{year}-09-01", "signingYear": year, "signingMonth": 9, "dealValue": 55000, "legalStatus": "Signed", "integrationStatus": "Follow up integration", "source": "Signed list 1", "statusText": "Signed Follow up integration", "leadFlag": True, "signedFlag": True, "integrationStartedFlag": True}),
@@ -1810,7 +1814,7 @@ def create_bootstrap_state() -> dict[str, Any]:
 def normalize_deal(record: dict[str, Any]) -> dict[str, Any]:
     resolved_deal_value = resolve_deal_value(record)
     return {
-        "id": clean_text(record.get("id")) or f"deal-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"deal-{utc_now().timestamp()}",
         "deal": normalize_deal_name(record.get("deal")),
         "client": clean_text(record.get("client")),
         "type": normalize_type(record.get("type")),
@@ -1961,8 +1965,8 @@ def should_apply_default_deal_value(record: dict[str, Any]) -> bool:
 
 def normalize_target(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"target-{datetime.utcnow().timestamp()}",
-        "year": to_int(record.get("year")) or datetime.utcnow().year,
+        "id": clean_text(record.get("id")) or f"target-{utc_now().timestamp()}",
+        "year": to_int(record.get("year")) or utc_now().year,
         "market": normalize_market(record.get("market")),
         "type": normalize_type(record.get("type")),
         "platform": normalize_platform(record.get("platform")),
@@ -1982,7 +1986,7 @@ def normalize_target(record: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_market_intel(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"intel-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"intel-{utc_now().timestamp()}",
         "country": normalize_market(record.get("country")),
         "regulatoryStatus": clean_text(record.get("regulatoryStatus")),
         "licenseType": clean_text(record.get("licenseType")),
@@ -2002,7 +2006,7 @@ def normalize_market_intel(record: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_task(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"task-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"task-{utc_now().timestamp()}",
         "taskNumber": clean_text(record.get("taskNumber")),
         "title": clean_text(record.get("title")),
         "scopeType": clean_text(record.get("scopeType")) or "Client",
@@ -2028,7 +2032,7 @@ def normalize_task(record: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_user(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"user-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"user-{utc_now().timestamp()}",
         "fullName": clean_text(record.get("fullName")),
         "email": clean_text(record.get("email")),
         "role": clean_text(record.get("role")) or "Viewer",
@@ -2041,7 +2045,7 @@ def normalize_user(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def normalize_workspace(record: dict[str, Any]) -> dict[str, Any]:
-    year = datetime.utcnow().year
+    year = utc_now().year
     return {
         "workspaceName": clean_text(record.get("workspaceName")) or "SalesRep LATAM",
         "organizationName": clean_text(record.get("organizationName")) or "Evolution LATAM",
@@ -2057,7 +2061,7 @@ def normalize_workspace(record: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_campaign(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"campaign-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"campaign-{utc_now().timestamp()}",
         "title": clean_text(record.get("title")),
         "campaignType": clean_text(record.get("campaignType")) or "Activation",
         "status": clean_text(record.get("status")) or "Planned",
@@ -2092,7 +2096,7 @@ def normalize_campaign(record: dict[str, Any]) -> dict[str, Any]:
 
 def normalize_history_entry(record: dict[str, Any]) -> dict[str, Any]:
     return {
-        "id": clean_text(record.get("id")) or f"history-{datetime.utcnow().timestamp()}",
+        "id": clean_text(record.get("id")) or f"history-{utc_now().timestamp()}",
         "action": clean_text(record.get("action")) or "Workspace updated",
         "detail": clean_text(record.get("detail")) or "Change recorded",
         "storageMode": clean_text(record.get("storageMode")) or "excel",
@@ -2490,7 +2494,7 @@ def normalize_target_collection(targets: list[dict[str, Any]]) -> list[dict[str,
     for item in targets:
         target = normalize_target(item)
         key = (
-            int(target.get("year") or datetime.utcnow().year),
+            int(target.get("year") or utc_now().year),
             target.get("market", ""),
             target.get("type", ""),
             target.get("platform", ""),
@@ -2533,7 +2537,7 @@ def extract_task_sequence(value: Any) -> int:
 
 
 def format_task_number(sequence: int, task: dict[str, Any], workspace: dict[str, Any]) -> str:
-    year = to_int(task.get("targetYear")) or to_int(workspace.get("fiscalYear")) or datetime.utcnow().year
+    year = to_int(task.get("targetYear")) or to_int(workspace.get("fiscalYear")) or utc_now().year
     return f"TSK-{year}-{sequence:04d}"
 
 
@@ -2926,7 +2930,7 @@ def sum_values(values: list[Any]) -> float:
 
 def get_active_target_year(targets: list[dict[str, Any]]) -> int:
     years = [target.get("year") for target in targets if target.get("year")]
-    return max(years) if years else datetime.utcnow().year
+    return max(years) if years else utc_now().year
 
 
 def summarize_target_counts(targets: list[dict[str, Any]], year: int) -> dict[str, int]:
@@ -2971,7 +2975,7 @@ def blank_if_zero(value: Any) -> Any:
 
 
 def empty_target() -> dict[str, Any]:
-    year = datetime.utcnow().year
+    year = utc_now().year
     return normalize_target({"id": f"target-{year}-global", "year": year, "market": "Global", "type": "All", "platform": "All"})
 
 
@@ -2994,7 +2998,7 @@ def days_since(date_text: Any) -> int:
     if not text:
         return 0
     try:
-        current = datetime.utcnow().date()
+        current = utc_now().date()
         target = datetime.fromisoformat(text).date()
         return (current - target).days
     except Exception:
