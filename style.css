@@ -658,7 +658,7 @@ button.stat-card {
 .view-nav-shell {
   position: sticky;
   top: 8px;
-  z-index: 15;
+  z-index: 12;
   display: grid;
   gap: 8px;
   margin: 14px 0 14px;
@@ -784,7 +784,7 @@ button.stat-card {
   position: fixed;
   top: 108px;
   right: 18px;
-  z-index: 24;
+  z-index: 16;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -803,6 +803,13 @@ button.stat-card {
   pointer-events: none;
   transform: translateX(20px);
   transition: opacity var(--transition), transform var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+body.deal-modal-open .view-nav-shell,
+body.deal-modal-open .operating-flow-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
 }
 
 .operating-flow-toggle::before {

@@ -907,6 +907,10 @@ const ui = {
   lastScrollY: 0,
   navHighlightTimer: 0,
   navHighlightNodes: [],
+  remoteSyncTimer: 0,
+  remoteSyncInFlight: false,
+  remoteSyncPending: false,
+  lastLocalMutationAt: 0,
 };
 
 let state = {
@@ -928,6 +932,14 @@ let state = {
 
 let derived = createDerivedState();
 let dealAutosaveTimer = 0;
+let dealPreviewTimer = 0;
+let dealHighlightTimer = 0;
+
+const REMOTE_SYNC_INTERVAL_MS = 20000;
+const REMOTE_SYNC_COOLDOWN_MS = 5000;
+const DEAL_PREVIEW_DEBOUNCE_MS = 120;
+const DEAL_HIGHLIGHT_DEBOUNCE_MS = 90;
+const realtimeChannel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel("cube-one-workspace-sync") : null;
 
 const serverMeta = {
   workbookPath: "",
@@ -1098,6 +1110,7 @@ async function init() {
   await hydrateFromExcel();
   renderAll();
   activateView("dashboard", { scroll: false });
+  startRemoteStateSync();
   setLoadingState(false);
 }
 
@@ -1192,10 +1205,10 @@ function bindEvents() {
 
   dealForm.addEventListener("submit", handleDealSubmit);
   dealForm.addEventListener("input", () => {
-    refreshDealFieldHighlights();
+    queueDealFieldHighlights();
   });
   dealForm.addEventListener("change", () => {
-    refreshDealFieldHighlights();
+    queueDealFieldHighlights({ immediate: true });
   });
   elements.dealFieldSummary?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-focus-deal-field]");
@@ -1268,7 +1281,7 @@ function bindEvents() {
   });
 
   dealForm.addEventListener("input", handleDealScoringInput);
-  dealForm.addEventListener("change", handleDealScoringInput);
+  dealForm.addEventListener("change", () => handleDealScoringInput({ immediate: true }));
   dealForm.addEventListener("click", handleDealAssistAction);
   dealForm.addEventListener("change", (event) => {
     if (event.target?.id?.startsWith("commercial-builder-")) {
@@ -1589,6 +1602,9 @@ function bindEvents() {
 
   window.addEventListener("scroll", handleOperatingFlowScroll, { passive: true });
   window.addEventListener("resize", handleOperatingFlowResize);
+  document.addEventListener("visibilitychange", handleWorkspaceVisibilityChange);
+  window.addEventListener("focus", handleWorkspaceFocus);
+  realtimeChannel?.addEventListener("message", handleWorkspaceSyncBroadcast);
 
   document.getElementById("export-pipeline-csv").addEventListener("click", () => {
     const rows = getFilteredDeals();
@@ -1633,11 +1649,7 @@ async function hydrateFromExcel(options = {}) {
     ensureActiveUser();
     resetWorkspaceForm();
     resetUserForm();
-    serverMeta.workbookPath = payload.workbookPath || "";
-    serverMeta.workbookUrl = resolveApiUrl(payload.workbookUrl || API_DOWNLOAD_URL);
-    serverMeta.lastUpdatedAt = cleanText(payload.savedAt) || cleanText(payload.updatedAt) || cleanText(payload.generatedAt) || "";
-    serverMeta.ready = true;
-    serverMeta.storageMode = "excel";
+    updateServerMetaFromPayload(payload, "excel");
     if (showSuccessBanner) {
       setBanner(buildExcelBanner("Datos cargados desde Excel."), "success");
     }
@@ -1654,18 +1666,27 @@ async function hydrateFromExcel(options = {}) {
       ensureActiveUser();
       resetWorkspaceForm();
       resetUserForm();
-      serverMeta.workbookPath = "GitHub published workspace baseline";
-      serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
-      serverMeta.lastUpdatedAt = cleanText(publishedPayload.savedAt) || cleanText(publishedPayload.updatedAt) || cleanText(publishedPayload.generatedAt) || cleanText(publishedPayload.history?.[0]?.createdAt) || "";
-      serverMeta.ready = false;
-      serverMeta.storageMode = "static";
+      updateServerMetaFromPayload(
+        {
+          ...publishedPayload,
+          workbookPath: "GitHub published workspace baseline",
+          workbookUrl: STATIC_WORKBOOK_URL,
+        },
+        "static"
+      );
       if (showSuccessBanner) {
         setBanner(buildExcelBanner("Loaded published GitHub workspace baseline."), "success");
       }
       return;
     } catch (publishedError) {
-      serverMeta.ready = false;
-      serverMeta.storageMode = "static";
+      updateServerMetaFromPayload(
+        {
+          workbookPath: "GitHub published workspace baseline",
+          workbookUrl: STATIC_WORKBOOK_URL,
+          savedAt: "",
+        },
+        "static"
+      );
       state = createDefaultState();
       synchronizeTaskSequence();
       ensureActiveUser();
@@ -1704,20 +1725,27 @@ async function persistState() {
     }
 
     const payload = await response.json();
-    serverMeta.workbookPath = payload.workbookPath || serverMeta.workbookPath;
-    serverMeta.workbookUrl = resolveApiUrl(payload.workbookUrl || API_DOWNLOAD_URL);
-    serverMeta.lastUpdatedAt = cleanText(payload.savedAt) || new Date().toISOString();
-    serverMeta.ready = true;
-    serverMeta.storageMode = "excel";
+    updateServerMetaFromPayload(
+      {
+        ...payload,
+        workbookUrl: payload.workbookUrl || API_DOWNLOAD_URL,
+      },
+      "excel"
+    );
+    ui.lastLocalMutationAt = Date.now();
     recordWorkspaceHistory("Workspace sync", "Changes saved to the connected workbook.", { storageMode: "excel" });
-    await hydrateFromExcel({ showSuccessBanner: false });
+    broadcastWorkspaceMutation("excel-save");
     return true;
   } catch (error) {
-    serverMeta.ready = false;
-    serverMeta.workbookPath = "GitHub published workspace baseline";
-    serverMeta.workbookUrl = STATIC_WORKBOOK_URL;
-    serverMeta.lastUpdatedAt = new Date().toISOString();
-    serverMeta.storageMode = "session";
+    updateServerMetaFromPayload(
+      {
+        workbookPath: "GitHub published workspace baseline",
+        workbookUrl: STATIC_WORKBOOK_URL,
+        savedAt: new Date().toISOString(),
+      },
+      "session"
+    );
+    ui.lastLocalMutationAt = Date.now();
     recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
       storageMode: "session",
     });
@@ -3566,6 +3594,148 @@ function renderAll() {
   renderAdminView();
   renderKpiCatalogue();
   renderCompanyProfileDrawer();
+}
+
+function queueDealFieldHighlights(options = {}) {
+  window.clearTimeout(dealHighlightTimer);
+  if (options.immediate) {
+    refreshDealFieldHighlights();
+    return;
+  }
+  dealHighlightTimer = window.setTimeout(() => {
+    refreshDealFieldHighlights();
+  }, DEAL_HIGHLIGHT_DEBOUNCE_MS);
+}
+
+function queueDealPreviewRefresh(options = {}) {
+  window.clearTimeout(dealPreviewTimer);
+  if (options.immediate) {
+    syncDealScoringPreview();
+    return;
+  }
+  dealPreviewTimer = window.setTimeout(() => {
+    syncDealScoringPreview();
+  }, DEAL_PREVIEW_DEBOUNCE_MS);
+}
+
+function updateServerMetaFromPayload(payload, mode = serverMeta.storageMode || "session") {
+  serverMeta.workbookPath = payload?.workbookPath || serverMeta.workbookPath;
+  serverMeta.workbookUrl = resolveApiUrl(payload?.workbookUrl || serverMeta.workbookUrl || API_DOWNLOAD_URL);
+  serverMeta.lastUpdatedAt = cleanText(payload?.savedAt) || cleanText(payload?.updatedAt) || cleanText(payload?.generatedAt) || serverMeta.lastUpdatedAt;
+  serverMeta.ready = mode === "excel";
+  serverMeta.storageMode = mode;
+}
+
+function getRemoteStateUrl() {
+  if (serverMeta.storageMode === "session") {
+    return "";
+  }
+  const baseUrl = serverMeta.ready ? API_STATE_URL : STATIC_STATE_URL;
+  const cacheBust = serverMeta.ready ? "" : `?t=${Date.now()}`;
+  return `${baseUrl}${cacheBust}`;
+}
+
+function getRemotePayloadTimestamp(payload) {
+  return cleanText(payload?.savedAt) || cleanText(payload?.updatedAt) || cleanText(payload?.generatedAt) || cleanText(payload?.history?.[0]?.createdAt);
+}
+
+async function refreshRemoteStateIfChanged(options = {}) {
+  const { force = false, silent = true } = options;
+  if (ui.remoteSyncInFlight) {
+    ui.remoteSyncPending = true;
+    return false;
+  }
+  if (!force && ui.isHydrating) {
+    return false;
+  }
+  if (serverMeta.storageMode === "session") {
+    return false;
+  }
+  if (!force && ui.dealModalOpen) {
+    return false;
+  }
+  if (!force && Date.now() - ui.lastLocalMutationAt < REMOTE_SYNC_COOLDOWN_MS) {
+    return false;
+  }
+
+  ui.remoteSyncInFlight = true;
+
+  try {
+    const remoteUrl = getRemoteStateUrl();
+    if (!remoteUrl) {
+      return false;
+    }
+
+    const response = await fetch(remoteUrl, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      return false;
+    }
+
+    const payload = await response.json();
+    const nextTimestamp = getRemotePayloadTimestamp(payload);
+    if (!force && nextTimestamp && serverMeta.lastUpdatedAt && nextTimestamp === serverMeta.lastUpdatedAt) {
+      return false;
+    }
+
+    applyStatePayload(payload);
+    synchronizeTaskSequence();
+    ensureActiveUser();
+    updateServerMetaFromPayload(payload, serverMeta.ready ? "excel" : serverMeta.storageMode === "excel" ? "excel" : "static");
+    renderAll();
+
+    if (!silent) {
+      setBanner("Workspace refreshed with the latest online changes.", "success");
+    }
+    return true;
+  } catch (error) {
+    return false;
+  } finally {
+    ui.remoteSyncInFlight = false;
+    if (ui.remoteSyncPending) {
+      ui.remoteSyncPending = false;
+      window.setTimeout(() => {
+        void refreshRemoteStateIfChanged({ silent: true });
+      }, 250);
+    }
+  }
+}
+
+function broadcastWorkspaceMutation(detail = "workspace-updated") {
+  realtimeChannel?.postMessage({
+    type: "workspace-updated",
+    detail,
+    at: new Date().toISOString(),
+  });
+}
+
+function startRemoteStateSync() {
+  window.clearInterval(ui.remoteSyncTimer);
+  ui.remoteSyncTimer = window.setInterval(() => {
+    void refreshRemoteStateIfChanged({ silent: true });
+  }, REMOTE_SYNC_INTERVAL_MS);
+}
+
+function handleWorkspaceVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    void refreshRemoteStateIfChanged({ silent: true });
+  }
+}
+
+function handleWorkspaceFocus() {
+  void refreshRemoteStateIfChanged({ silent: true });
+}
+
+function handleWorkspaceSyncBroadcast(event) {
+  if (!event?.data || event.data.type !== "workspace-updated") {
+    return;
+  }
+  if (Date.now() - ui.lastLocalMutationAt < 1500) {
+    return;
+  }
+  void refreshRemoteStateIfChanged({ force: true, silent: true });
 }
 
 function setLoadingState(isLoading, title = "Loading workspace", copy = "Syncing Cube One from the live local workspace.") {
@@ -11899,8 +12069,8 @@ function buildCrmOwnerRows(deals) {
     .sort((left, right) => right.forecastValue - left.forecastValue || right.accountCount - left.accountCount || left.owner.localeCompare(right.owner));
 }
 
-function handleDealScoringInput() {
-  syncDealScoringPreview();
+function handleDealScoringInput(options = {}) {
+  queueDealPreviewRefresh({ immediate: options.immediate });
   scheduleDealAutosave();
 }
 

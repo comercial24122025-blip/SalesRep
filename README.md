@@ -34,7 +34,7 @@ URL esperada de publicacion:
 https://comercial24122025-blip.github.io/SalesRep/
 ```
 
-En la version publicada, SalesRep carga el snapshot `data/published-state.json` y guarda cambios en el navegador cuando no hay backend conectado.
+En la version publicada, Cube One carga la base `data/published-state.json` como workspace baseline y guarda cambios con historial local en el navegador cuando no hay backend conectado.
 
 ## Abrir la app localmente
 
