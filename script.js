@@ -705,6 +705,13 @@ const elements = {
   operatingFlowDropdown: document.getElementById("operating-flow-dropdown"),
   operatingFlowToggle: document.getElementById("operating-flow-toggle"),
   heroStats: document.getElementById("hero-stats"),
+  dataSourceStatus: document.getElementById("data-source-status"),
+  dataLastSyncStatus: document.getElementById("data-last-sync-status"),
+  dataSaveStatus: document.getElementById("data-save-status"),
+  dataUnsavedStatus: document.getElementById("data-unsaved-status"),
+  dataModeStatus: document.getElementById("data-mode-status"),
+  globalNotificationCount: document.getElementById("global-notification-count"),
+  globalNotificationCopy: document.getElementById("global-notification-copy"),
   activeUserSelect: document.getElementById("active-user-select"),
   workspaceDropdownTitle: document.getElementById("workspace-dropdown-title"),
   workspaceDropdownCopy: document.getElementById("workspace-dropdown-copy"),
@@ -802,6 +809,7 @@ const elements = {
   dealWorkflowStageBadge: document.getElementById("deal-workflow-stage-badge"),
   dealFormTitle: document.getElementById("deal-form-title"),
   dealSubmitButton: document.getElementById("deal-submit-button"),
+  dealDeleteButton: document.getElementById("deal-delete-button"),
   dealAutosaveBadge: document.getElementById("deal-autosave-badge"),
   dealAutosaveCopy: document.getElementById("deal-autosave-copy"),
   dealAutosaveSections: document.getElementById("deal-autosave-sections"),
@@ -912,6 +920,8 @@ const ui = {
   remoteSyncInFlight: false,
   remoteSyncPending: false,
   lastLocalMutationAt: 0,
+  lastPersistStatus: "idle",
+  lastPersistAt: "",
 };
 
 let state = {
@@ -1244,6 +1254,12 @@ function bindEvents() {
     resetDealForm();
     closeDealModal();
     setBanner("Deal form cleared and autosave draft discarded.", "default");
+  });
+  elements.dealDeleteButton?.addEventListener("click", async () => {
+    if (!ui.editingDealId) {
+      return;
+    }
+    await deleteDealById(ui.editingDealId);
   });
   elements.restoreDealDraftButton?.addEventListener("click", () => {
     restoreActiveDealAutosave();
@@ -1722,6 +1738,7 @@ async function hydrateFromExcel(options = {}) {
 }
 
 async function persistState() {
+  ui.lastPersistStatus = "saving";
   try {
     const response = await fetch(API_SAVE_URL, {
       method: "POST",
@@ -1754,6 +1771,8 @@ async function persistState() {
       },
       "excel"
     );
+    ui.lastPersistStatus = "synced";
+    ui.lastPersistAt = cleanText(payload?.savedAt) || new Date().toISOString();
     ui.lastLocalMutationAt = Date.now();
     recordWorkspaceHistory("Workspace sync", "Changes saved to the connected workbook.", { storageMode: "excel" });
     broadcastWorkspaceMutation("excel-save");
@@ -1767,6 +1786,8 @@ async function persistState() {
       },
       "session"
     );
+    ui.lastPersistStatus = "failed";
+    ui.lastPersistAt = new Date().toISOString();
     ui.lastLocalMutationAt = Date.now();
     recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
       storageMode: "session",
@@ -3601,6 +3622,7 @@ function renderAll() {
   renderGlobalFilters();
   renderViewState();
   renderWorkspaceChrome();
+  renderDataStatusBar();
   renderCompanyFinder();
   renderDealFormAssist();
   renderModuleFlow();
@@ -3920,6 +3942,154 @@ function renderWorkspaceChrome() {
     ]);
     setSelectOptions(ownerSelect, names, currentValue);
   }
+}
+
+function formatStatusBarTimestamp(value) {
+  if (!value) {
+    return "Not synced yet";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Not synced yet";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function getDataSourceStatusLabel() {
+  if (serverMeta.ready) {
+    return "Uploaded Excel";
+  }
+  if (serverMeta.storageMode === "static") {
+    return "Published baseline";
+  }
+  return "Session workspace";
+}
+
+function getDataModeStatusLabel() {
+  if (serverMeta.ready) {
+    return "Server";
+  }
+  if (serverMeta.storageMode === "static") {
+    return "Reference";
+  }
+  return "Session";
+}
+
+function getWorkspaceUnsavedChangeCount() {
+  const draftKeys = Object.keys(readDealAutosaveStore().drafts || {});
+  let pendingCount = draftKeys.length;
+  const activeKey = getActiveDealAutosaveKey();
+
+  if (dealForm && ui.dealModalOpen && ui.dealAutosaveBaseline && activeDealAutosaveHasChanges() && !draftKeys.includes(activeKey)) {
+    pendingCount += 1;
+  }
+
+  return pendingCount;
+}
+
+function getDataSaveStatusState(unsavedCount = getWorkspaceUnsavedChangeCount()) {
+  if (ui.remoteSyncInFlight) {
+    return { label: "Refreshing", tone: "neutral" };
+  }
+
+  if (ui.dealAutosaveStatus === "saving") {
+    return { label: "Saving draft", tone: "warning" };
+  }
+
+  if (ui.dealAutosaveStatus === "error") {
+    return { label: "Draft warning", tone: "danger" };
+  }
+
+  if (ui.lastPersistStatus === "failed" || serverMeta.storageMode === "session") {
+    return { label: "Session only", tone: "warning" };
+  }
+
+  if (serverMeta.storageMode === "static") {
+    return { label: "Reference mode", tone: "neutral" };
+  }
+
+  if (unsavedCount > 0) {
+    return { label: `${unsavedCount} pending`, tone: "warning" };
+  }
+
+  return { label: "Synced", tone: "success" };
+}
+
+function setStatusTone(target, tone = "neutral") {
+  const shell = target?.closest?.(".data-status-item, .data-notification-pill");
+  if (shell) {
+    shell.dataset.tone = tone;
+  }
+}
+
+function renderDataStatusBar() {
+  if (
+    !elements.dataSourceStatus ||
+    !elements.dataLastSyncStatus ||
+    !elements.dataSaveStatus ||
+    !elements.dataUnsavedStatus ||
+    !elements.dataModeStatus ||
+    !elements.globalNotificationCount ||
+    !elements.globalNotificationCopy
+  ) {
+    return;
+  }
+
+  const unsavedCount = getWorkspaceUnsavedChangeCount();
+  const scopedDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const scopedTasks = getScopedTasks();
+  const myTasks = getMyActionTasks(scopedTasks, getActiveUser());
+  const taskBuckets = getActionBuckets(myTasks);
+  const fixNowAlerts = getFixNowAlerts(scopedDeals, scopedTasks);
+  const dealAlerts = fixNowAlerts.filter((alert) => alert.dealId);
+  const criticalAlerts = dealAlerts.filter((alert) => alert.type === "critical").length;
+  const warningAlerts = dealAlerts.length - criticalAlerts;
+  const attentionCount = criticalAlerts + warningAlerts + taskBuckets.overdue.length + taskBuckets.today.length + taskBuckets.blocked.length;
+  const saveState = getDataSaveStatusState(unsavedCount);
+
+  elements.dataSourceStatus.textContent = getDataSourceStatusLabel();
+  elements.dataLastSyncStatus.textContent = formatStatusBarTimestamp(serverMeta.lastUpdatedAt || ui.lastPersistAt);
+  elements.dataSaveStatus.textContent = saveState.label;
+  elements.dataUnsavedStatus.textContent = `${unsavedCount} pending`;
+  elements.dataModeStatus.textContent = getDataModeStatusLabel();
+
+  setStatusTone(elements.dataSourceStatus, serverMeta.ready ? "success" : serverMeta.storageMode === "static" ? "neutral" : "warning");
+  setStatusTone(elements.dataLastSyncStatus, serverMeta.lastUpdatedAt || ui.lastPersistAt ? "neutral" : "warning");
+  setStatusTone(elements.dataSaveStatus, saveState.tone);
+  setStatusTone(elements.dataUnsavedStatus, unsavedCount > 0 ? "warning" : "success");
+  setStatusTone(elements.dataModeStatus, serverMeta.ready ? "success" : serverMeta.storageMode === "static" ? "neutral" : "warning");
+
+  if (attentionCount <= 0) {
+    elements.globalNotificationCount.textContent = "0 alerts";
+    elements.globalNotificationCopy.textContent = "All clear";
+    setStatusTone(elements.globalNotificationCount, "success");
+    return;
+  }
+
+  const copyParts = [];
+  if (taskBuckets.overdue.length > 0) {
+    copyParts.push(`${taskBuckets.overdue.length} overdue`);
+  }
+  if (taskBuckets.today.length > 0) {
+    copyParts.push(`${taskBuckets.today.length} due today`);
+  }
+  if (taskBuckets.blocked.length > 0) {
+    copyParts.push(`${taskBuckets.blocked.length} blocked`);
+  }
+  if (criticalAlerts > 0) {
+    copyParts.push(`${criticalAlerts} critical`);
+  }
+
+  elements.globalNotificationCount.textContent = `${attentionCount} signals`;
+  elements.globalNotificationCopy.textContent = copyParts.slice(0, 2).join(" · ") || `${warningAlerts} pipeline warnings`;
+  setStatusTone(elements.globalNotificationCount, criticalAlerts > 0 || taskBuckets.overdue.length > 0 ? "danger" : "warning");
 }
 
 function formatHistoryTimestamp(value) {
@@ -6576,6 +6746,7 @@ function renderCompanyProfileSummaryActions(activeDeal) {
 
   return [
     '<button type="button" class="button button-primary button-small" data-company-profile-action="edit-profile">Edit Profile</button>',
+    `<button type="button" class="button button-danger button-small" data-action="delete-deal" data-id="${escapeAttribute(activeDeal.id)}">Delete Account</button>`,
     renderDealWorkflowDocumentButtons(activeDeal, {
       className: "button button-secondary button-small",
       kinds: ["proposal", "legal", "dd", "integration", "signoff"],
@@ -9307,7 +9478,43 @@ function openDealEditorById(id) {
   openDealModal();
   renderViewState();
   window.scrollTo({ top: 0, behavior: "smooth" });
-  setBanner(`Editing deal: ${deal.deal}.`, "default");
+  setBanner(`Editing account: ${deal.deal || deal.client || deal.operator || "Draft"}.`, "default");
+}
+
+async function deleteDealById(id, options = {}) {
+  const deal = state.deals.find((item) => item.id === id);
+  if (!deal) {
+    return false;
+  }
+
+  const dealLabel = deal.deal || deal.client || deal.operator || "this account";
+  if (
+    !options.skipConfirm &&
+    !window.confirm(`Delete "${dealLabel}" from the workspace? This removes the lead/client/operator record from the active pipeline.`)
+  ) {
+    return false;
+  }
+
+  state.deals = state.deals.filter((item) => item.id !== id);
+  const saved = await persistState();
+
+  if (ui.editingDealId === id) {
+    clearActiveDealAutosave();
+    ui.editingDealId = null;
+    resetDealForm();
+    closeDealModal();
+  }
+
+  if (ui.companyProfileDealId === id) {
+    hideCompanyProfilePanel();
+  }
+
+  renderAll();
+  setBanner(
+    buildExcelBanner(saved ? `Account deleted: ${dealLabel}.` : `Account removed in memory only: ${dealLabel}.`),
+    saved ? "warn" : "danger"
+  );
+  return true;
 }
 
 function openDealModal() {
@@ -9419,18 +9626,7 @@ async function handleDealAction(event) {
   }
 
   if (action === "delete-deal") {
-    if (!window.confirm(`Delete the deal "${deal.deal}"?`)) {
-      return;
-    }
-
-    state.deals = state.deals.filter((item) => item.id !== id);
-    const saved = await persistState();
-    if (ui.editingDealId === id) {
-      ui.editingDealId = null;
-      resetDealForm();
-    }
-    renderAll();
-    setBanner(buildExcelBanner(saved ? `Deal deleted: ${deal.deal}.` : `Deal deleted in memory only: ${deal.deal}.`), saved ? "warn" : "danger");
+    await deleteDealById(id, { skipConfirm: false });
   }
 }
 
@@ -9984,6 +10180,9 @@ function fillDealForm(deal, options = {}) {
 
   elements.dealFormTitle.textContent = `Edit Account: ${deal.deal || deal.client || deal.operator || "Draft"}`;
   elements.dealSubmitButton.textContent = "Update Account";
+  if (elements.dealDeleteButton) {
+    elements.dealDeleteButton.hidden = false;
+  }
   ui.companyAssistKey = getCompanyProfileKey(deal);
   resetCommercialBuilder();
   syncDealScoringPreview();
@@ -10004,6 +10203,9 @@ function resetDealForm() {
   ui.companyAssistKey = "";
   elements.dealFormTitle.textContent = "New Account";
   elements.dealSubmitButton.textContent = "Save Account";
+  if (elements.dealDeleteButton) {
+    elements.dealDeleteButton.hidden = true;
+  }
   resetCommercialBuilder();
   syncDealScoringPreview();
   refreshDealFieldHighlights();
@@ -15136,9 +15338,16 @@ function renderModuleFlow() {
   }
 
   const readyCount = items.filter((item) => item.status !== "Needs setup").length;
+  const displayItems =
+    ui.activeView === "dashboard"
+      ? items.filter((item) => ["tasks", "pipeline", "requests", "targets"].includes(item.view))
+      : items;
 
-  elements.moduleFlowSummary.textContent = `${readyCount} of ${items.length} modules active`;
-  elements.moduleFlowGrid.innerHTML = items
+  elements.moduleFlowSummary.textContent =
+    ui.activeView === "dashboard"
+      ? `${displayItems.length} execution modules in focus`
+      : `${readyCount} of ${items.length} modules active`;
+  elements.moduleFlowGrid.innerHTML = displayItems
     .map((item, index) => {
       return `
         <article class="module-flow-card ${item.tone} ${ui.activeView === item.view ? "is-current" : ""}">

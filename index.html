@@ -124,6 +124,33 @@
         <p id="app-banner" class="banner" aria-live="polite">
           Cube One runs independently and saves your changes to a local Excel workbook through the bundled server.
         </p>
+
+        <section class="data-status-bar" aria-label="Data status">
+          <article class="data-status-item">
+            <span>Source</span>
+            <strong id="data-source-status">Checking</strong>
+          </article>
+          <article class="data-status-item">
+            <span>Last Sync</span>
+            <strong id="data-last-sync-status">Not available</strong>
+          </article>
+          <article class="data-status-item">
+            <span>Save Status</span>
+            <strong id="data-save-status">Synced</strong>
+          </article>
+          <article class="data-status-item">
+            <span>Unsaved</span>
+            <strong id="data-unsaved-status">0 pending</strong>
+          </article>
+          <article class="data-status-item">
+            <span>Mode</span>
+            <strong id="data-mode-status">Static</strong>
+          </article>
+          <button type="button" class="data-notification-pill" data-view-trigger="tasks">
+            <span id="global-notification-count">0 alerts</span>
+            <strong id="global-notification-copy">All clear</strong>
+          </button>
+        </section>
       </header>
 
       <section class="company-command-bar" aria-label="Company finder">
@@ -186,20 +213,20 @@
         </button>
         <section id="operating-flow-shell" class="view-nav-shell" aria-label="Primary navigation" hidden>
           <div class="view-nav-meta view-nav-meta-compact">
-            <p class="panel-kicker">Operating flow</p>
-            <span class="view-nav-priority">Focus: execution, market funnel, targets</span>
+            <p class="panel-kicker">Daily execution flow</p>
+            <span class="view-nav-priority">Fix work, move deals, protect revenue</span>
           </div>
           <nav class="view-switcher view-switcher-primary" aria-label="Primary app sections">
-            <button class="view-tab view-tab-primary is-active" data-view-trigger="dashboard">Dashboard</button>
-            <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline Stage Funnel</button>
-            <button class="view-tab view-tab-primary" data-view-trigger="crm">Market Funnel</button>
-            <button class="view-tab view-tab-primary" data-view-trigger="targets">Targets</button>
+            <button class="view-tab view-tab-primary is-active" data-view-trigger="dashboard">Home</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="tasks">My Actions</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="requests">Requests</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="campaigns">Accounts</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="targets">Forecast</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="admin">Admin</button>
           </nav>
           <nav class="view-switcher view-switcher-secondary" aria-label="Secondary app sections">
-            <button class="view-tab view-tab-secondary" data-view-trigger="tasks">My Actions</button>
-            <button class="view-tab view-tab-secondary" data-view-trigger="requests">Requests</button>
-            <button class="view-tab view-tab-secondary" data-view-trigger="campaigns">Growth</button>
-            <button class="view-tab view-tab-secondary" data-view-trigger="admin">Setup</button>
+            <button class="view-tab view-tab-secondary" data-view-trigger="crm">Market Intel</button>
             <button class="view-tab view-tab-secondary" data-view-trigger="catalogue">KPIs</button>
           </nav>
         </section>
@@ -341,8 +368,8 @@
             <section class="module-flow-shell panel-wide panel-secondary" aria-label="Module workflow">
               <div class="module-flow-head">
                 <div>
-                  <p class="panel-kicker">Guided journey</p>
-                  <h2>Onboarding, Initiation &amp; Progress Flow</h2>
+                  <p class="panel-kicker">Execution focus</p>
+                  <h2>Daily operating path</h2>
                 </div>
                 <span id="module-flow-summary" class="chip">0 of 6 modules ready</span>
               </div>
@@ -1566,6 +1593,7 @@
 
                 <div class="form-actions">
                   <button type="submit" id="deal-submit-button" class="button button-primary">Save Account</button>
+                  <button type="button" id="deal-delete-button" class="button button-danger" hidden>Delete Account</button>
                   <button type="button" id="deal-cancel-button" class="button button-ghost">Clear</button>
                 </div>
 

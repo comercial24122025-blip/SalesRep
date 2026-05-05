@@ -611,13 +611,87 @@ button.stat-card {
   color: var(--danger);
 }
 
+.data-status-bar {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  align-items: stretch;
+}
+
+.data-status-item,
+.data-notification-pill {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  min-height: 72px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(191, 219, 254, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: var(--glass-blur);
+}
+
+.data-status-item span,
+.data-notification-pill span {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.data-status-item strong,
+.data-notification-pill strong {
+  color: #f8fbff;
+  font-size: 0.96rem;
+  letter-spacing: -0.02em;
+}
+
+.data-notification-pill {
+  border-radius: 18px;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+}
+
+.data-notification-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(8, 18, 37, 0.18);
+}
+
+.data-status-item[data-tone="success"],
+.data-notification-pill[data-tone="success"] {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.data-status-item[data-tone="warning"],
+.data-notification-pill[data-tone="warning"] {
+  border-color: rgba(251, 191, 36, 0.32);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.data-status-item[data-tone="danger"],
+.data-notification-pill[data-tone="danger"] {
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.data-status-item[data-tone="neutral"],
+.data-notification-pill[data-tone="neutral"] {
+  border-color: rgba(191, 219, 254, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .company-command-bar {
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
   gap: 18px;
-  margin: 18px 0 16px;
-  padding: 18px 20px;
-  border-radius: 24px;
+  margin: 14px 0 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 251, 255, 0.7));
   border: 1px solid rgba(208, 220, 240, 0.72);
   box-shadow: var(--shadow-md);
@@ -868,9 +942,9 @@ body.deal-modal-open .operating-flow-dropdown {
 .module-flow-shell {
   display: grid;
   gap: 14px;
-  margin: 0 0 12px;
-  padding: 18px;
-  border-radius: 24px;
+  margin: 0 0 10px;
+  padding: 14px 16px;
+  border-radius: 20px;
   background:
     radial-gradient(circle at top left, rgba(37, 99, 255, 0.07), transparent 26%),
     linear-gradient(180deg, rgba(248, 250, 255, 0.76), rgba(240, 245, 255, 0.62));
@@ -890,18 +964,18 @@ body.deal-modal-open .operating-flow-dropdown {
 
 .module-flow-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+  gap: 8px;
 }
 
 .module-flow-card {
   display: grid;
-  gap: 8px;
-  padding: 12px;
-  border-radius: 18px;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 16px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.9));
   border: 1px solid rgba(204, 219, 238, 0.82);
-  box-shadow: 0 16px 30px rgba(14, 28, 68, 0.08);
+  box-shadow: 0 10px 20px rgba(14, 28, 68, 0.06);
   min-height: 0;
   color: var(--ink);
   align-content: start;
@@ -941,6 +1015,13 @@ body.deal-modal-open .operating-flow-dropdown {
 .module-flow-card p,
 .module-flow-card .module-flow-metrics span {
   color: #435066;
+}
+
+.module-flow-card .module-flow-copy small {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .module-flow-card .module-flow-copy strong,
@@ -1035,12 +1116,12 @@ body.deal-modal-open .operating-flow-dropdown {
 
 .workflow-command-shell {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 12px;
   align-items: stretch;
-  margin: 0 0 18px;
-  padding: 18px 20px;
-  border-radius: 24px;
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border-radius: 20px;
   background:
     radial-gradient(circle at top right, rgba(124, 58, 237, 0.06), transparent 24%),
     linear-gradient(180deg, rgba(248, 250, 255, 0.78), rgba(240, 245, 255, 0.68));
@@ -1062,9 +1143,9 @@ body.deal-modal-open .operating-flow-dropdown {
 
 .workflow-command-block {
   display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border-radius: 20px;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.56);
   border: 1px solid rgba(191, 219, 254, 0.24);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.36);
@@ -1091,15 +1172,19 @@ body.deal-modal-open .operating-flow-dropdown {
 .workflow-command-block p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.95rem;
-  line-height: 1.6;
+  font-size: 0.87rem;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .workflow-progress {
   display: grid;
-  gap: 10px;
-  padding: 16px 18px;
-  border-radius: 20px;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.56);
   border: 1px solid rgba(191, 219, 254, 0.24);
 }
@@ -1282,12 +1367,12 @@ body.deal-modal-open .operating-flow-dropdown {
 }
 
 .panel-secondary {
-  gap: 18px;
+  gap: 16px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(249, 251, 255, 0.58)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(249, 251, 255, 0.62)),
     var(--surface);
   border-color: rgba(214, 224, 240, 0.76);
-  box-shadow: 0 12px 30px rgba(14, 28, 68, 0.06);
+  box-shadow: 0 10px 24px rgba(14, 28, 68, 0.05);
 }
 
 .panel-wide {
@@ -1363,6 +1448,17 @@ body.deal-modal-open .operating-flow-dropdown {
   border-color: rgba(255, 255, 255, 0.76);
 }
 
+.button-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: rgba(194, 61, 55, 0.2);
+}
+
+.button-danger:hover {
+  background: rgba(194, 61, 55, 0.18);
+  border-color: rgba(194, 61, 55, 0.28);
+}
+
 .hero .button-ghost {
   background: rgba(255, 255, 255, 0.08);
   color: #f8fbff;
@@ -1431,10 +1527,15 @@ body.deal-modal-open .operating-flow-dropdown {
 }
 
 .deal-form-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   padding: 16px 18px;
   border-radius: 20px;
-  background: var(--surface-card);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.92));
   border: 1px solid var(--border-soft);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(18px);
 }
 
 .deal-autosave-shell {
@@ -1850,6 +1951,9 @@ textarea {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  padding-top: 6px;
 }
 
 .form-details {
@@ -2817,6 +2921,7 @@ button.executive-readout-card {
 
 .pipeline-view .pipeline-workspace {
   grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
 }
 
 .pipeline-form-panel,
@@ -2868,6 +2973,18 @@ button.executive-readout-card {
   border-radius: 16px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   box-shadow: 0 32px 80px rgba(8, 18, 37, 0.28);
+  overscroll-behavior: contain;
+}
+
+.deal-modal-panel > .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: -22px -22px 18px;
+  padding: 18px 22px 16px;
+  background: linear-gradient(180deg, rgba(250, 252, 255, 0.96), rgba(246, 249, 255, 0.9));
+  border-bottom: 1px solid rgba(214, 224, 240, 0.82);
+  backdrop-filter: blur(18px);
 }
 
 body.deal-modal-open {
@@ -4323,6 +4440,7 @@ button.stage-card {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
 }
 
 .pill {
@@ -4418,14 +4536,14 @@ button.stage-card {
 
 .data-table {
   width: 100%;
-  min-width: 1120px;
+  min-width: 1040px;
   border-collapse: collapse;
   background: transparent;
 }
 
 .data-table th,
 .data-table td {
-  padding: 15px 16px;
+  padding: 13px 14px;
   text-align: left;
   border-bottom: 1px solid rgba(24, 30, 42, 0.06);
   vertical-align: top;
@@ -4996,12 +5114,16 @@ button.stage-card {
 }
 
 .data-table td {
-  font-size: 0.95rem;
-  line-height: 1.54;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: rgba(247, 250, 255, 0.58);
 }
 
 .data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(234, 242, 255, 0.72);
 }
 
 .entity-title {
@@ -5585,6 +5707,10 @@ button.stage-card {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  .data-status-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
@@ -5614,6 +5740,7 @@ button.stage-card {
   }
 
   .hero-stats,
+  .data-status-bar,
   .command-kpi-grid,
   .signal-grid,
   .progress-grid,
