@@ -171,34 +171,39 @@
         </div>
       </section>
 
-      <section id="operating-flow-shell" class="view-nav-shell" aria-label="Primary navigation">
-        <div class="view-nav-meta view-nav-meta-compact">
-          <p class="panel-kicker">Operating flow</p>
-          <span class="view-nav-priority">Focus: execution, market funnel, targets</span>
-        </div>
-        <nav class="view-switcher view-switcher-primary" aria-label="Primary app sections">
-          <button class="view-tab view-tab-primary is-active" data-view-trigger="dashboard">Dashboard</button>
-          <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline Stage Funnel</button>
-          <button class="view-tab view-tab-primary" data-view-trigger="crm">Market Funnel</button>
-          <button class="view-tab view-tab-primary" data-view-trigger="targets">Targets</button>
-        </nav>
-        <nav class="view-switcher view-switcher-secondary" aria-label="Secondary app sections">
-          <button class="view-tab view-tab-secondary" data-view-trigger="tasks">My Actions</button>
-          <button class="view-tab view-tab-secondary" data-view-trigger="requests">Requests</button>
-          <button class="view-tab view-tab-secondary" data-view-trigger="campaigns">Growth</button>
-          <button class="view-tab view-tab-secondary" data-view-trigger="admin">Setup</button>
-          <button class="view-tab view-tab-secondary" data-view-trigger="catalogue">KPIs</button>
-        </nav>
-      </section>
-      <button
-        id="operating-flow-toggle"
-        class="operating-flow-toggle"
-        type="button"
-        aria-controls="operating-flow-shell"
-        aria-expanded="true"
-      >
-        Operating Flow
-      </button>
+      <div id="operating-flow-dropdown" class="operating-flow-dropdown">
+        <button
+          id="operating-flow-toggle"
+          class="operating-flow-toggle is-visible"
+          type="button"
+          aria-controls="operating-flow-shell"
+          aria-expanded="false"
+        >
+          <span class="operating-flow-toggle-copy">
+            <strong>Operating Flow</strong>
+            <small>Dashboard, Pipeline, Market Funnel, Targets</small>
+          </span>
+        </button>
+        <section id="operating-flow-shell" class="view-nav-shell" aria-label="Primary navigation" hidden>
+          <div class="view-nav-meta view-nav-meta-compact">
+            <p class="panel-kicker">Operating flow</p>
+            <span class="view-nav-priority">Focus: execution, market funnel, targets</span>
+          </div>
+          <nav class="view-switcher view-switcher-primary" aria-label="Primary app sections">
+            <button class="view-tab view-tab-primary is-active" data-view-trigger="dashboard">Dashboard</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline Stage Funnel</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="crm">Market Funnel</button>
+            <button class="view-tab view-tab-primary" data-view-trigger="targets">Targets</button>
+          </nav>
+          <nav class="view-switcher view-switcher-secondary" aria-label="Secondary app sections">
+            <button class="view-tab view-tab-secondary" data-view-trigger="tasks">My Actions</button>
+            <button class="view-tab view-tab-secondary" data-view-trigger="requests">Requests</button>
+            <button class="view-tab view-tab-secondary" data-view-trigger="campaigns">Growth</button>
+            <button class="view-tab view-tab-secondary" data-view-trigger="admin">Setup</button>
+            <button class="view-tab view-tab-secondary" data-view-trigger="catalogue">KPIs</button>
+          </nav>
+        </section>
+      </div>
 
       <main class="views">
         <section class="view is-active" data-view="dashboard">

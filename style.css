@@ -655,13 +655,19 @@ button.stat-card {
   letter-spacing: 0.02em;
 }
 
-.view-nav-shell {
+.operating-flow-dropdown {
   position: sticky;
   top: 8px;
   z-index: 12;
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin: 14px 0 14px;
+}
+
+.view-nav-shell {
+  position: static;
+  display: grid;
+  gap: 8px;
   padding: 10px 12px;
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(8, 18, 37, 0.985), rgba(13, 24, 48, 0.965));
@@ -678,17 +684,8 @@ button.stat-card {
     box-shadow var(--transition);
 }
 
-.view-nav-shell.is-collapsed {
-  max-height: 0;
-  margin: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateY(-10px);
-  pointer-events: none;
-  border-color: transparent;
-  box-shadow: none;
+.view-nav-shell[hidden] {
+  display: none !important;
 }
 
 .view-nav-meta {
@@ -781,32 +778,46 @@ button.stat-card {
 }
 
 .operating-flow-toggle {
-  position: fixed;
-  top: 108px;
-  right: 18px;
-  z-index: 16;
-  display: inline-flex;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  gap: 12px;
+  width: 100%;
   padding: 12px 14px;
   border: 1px solid rgba(96, 165, 250, 0.22);
-  border-radius: 999px;
+  border-radius: 14px;
   background: linear-gradient(180deg, rgba(8, 18, 37, 0.96), rgba(15, 27, 56, 0.94));
   color: #e2e8f0;
-  font-size: 0.82rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  box-shadow: 0 18px 38px rgba(8, 18, 37, 0.22);
+  text-align: left;
+  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.14);
   cursor: pointer;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(20px);
-  transition: opacity var(--transition), transform var(--transition), background var(--transition), box-shadow var(--transition);
+  transition: background var(--transition), box-shadow var(--transition), border-color var(--transition);
 }
 
-body.deal-modal-open .view-nav-shell,
-body.deal-modal-open .operating-flow-toggle {
+.operating-flow-toggle-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.operating-flow-toggle-copy strong {
+  color: #f8fbff;
+  font-size: 0.86rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.operating-flow-toggle-copy small {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+body.deal-modal-open .operating-flow-dropdown {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-8px);
@@ -816,15 +827,40 @@ body.deal-modal-open .operating-flow-toggle {
   content: "";
   width: 9px;
   height: 9px;
+  justify-self: end;
   border-right: 2px solid currentColor;
   border-bottom: 2px solid currentColor;
-  transform: rotate(135deg);
+  transform: rotate(45deg);
+  transition: transform var(--transition);
 }
 
 .operating-flow-toggle.is-visible {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0);
+}
+
+.operating-flow-toggle.is-open {
+  border-color: rgba(96, 165, 250, 0.34);
+  box-shadow: 0 16px 34px rgba(8, 18, 37, 0.18);
+}
+
+.operating-flow-toggle.is-open::before {
+  transform: rotate(-135deg);
+}
+
+.operating-flow-dropdown.is-open .view-nav-shell {
+  animation: operatingFlowDropdownIn 0.18s ease;
+}
+
+@keyframes operatingFlowDropdownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .module-flow-shell {
@@ -5432,7 +5468,7 @@ button.stage-card {
     position: static;
   }
 
-  .view-nav-shell {
+  .operating-flow-dropdown {
     top: 10px;
   }
 
@@ -5466,20 +5502,16 @@ button.stage-card {
 }
 
 @media (max-width: 960px) {
-  .operating-flow-toggle {
-    display: none;
+  .operating-flow-dropdown {
+    top: 10px;
   }
 
-  .view-nav-shell.is-collapsed {
-    max-height: none;
-    margin: 18px 0 16px;
-    padding: 16px 18px;
-    overflow: visible;
-    opacity: 1;
-    transform: none;
-    pointer-events: auto;
-    border-color: rgba(96, 165, 250, 0.16);
-    box-shadow: 0 24px 54px rgba(8, 18, 37, 0.22);
+  .operating-flow-toggle {
+    padding: 11px 12px;
+  }
+
+  .view-nav-shell {
+    padding: 14px;
   }
 
   .brand-lockup {
@@ -5562,6 +5594,10 @@ button.stage-card {
   .panel {
     padding: 18px;
     border-radius: 24px;
+  }
+
+  .operating-flow-dropdown {
+    gap: 8px;
   }
 
   .view-nav-shell {

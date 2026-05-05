@@ -702,6 +702,7 @@ const NAV_HIGHLIGHT_DURATION_MS = 1800;
 const elements = {
   focusSummary: document.getElementById("focus-summary"),
   operatingFlowShell: document.getElementById("operating-flow-shell"),
+  operatingFlowDropdown: document.getElementById("operating-flow-dropdown"),
   operatingFlowToggle: document.getElementById("operating-flow-toggle"),
   heroStats: document.getElementById("hero-stats"),
   activeUserSelect: document.getElementById("active-user-select"),
@@ -903,7 +904,7 @@ const ui = {
   dealAutosaveBaseline: null,
   dealAutosaveRestored: false,
   dealModalOpen: false,
-  operatingFlowCollapsed: false,
+  operatingFlowMenuOpen: false,
   lastScrollY: 0,
   navHighlightTimer: 0,
   navHighlightNodes: [],
@@ -1124,10 +1125,30 @@ function bindEvents() {
   });
 
   elements.operatingFlowToggle?.addEventListener("click", () => {
-    ui.operatingFlowCollapsed = false;
+    ui.operatingFlowMenuOpen = !ui.operatingFlowMenuOpen;
     renderOperatingFlowVisibility();
-    elements.operatingFlowShell?.scrollIntoView({ block: "start", behavior: "smooth" });
-    pulseNavigationTarget(elements.operatingFlowShell);
+    if (ui.operatingFlowMenuOpen) {
+      elements.operatingFlowDropdown?.scrollIntoView({ block: "start", behavior: "smooth" });
+      pulseNavigationTarget(elements.operatingFlowDropdown || elements.operatingFlowShell);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!ui.operatingFlowMenuOpen) {
+      return;
+    }
+    if (elements.operatingFlowDropdown?.contains(event.target)) {
+      return;
+    }
+    ui.operatingFlowMenuOpen = false;
+    renderOperatingFlowVisibility();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && ui.operatingFlowMenuOpen) {
+      ui.operatingFlowMenuOpen = false;
+      renderOperatingFlowVisibility();
+    }
   });
 
   document.getElementById("reset-demo-button").addEventListener("click", () => {
@@ -3798,6 +3819,7 @@ function scrollToViewTarget(viewName, selector = "") {
 function activateView(viewName, options = {}) {
   const nextView = cleanText(viewName) || "dashboard";
   ui.activeView = nextView;
+  ui.operatingFlowMenuOpen = false;
   renderViewState();
 
   if (options.scroll === false) {
@@ -3957,49 +3979,22 @@ function renderWorkspaceHistoryPreview() {
 }
 
 function renderOperatingFlowVisibility() {
-  const shouldCollapse = ui.operatingFlowCollapsed && window.innerWidth > 960;
-  elements.operatingFlowShell?.classList.toggle("is-collapsed", shouldCollapse);
-  elements.operatingFlowToggle?.classList.toggle("is-visible", shouldCollapse);
-  elements.operatingFlowToggle?.setAttribute("aria-expanded", shouldCollapse ? "false" : "true");
+  const isOpen = Boolean(ui.operatingFlowMenuOpen) && !ui.dealModalOpen;
+  elements.operatingFlowDropdown?.classList.toggle("is-open", isOpen);
+  if (elements.operatingFlowShell) {
+    elements.operatingFlowShell.hidden = !isOpen;
+    elements.operatingFlowShell.classList.toggle("is-open", isOpen);
+  }
+  elements.operatingFlowToggle?.classList.add("is-visible");
+  elements.operatingFlowToggle?.classList.toggle("is-open", isOpen);
+  elements.operatingFlowToggle?.setAttribute("aria-expanded", isOpen ? "true" : "false");
 }
 
 function handleOperatingFlowScroll() {
-  if (window.innerWidth <= 960) {
-    if (ui.operatingFlowCollapsed) {
-      ui.operatingFlowCollapsed = false;
-      renderOperatingFlowVisibility();
-    }
-    ui.lastScrollY = window.scrollY || 0;
-    return;
-  }
-
-  const currentScrollY = window.scrollY || 0;
-  const delta = currentScrollY - ui.lastScrollY;
-
-  if (currentScrollY <= 72) {
-    if (ui.operatingFlowCollapsed) {
-      ui.operatingFlowCollapsed = false;
-      renderOperatingFlowVisibility();
-    }
-    ui.lastScrollY = currentScrollY;
-    return;
-  }
-
-  if (delta > 8 && !ui.operatingFlowCollapsed) {
-    ui.operatingFlowCollapsed = true;
-    renderOperatingFlowVisibility();
-  } else if (delta < -8 && ui.operatingFlowCollapsed) {
-    ui.operatingFlowCollapsed = false;
-    renderOperatingFlowVisibility();
-  }
-
-  ui.lastScrollY = currentScrollY;
+  ui.lastScrollY = window.scrollY || 0;
 }
 
 function handleOperatingFlowResize() {
-  if (window.innerWidth <= 960 && ui.operatingFlowCollapsed) {
-    ui.operatingFlowCollapsed = false;
-  }
   renderOperatingFlowVisibility();
 }
 
