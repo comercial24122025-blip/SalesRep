@@ -105,7 +105,8 @@ html {
 .workflow-command-shell.is-nav-target,
 .module-flow-shell.is-nav-target,
 .company-command-bar.is-nav-target,
-.view-nav-shell.is-nav-target {
+.view-nav-shell.is-nav-target,
+.view-context-bar.is-nav-target {
   animation: nav-target-pulse 1.55s ease;
 }
 
@@ -276,6 +277,20 @@ body.app-loading {
   display: grid;
   gap: 10px;
   max-width: 960px;
+}
+
+body[data-page-scope]:not([data-page-scope="home"]) .hero-copy {
+  display: none;
+}
+
+body[data-page-scope]:not([data-page-scope="home"]) .hero {
+  gap: 16px;
+  padding: 22px;
+}
+
+body[data-page-scope]:not([data-page-scope="home"]) .hero-topline {
+  grid-template-columns: minmax(260px, 0.7fr) minmax(220px, 0.3fr);
+  align-items: start;
 }
 
 .brand-lockup {
@@ -689,13 +704,111 @@ button.stat-card {
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
   gap: 18px;
-  margin: 14px 0 14px;
+  margin: 0;
   padding: 16px 18px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(248, 251, 255, 0.7));
   border: 1px solid rgba(208, 220, 240, 0.72);
   box-shadow: var(--shadow-md);
   backdrop-filter: var(--glass-blur);
+}
+
+.app-layout {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 12px;
+  width: 100%;
+  display: block;
+  min-width: 0;
+  z-index: 18;
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease;
+}
+
+.app-content {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin-left: 0;
+}
+
+body[data-page-scope="focus-window"] #hero-stats,
+body[data-page-scope="focus-window"] #app-banner,
+body[data-page-scope="focus-window"] .data-status-bar,
+body[data-page-scope="focus-window"] .view-context-bar,
+body[data-page-scope="focus-window"] .company-command-bar,
+body[data-page-scope="focus-window"] #company-profile-shell,
+body[data-page-scope="focus-window"] .views,
+body[data-page-scope="executive-overview"] .view-context-bar,
+body[data-page-scope="executive-overview"] .company-command-bar,
+body[data-page-scope="executive-overview"] #company-profile-shell,
+body[data-page-scope="executive-overview"] .views {
+  display: none !important;
+}
+
+body[data-page-scope="commercial-funnel"] #pipeline-stage-guide-shell,
+body[data-page-scope="commercial-funnel"] #pipeline-follow-up-shell,
+body[data-page-scope="commercial-funnel"] #pipeline-table-shell,
+body[data-page-scope="pipeline-kanban"] #pipeline-stage-guide-shell,
+body[data-page-scope="pipeline-kanban"] #pipeline-follow-up-shell,
+body[data-page-scope="pipeline-kanban"] #pipeline-table-shell,
+body[data-page-scope="stage-guide"] #pipeline-funnel-overview-shell,
+body[data-page-scope="stage-guide"] .filter-grid,
+body[data-page-scope="stage-guide"] #pipeline-board,
+body[data-page-scope="stage-guide"] #pipeline-follow-up-shell,
+body[data-page-scope="stage-guide"] #pipeline-table-shell,
+body[data-page-scope="follow-up-notifications"] #pipeline-funnel-overview-shell,
+body[data-page-scope="follow-up-notifications"] .filter-grid,
+body[data-page-scope="follow-up-notifications"] #pipeline-board,
+body[data-page-scope="follow-up-notifications"] #pipeline-stage-guide-shell,
+body[data-page-scope="follow-up-notifications"] #pipeline-table-shell {
+  display: none !important;
+}
+
+body[data-page-scope="commercial-funnel"] .company-command-bar,
+body[data-page-scope="pipeline-kanban"] .company-command-bar,
+body[data-page-scope="stage-guide"] .company-command-bar,
+body[data-page-scope="follow-up-notifications"] .company-command-bar {
+  display: none !important;
+}
+
+.view-context-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(245, 249, 255, 0.72));
+  border: 1px solid rgba(208, 220, 240, 0.72);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: var(--glass-blur);
+}
+
+.view-context-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.view-context-copy h2 {
+  margin: 0;
+  font-size: clamp(1.28rem, 1.85vw, 1.7rem);
+  letter-spacing: -0.03em;
+}
+
+.view-context-copy .toolbar-note {
+  margin: 0;
+  max-width: 72ch;
+}
+
+.view-context-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .company-command-copy {
@@ -730,24 +843,29 @@ button.stat-card {
 }
 
 .operating-flow-dropdown {
-  position: sticky;
-  top: 8px;
+  position: static;
   z-index: 12;
   display: grid;
   gap: 10px;
-  margin: 14px 0 14px;
-  filter: drop-shadow(0 18px 28px rgba(8, 18, 37, 0.08));
+  margin: 0;
+  filter: none;
+}
+
+.operating-flow-dropdown.is-hidden {
+  transform: translateY(-120%);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .view-nav-shell {
   position: static;
   display: grid;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 16px;
-  background: linear-gradient(180deg, rgba(8, 18, 37, 0.86), rgba(13, 24, 48, 0.8));
-  border-color: rgba(147, 197, 253, 0.18);
-  box-shadow: 0 12px 28px rgba(8, 18, 37, 0.18);
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(10, 20, 40, 0.92), rgba(15, 27, 54, 0.88));
+  border: 1px solid rgba(147, 197, 253, 0.18);
+  box-shadow: 0 18px 32px rgba(8, 18, 37, 0.16);
   transform-origin: top center;
   transition:
     opacity var(--transition),
@@ -761,6 +879,84 @@ button.stat-card {
 
 .view-nav-shell[hidden] {
   display: none !important;
+}
+
+.app-sidebar-shell {
+  min-height: 0;
+  max-height: none;
+  overflow: visible;
+  align-content: start;
+}
+
+.app-sidebar-head {
+  display: none;
+}
+
+.app-sidebar-head h2 {
+  margin: 4px 0 0;
+  font-size: 1.12rem;
+  color: #f8fbff;
+}
+
+.app-sidebar-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(147, 197, 253, 0.2), transparent);
+}
+
+.app-sidebar-subpages {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.app-sidebar-footer {
+  margin-top: 0;
+  padding-top: 0;
+  margin-left: auto;
+}
+
+.sidebar-config {
+  display: grid;
+  gap: 10px;
+}
+
+.sidebar-config-toggle {
+  list-style: none;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 197, 253, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f8fbff;
+  cursor: pointer;
+  font-size: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-config-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-config-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(147, 197, 253, 0.14);
+}
+
+.sidebar-config-panel strong {
+  color: #f8fbff;
+  font-size: 0.84rem;
+}
+
+.sidebar-config-panel small {
+  color: rgba(226, 232, 240, 0.72);
+  line-height: 1.45;
 }
 
 .view-nav-meta {
@@ -784,7 +980,7 @@ button.stat-card {
 }
 
 .view-nav-priority {
-  display: none;
+  display: inline-flex;
   align-items: center;
   padding: 6px 10px;
   border-radius: 999px;
@@ -823,6 +1019,22 @@ button.stat-card {
   box-shadow: none;
 }
 
+.view-switcher-sidebar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.view-switcher-sidebar-secondary {
+  gap: 6px;
+  padding-top: 0;
+}
+
 .view-tab {
   border: 0;
   border-radius: 9px;
@@ -837,6 +1049,25 @@ button.stat-card {
   transition: background var(--transition), color var(--transition), transform var(--transition), box-shadow var(--transition);
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+a.view-tab {
+  text-decoration: none;
+}
+
+.view-switcher-sidebar .view-tab {
+  width: auto;
+  padding: 9px 12px;
+  border-radius: 12px;
+  text-align: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.76rem;
+}
+
+.view-switcher-sidebar-secondary .view-tab {
+  padding: 9px 12px;
+  font-size: 0.74rem;
 }
 
 .view-tab-primary {
@@ -891,12 +1122,6 @@ button.stat-card {
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.01em;
-}
-
-body.deal-modal-open .operating-flow-dropdown {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-8px);
 }
 
 .operating-flow-toggle::before {
@@ -1531,6 +1756,7 @@ body.deal-modal-open .operating-flow-dropdown {
   top: 0;
   z-index: 4;
   padding: 16px 18px;
+  margin-bottom: 18px;
   border-radius: 20px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.92));
   border: 1px solid var(--border-soft);
@@ -2969,7 +3195,9 @@ button.executive-readout-card {
   z-index: 1;
   width: min(1100px, calc(100vw - 40px));
   max-height: min(90vh, 980px);
-  overflow: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
   border-radius: 16px;
   border: 1px solid rgba(96, 165, 250, 0.14);
   box-shadow: 0 32px 80px rgba(8, 18, 37, 0.28);
@@ -2977,14 +3205,20 @@ button.executive-readout-card {
 }
 
 .deal-modal-panel > .panel-head {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 5;
   margin: -22px -22px 18px;
   padding: 18px 22px 16px;
   background: linear-gradient(180deg, rgba(250, 252, 255, 0.96), rgba(246, 249, 255, 0.9));
   border-bottom: 1px solid rgba(214, 224, 240, 0.82);
   backdrop-filter: blur(18px);
+}
+
+.deal-modal-panel > form.entity-form {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
 }
 
 body.deal-modal-open {
@@ -4010,19 +4244,23 @@ button.stage-card {
 .kanban-board {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(280px, 320px);
-  gap: 16px;
+  grid-auto-columns: minmax(286px, 330px);
+  gap: 18px;
   overflow-x: auto;
-  padding: 8px 2px 18px;
+  padding: 8px 4px 20px;
 }
 
 .kanban-column {
-  background: rgba(10, 18, 32, 0.72);
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 18px;
-  padding: 12px;
-  min-height: 420px;
-  color: #e5eef8;
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 255, 0.08), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(244, 248, 255, 0.82));
+  border: 1px solid rgba(208, 220, 240, 0.82);
+  border-radius: 22px;
+  padding: 14px;
+  min-height: 440px;
+  color: var(--ink);
+  box-shadow: 0 16px 28px rgba(15, 23, 42, 0.06);
+  backdrop-filter: var(--glass-blur);
 }
 
 .kanban-column-header {
@@ -4035,52 +4273,56 @@ button.stage-card {
 
 .kanban-column-header h3 {
   margin: 0;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-  color: #ffffff;
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
 }
 
 .kanban-column-header p {
   margin: 4px 0 0;
-  color: #94a3b8;
-  font-size: 12px;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .kanban-stage-count {
-  background: rgba(59, 130, 246, 0.14);
-  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(37, 99, 235, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.22);
   border-radius: 999px;
-  padding: 4px 9px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #dbeafe;
+  padding: 5px 10px;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--accent-strong);
 }
 
 .kanban-dropzone {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   min-height: 320px;
-  border-radius: 14px;
-  transition: background 0.16s ease, outline 0.16s ease;
+  padding: 2px;
+  border-radius: 16px;
+  transition: background 0.16s ease, outline 0.16s ease, box-shadow 0.16s ease;
 }
 
 .kanban-dropzone.is-over {
-  background: rgba(59, 130, 246, 0.08);
-  outline: 1px dashed rgba(96, 165, 250, 0.55);
+  background: rgba(37, 99, 235, 0.06);
+  outline: 1px dashed rgba(96, 165, 250, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.08);
 }
 
 .kanban-card {
-  background: rgba(15, 23, 42, 0.96);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.9));
+  border: 1px solid rgba(208, 220, 240, 0.88);
   border-left: 5px solid #22c55e;
-  border-radius: 16px;
-  padding: 12px;
+  border-radius: 18px;
+  padding: 14px;
   cursor: grab;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 14px 24px rgba(15, 23, 42, 0.06);
 }
 
 .kanban-card.is-dragging {
-  opacity: 0.55;
+  opacity: 0.68;
+  transform: scale(0.995);
 }
 
 .kanban-card-healthy {
@@ -4098,24 +4340,28 @@ button.stage-card {
 .kanban-card-top {
   display: flex;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
+  align-items: flex-start;
 }
 
 .kanban-risk-pill {
   white-space: nowrap;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 0.68rem;
+  font-weight: 800;
   border-radius: 999px;
-  padding: 4px 8px;
-  background: rgba(148, 163, 184, 0.12);
-  color: #e5eef8;
+  padding: 5px 9px;
+  background: rgba(15, 23, 42, 0.06);
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .kanban-card-value {
-  margin-top: 10px;
-  font-size: 18px;
+  margin-top: 2px;
+  font-size: 1.15rem;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--ink);
+  letter-spacing: -0.02em;
 }
 
 .kanban-card-meta,
@@ -4123,8 +4369,8 @@ button.stage-card {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  color: #94a3b8;
-  font-size: 12px;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
   margin-top: 8px;
 }
 
@@ -4133,10 +4379,10 @@ button.stage-card {
 }
 
 .kanban-next-action {
-  margin-top: 10px;
-  font-size: 13px;
-  line-height: 1.35;
-  color: #dbe5f0;
+  margin-top: 6px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink);
 }
 
 .kanban-actions {
@@ -4160,7 +4406,7 @@ button.stage-card {
 }
 
 .kanban-stage-button {
-  border: 1px solid rgba(96, 165, 250, 0.24);
+  border: 1px solid rgba(96, 165, 250, 0.2);
   background: linear-gradient(135deg, rgba(37, 99, 255, 0.92), rgba(124, 58, 237, 0.88));
   color: #f8fbff;
   cursor: pointer;
@@ -4176,17 +4422,18 @@ button.stage-card {
 }
 
 .kanban-stage-complete {
-  border: 1px dashed rgba(148, 163, 184, 0.28);
-  background: rgba(148, 163, 184, 0.08);
-  color: #94a3b8;
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  background: rgba(241, 245, 249, 0.88);
+  color: var(--ink-soft);
 }
 
 .kanban-empty {
-  color: #64748b;
-  font-size: 13px;
-  border: 1px dashed rgba(148, 163, 184, 0.25);
-  border-radius: 14px;
-  padding: 14px;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  border: 1px dashed rgba(148, 163, 184, 0.26);
+  border-radius: 16px;
+  padding: 16px 14px;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .kanban-card::after {
@@ -4195,7 +4442,22 @@ button.stage-card {
   inset: auto 16px 0 16px;
   height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent 0%, rgba(24, 50, 74, 0.24) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(24, 50, 74, 0.12) 50%, transparent 100%);
+}
+
+.kanban-card-healthy .kanban-risk-pill {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.kanban-card-risk .kanban-risk-pill {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+.kanban-card-stuck .kanban-risk-pill {
+  background: rgba(239, 68, 68, 0.12);
+  color: #b91c1c;
 }
 
 .pipeline-card-head {
@@ -5627,8 +5889,41 @@ button.stage-card {
 }
 
 @media (max-width: 960px) {
+  .app-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .app-sidebar {
+    position: static;
+    top: auto;
+    width: auto;
+    transform: none;
+  }
+
+  .app-sidebar-shell {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .app-content {
+    margin-left: 0;
+  }
+
+  .view-context-bar {
+    display: grid;
+    gap: 14px;
+    justify-items: start;
+  }
+
+  .view-context-actions {
+    width: 100%;
+  }
+
   .operating-flow-dropdown {
-    top: 10px;
+    position: static;
   }
 
   .operating-flow-toggle {
@@ -5735,8 +6030,9 @@ button.stage-card {
     border-radius: 24px;
   }
 
-  .view-nav-meta {
-    display: none;
+  .app-sidebar-head {
+    display: grid;
+    gap: 10px;
   }
 
   .hero-stats,
@@ -5776,8 +6072,8 @@ button.stage-card {
     padding-top: 0;
   }
 
-  .view-nav-meta {
-    align-items: start;
+  .view-nav-priority {
+    display: none;
   }
 
   .view-tab {
@@ -5797,10 +6093,25 @@ button.stage-card {
     font-size: 0.72rem;
   }
 
+  .view-switcher-sidebar {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+  }
+
+  .view-switcher-sidebar .view-tab {
+    width: auto;
+    min-width: max-content;
+    text-align: center;
+  }
+
   .hero-actions,
   .form-actions,
   .head-actions,
   .toolbar-filters,
+  .view-context-actions,
   .workflow-actions {
     width: 100%;
   }

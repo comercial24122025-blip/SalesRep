@@ -685,6 +685,7 @@ const userForm = document.getElementById("user-form");
 const DEAL_FORM_SECTION_FIELD_MAP = buildDealFormSectionFieldMap();
 
 const viewTabs = Array.from(document.querySelectorAll("[data-view-trigger]"));
+const pageLinks = Array.from(document.querySelectorAll("[data-page-link]"));
 const views = Array.from(document.querySelectorAll("[data-view]"));
 const VIEW_SCROLL_TARGETS = {
   dashboard: ".cockpit-command-center",
@@ -697,6 +698,121 @@ const VIEW_SCROLL_TARGETS = {
   campaigns: "#campaign-board",
   catalogue: "#kpi-grid",
 };
+const VIEW_PAGE_MAP = {
+  dashboard: "index.html",
+  tasks: "my-actions.html",
+  pipeline: "pipeline.html",
+  requests: "requests.html",
+  campaigns: "accounts.html",
+  targets: "forecast.html",
+  admin: "admin.html",
+  crm: "market-intel.html",
+  catalogue: "kpis.html",
+};
+const PAGE_VIEW_MAP = Object.fromEntries(Object.entries(VIEW_PAGE_MAP).map(([view, page]) => [page, view]));
+const LEGACY_ROUTE_VIEW_MAP = {
+  home: "dashboard",
+  "my-actions": "tasks",
+  pipeline: "pipeline",
+  requests: "requests",
+  accounts: "campaigns",
+  forecast: "targets",
+  admin: "admin",
+  "market-intel": "crm",
+  kpis: "catalogue",
+};
+const PAGE_SCOPE_CONFIG = {
+  "index.html": { view: "dashboard", scope: "home" },
+  "my-actions.html": { view: "tasks", scope: "my-actions" },
+  "pipeline.html": { view: "pipeline", scope: "pipeline" },
+  "requests.html": { view: "requests", scope: "requests" },
+  "accounts.html": { view: "campaigns", scope: "accounts" },
+  "forecast.html": { view: "targets", scope: "forecast" },
+  "admin.html": { view: "admin", scope: "admin" },
+  "market-intel.html": { view: "crm", scope: "market-intel" },
+  "kpis.html": { view: "catalogue", scope: "kpis" },
+  "focus-window.html": { view: "dashboard", scope: "focus-window" },
+  "executive-overview.html": { view: "dashboard", scope: "executive-overview" },
+  "commercial-funnel.html": { view: "pipeline", scope: "commercial-funnel" },
+  "pipeline-kanban.html": { view: "pipeline", scope: "pipeline-kanban" },
+  "stage-operating-guide.html": { view: "pipeline", scope: "stage-guide" },
+  "follow-up-notifications.html": { view: "pipeline", scope: "follow-up-notifications" },
+};
+const VIEW_CONTEXT_META = {
+  dashboard: {
+    kicker: "Home",
+    title: "Revenue execution cockpit",
+    copy: "Start with the command center, fix what is blocked, and move the team into today's highest-value work.",
+    actionLabel: "Open Pipeline",
+    actionView: "pipeline",
+    actionTargetSelector: "#pipeline-board",
+  },
+  tasks: {
+    kicker: "My Actions",
+    title: "Daily execution queue",
+    copy: "Work overdue items first, clear today commitments, and close blockers without leaving the queue.",
+    actionLabel: "View Overdue",
+    actionView: "tasks",
+    actionTargetSelector: "#task-board",
+  },
+  pipeline: {
+    kicker: "Pipeline",
+    title: "Stage-controlled deal flow",
+    copy: "Run the funnel as the primary work surface, move stages with discipline, and keep next actions current.",
+    actionLabel: "New Account",
+    actionView: "pipeline",
+    actionTargetSelector: "#open-new-deal-modal-button",
+  },
+  requests: {
+    kicker: "Requests",
+    title: "Operational handoff factory",
+    copy: "Open the right request lane, complete missing fields, and hand work to legal, DD, integration, and launch teams cleanly.",
+    actionLabel: "Open Request Hub",
+    actionView: "requests",
+    actionTargetSelector: "#requests-board",
+  },
+  campaigns: {
+    kicker: "Accounts",
+    title: "Live account management",
+    copy: "Control growth, handover, and account follow-up from one page instead of scattering post-live work.",
+    actionLabel: "View Live Accounts",
+    actionView: "campaigns",
+    actionTargetSelector: "#campaign-board",
+  },
+  targets: {
+    kicker: "Forecast",
+    title: "Targets and revenue plan",
+    copy: "Review attainment, update planning, and connect weighted pipeline to the year-end revenue picture.",
+    actionLabel: "Open Targets",
+    actionView: "targets",
+    actionTargetSelector: "#target-progress",
+  },
+  admin: {
+    kicker: "Admin",
+    title: "Workspace control",
+    copy: "Manage users, settings, and workspace structure without cluttering the daily execution surfaces.",
+    actionLabel: "Open Workspace",
+    actionView: "admin",
+    actionTargetSelector: "#workspace-form",
+  },
+  crm: {
+    kicker: "Market Intel",
+    title: "Market and account mapping",
+    copy: "Review market coverage, whitespace, and account assignment before new targets are pushed into execution.",
+    actionLabel: "Open Market Intel",
+    actionView: "crm",
+    actionTargetSelector: "#market-intel-board",
+  },
+  catalogue: {
+    kicker: "KPIs",
+    title: "Performance catalogue",
+    copy: "Scan operating metrics, benchmark performance, and keep executive reporting in a dedicated reference page.",
+    actionLabel: "View KPI Grid",
+    actionView: "catalogue",
+    actionTargetSelector: "#kpi-grid",
+  },
+};
+const COMPANY_FINDER_VIEWS = new Set(["dashboard", "crm", "pipeline"]);
 const NAV_HIGHLIGHT_DURATION_MS = 1800;
 
 const elements = {
@@ -704,6 +820,11 @@ const elements = {
   operatingFlowShell: document.getElementById("operating-flow-shell"),
   operatingFlowDropdown: document.getElementById("operating-flow-dropdown"),
   operatingFlowToggle: document.getElementById("operating-flow-toggle"),
+  companyCommandBar: document.querySelector(".company-command-bar"),
+  viewContextKicker: document.getElementById("view-context-kicker"),
+  viewContextTitle: document.getElementById("view-context-title"),
+  viewContextCopy: document.getElementById("view-context-copy"),
+  viewContextAction: document.getElementById("view-context-action"),
   heroStats: document.getElementById("hero-stats"),
   dataSourceStatus: document.getElementById("data-source-status"),
   dataLastSyncStatus: document.getElementById("data-last-sync-status"),
@@ -914,6 +1035,7 @@ const ui = {
   dealModalOpen: false,
   operatingFlowMenuOpen: false,
   lastScrollY: 0,
+  navHidden: false,
   navHighlightTimer: 0,
   navHighlightNodes: [],
   remoteSyncTimer: 0,
@@ -922,6 +1044,8 @@ const ui = {
   lastLocalMutationAt: 0,
   lastPersistStatus: "idle",
   lastPersistAt: "",
+  pageView: "dashboard",
+  pageScope: "home",
 };
 
 let state = {
@@ -1108,9 +1232,18 @@ function rebuildDerivedState(force = false) {
 init();
 
 async function init() {
+  ui.pageView = resolvePageViewFromLocation();
+  ui.pageScope = resolvePageScopeFromLocation();
+  document.body.dataset.pageScope = ui.pageScope || "home";
   setLoadingState(true, "Loading workspace", "Syncing live pipeline, tasks, market intelligence, and forecast data.");
+  const legacyHashView = getLegacyHashView();
+  const currentFileName = getCurrentPageFileName();
+  if (legacyHashView && currentFileName === "index.html" && legacyHashView !== "dashboard") {
+    window.location.replace(buildPageUrlForView(legacyHashView));
+    return;
+  }
   bindEvents();
-  ui.activeView = "dashboard";
+  ui.activeView = ui.pageView || "dashboard";
   resetDealForm();
   resetMarketIntelForm();
   resetTargetForm();
@@ -1120,7 +1253,7 @@ async function init() {
   resetUserForm();
   await hydrateFromExcel();
   renderAll();
-  activateView("dashboard", { scroll: false });
+  activateView(ui.activeView, { scroll: false, pageNavigation: false });
   startRemoteStateSync();
   setLoadingState(false);
 }
@@ -1130,7 +1263,7 @@ function bindEvents() {
 
   viewTabs.forEach((button) => {
     button.addEventListener("click", () => {
-      activateView(button.dataset.viewTrigger);
+      activateView(button.dataset.viewTrigger, { targetSelector: button.dataset.targetSelector || "" });
     });
   });
 
@@ -3809,6 +3942,9 @@ function renderViewState() {
   viewTabs.forEach((button) => {
     button.classList.toggle("is-active", button.dataset.viewTrigger === ui.activeView);
   });
+  pageLinks.forEach((link) => {
+    link.classList.toggle("is-active", cleanText(link.dataset.pageLink) === getCurrentPageFileName());
+  });
 
   views.forEach((view) => {
     view.classList.toggle("is-active", view.dataset.view === ui.activeView);
@@ -3817,6 +3953,9 @@ function renderViewState() {
   elements.dealModalShell?.toggleAttribute("hidden", !ui.dealModalOpen);
   elements.dealModalShell?.setAttribute("aria-hidden", ui.dealModalOpen ? "false" : "true");
   document.body.classList.toggle("deal-modal-open", ui.dealModalOpen);
+  document.body.dataset.pageScope = ui.pageScope || "home";
+  renderViewContextBar();
+  renderViewSectionVisibility();
   renderOperatingFlowVisibility();
 }
 
@@ -3841,6 +3980,10 @@ function scrollToViewTarget(viewName, selector = "") {
 
 function activateView(viewName, options = {}) {
   const nextView = cleanText(viewName) || "dashboard";
+  if (options.pageNavigation !== false && nextView !== ui.pageView) {
+    window.location.href = buildPageUrlForView(nextView);
+    return;
+  }
   ui.activeView = nextView;
   ui.operatingFlowMenuOpen = false;
   renderViewState();
@@ -3855,11 +3998,72 @@ function activateView(viewName, options = {}) {
   });
 }
 
+function resolvePageViewFromLocation() {
+  const pathname = getCurrentPageFileName();
+  const config = PAGE_SCOPE_CONFIG[pathname];
+  if (config?.view) {
+    return config.view;
+  }
+
+  return getLegacyHashView() || "dashboard";
+}
+
+function resolvePageScopeFromLocation() {
+  const pathname = getCurrentPageFileName();
+  return PAGE_SCOPE_CONFIG[pathname]?.scope || "home";
+}
+
+function buildPageUrlForView(viewName) {
+  const fileName = VIEW_PAGE_MAP[cleanText(viewName)] || VIEW_PAGE_MAP.dashboard;
+  return new URL(fileName, APP_BASE_URL).toString();
+}
+
+function getCurrentPageFileName() {
+  return window.location.pathname.split("/").pop() || "index.html";
+}
+
+function getLegacyHashView() {
+  const rawHash = cleanText(window.location.hash || "");
+  const normalizedHash = rawHash.replace(/^#\/?/, "").trim().toLowerCase();
+  return LEGACY_ROUTE_VIEW_MAP[normalizedHash] || "";
+}
+
 function resolveNavigationHighlightTarget(target) {
   if (!(target instanceof HTMLElement)) {
     return null;
   }
-  return target.closest(".panel, .workflow-command-shell, .module-flow-shell, .company-command-bar, .view-nav-shell") || target;
+  return target.closest(".panel, .workflow-command-shell, .module-flow-shell, .company-command-bar, .view-nav-shell, .view-context-bar") || target;
+}
+
+function renderViewContextBar() {
+  const meta = VIEW_CONTEXT_META[ui.activeView] || VIEW_CONTEXT_META.dashboard;
+
+  if (elements.viewContextKicker) {
+    elements.viewContextKicker.textContent = meta.kicker;
+  }
+  if (elements.viewContextTitle) {
+    elements.viewContextTitle.textContent = meta.title;
+  }
+  if (elements.viewContextCopy) {
+    elements.viewContextCopy.textContent = meta.copy;
+  }
+  if (elements.viewContextAction) {
+    elements.viewContextAction.textContent = meta.actionLabel;
+    elements.viewContextAction.dataset.viewTrigger = meta.actionView || "dashboard";
+    elements.viewContextAction.dataset.targetSelector = meta.actionTargetSelector || "";
+    elements.viewContextAction.hidden = !meta.actionLabel;
+  }
+}
+
+function renderViewSectionVisibility() {
+  const showCompanyFinder = COMPANY_FINDER_VIEWS.has(ui.activeView);
+  if (elements.companyCommandBar) {
+    elements.companyCommandBar.hidden = !showCompanyFinder;
+  }
+
+  if (!showCompanyFinder && elements.companyProfileShell) {
+    elements.companyProfileShell.hidden = true;
+  }
 }
 
 function focusFirstEditableField(target) {
@@ -4150,22 +4354,43 @@ function renderWorkspaceHistoryPreview() {
 }
 
 function renderOperatingFlowVisibility() {
-  const isOpen = Boolean(ui.operatingFlowMenuOpen) && !ui.dealModalOpen;
+  const isDesktop = window.matchMedia("(min-width: 1081px)").matches;
+  const isOpen = true;
+
   elements.operatingFlowDropdown?.classList.toggle("is-open", isOpen);
+  elements.operatingFlowDropdown?.classList.toggle("is-desktop", isDesktop);
+  elements.operatingFlowDropdown?.classList.toggle("is-hidden", ui.navHidden && !ui.dealModalOpen);
   if (elements.operatingFlowShell) {
-    elements.operatingFlowShell.hidden = !isOpen;
+    elements.operatingFlowShell.hidden = false;
     elements.operatingFlowShell.classList.toggle("is-open", isOpen);
+    elements.operatingFlowShell.classList.toggle("is-pinned", isDesktop);
   }
-  elements.operatingFlowToggle?.classList.add("is-visible");
-  elements.operatingFlowToggle?.classList.toggle("is-open", isOpen);
-  elements.operatingFlowToggle?.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  if (elements.operatingFlowToggle) {
+    elements.operatingFlowToggle.hidden = true;
+    elements.operatingFlowToggle.classList.remove("is-visible", "is-open");
+    elements.operatingFlowToggle.setAttribute("aria-expanded", "true");
+  }
 }
 
 function handleOperatingFlowScroll() {
-  ui.lastScrollY = window.scrollY || 0;
+  const currentScrollY = window.scrollY || 0;
+  const scrollingDown = currentScrollY > ui.lastScrollY + 12;
+  const scrollingUp = currentScrollY < ui.lastScrollY - 12;
+
+  if (currentScrollY < 120 || scrollingUp) {
+    ui.navHidden = false;
+  } else if (scrollingDown) {
+    ui.navHidden = true;
+  }
+
+  ui.lastScrollY = currentScrollY;
+  renderOperatingFlowVisibility();
 }
 
 function handleOperatingFlowResize() {
+  if (window.matchMedia("(min-width: 1081px)").matches) {
+    ui.operatingFlowMenuOpen = false;
+  }
   renderOperatingFlowVisibility();
 }
 
@@ -8183,8 +8408,12 @@ function renderTasks() {
   const openCount = visibleTasks.filter((task) => task.status !== "Done").length;
   const buckets = getActionBuckets(visibleTasks);
   const todayCount = buckets.overdue.length + buckets.today.length;
+  const taskTableWrap = elements.taskTableBody?.closest(".table-wrap");
   elements.taskSummary.textContent = ui.taskPreset ? `${visibleTasks.length} actions · ${ui.taskPreset.label}` : `${todayCount} require action today`;
   elements.taskOpenCount.textContent = `${openCount} open`;
+  if (taskTableWrap) {
+    taskTableWrap.hidden = ui.activeView === "tasks";
+  }
   renderTaskBoard(visibleTasks);
   renderTaskTable(visibleTasks);
 }
