@@ -5237,8 +5237,12 @@ function renderAiSummaryResponse(deals, buckets, alerts, revenue) {
       <p>${escapeHtml(topAlert ? `${topAlert.title}: ${topAlert.detail}` : "No critical blockers detected. Work the due-today queue and keep stage movement current.")}</p>
     </div>
     <div class="ai-agent-view-grid">
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector=".cockpit-command-center"><strong>Command center</strong><span>Fix now, actions today, and revenue risk</span></button>
       <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#commercial-funnel-shell"><strong>Commercial funnel</strong><span>Open and sync by current AI scope</span></button>
       <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-board"><strong>Pipeline Kanban</strong><span>Move deals and clear blockers</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-time-pressure"><strong>Time pressure</strong><span>Stage SLA pressure and bottlenecks</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-operator-breakdown"><strong>Operator breakdown</strong><span>Weighted exposure by operator</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-growth-forecast"><strong>Forecast growth opportunities</strong><span>Growth expansion opportunities in scope</span></button>
       <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-stage-guide-shell"><strong>Stage Operating Guide</strong><span>Validate gate requirements</span></button>
       <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-table-shell"><strong>Pipeline</strong><span>Review full sheet and status</span></button>
       <button type="button" class="ai-view-card" data-ai-open-view="tasks" data-ai-target-selector="#task-board"><strong>Tasks · Fix today</strong><span>Execute overdue and due-today actions</span></button>
@@ -5369,6 +5373,13 @@ function renderAiLatamForecastResponse(deals) {
         "Forecast per operator",
         operatorRows.map((row) => `${row.operator || "No operator"} · ${row.market || "No market"}: ${formatCompactCurrency(row.forecastValue || row.weightedCount || 0)}`)
       )}
+    </div>
+    <div class="ai-agent-view-grid">
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector=".cockpit-command-center"><strong>Command center</strong><span>Daily summary and execution snapshot</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-board"><strong>Pipeline</strong><span>Move scoped deals by stage</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-time-pressure"><strong>Time pressure</strong><span>Legal, DD, and Integration SLA</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-operator-breakdown"><strong>Operator breakdown</strong><span>Operator-level weighted concentration</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="dashboard" data-ai-target-selector="#command-growth-forecast"><strong>Forecast growth opportunities</strong><span>Where to push next for growth</span></button>
     </div>
   `;
 }
@@ -17677,7 +17688,12 @@ async function uploadExcelWorkbook(file) {
       await refreshRemoteState({ force: true });
       renderAll();
       runPostRefreshDataChecks({ source: "github upload" });
-      setBanner(buildExcelBanner(`Workbook uploaded to GitHub: ${GITHUB_DEFAULT_WORKBOOK_PATH}.`), "success");
+      setBanner(
+        buildExcelBanner(
+          `Workbook uploaded to GitHub: ${GITHUB_DEFAULT_WORKBOOK_PATH}. If data does not change immediately, publish/update the online baseline JSON from this workbook source.`
+        ),
+        "success"
+      );
       return;
     }
 
