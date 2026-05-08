@@ -1301,6 +1301,7 @@ async function init() {
     return;
   }
   bindEvents();
+  enhanceExecutiveNavigation();
   ui.activeView = ui.pageView || "dashboard";
   resetDealForm();
   resetMarketIntelForm();
@@ -1329,6 +1330,26 @@ async function init() {
   restorePendingTaskDraft();
   startRemoteStateSync();
   setLoadingState(false);
+}
+
+function enhanceExecutiveNavigation() {
+  const navLabelMap = {
+    "executive-overview.html": "Executive Overview",
+    "pipeline-kanban.html": "Stage Pipeline",
+    "pipeline.html": "Opportunities & New Deals",
+    "accounts.html": "Growth Opportunities",
+    "focus-window.html": "Strategic Deals",
+    "market-intel.html": "Market Overview",
+    "forecast.html": "Market Forecast",
+    "kpis.html": "Market Benchmark",
+  };
+
+  pageLinks.forEach((link) => {
+    const page = cleanText(link.dataset.pageLink);
+    if (navLabelMap[page]) {
+      link.textContent = navLabelMap[page];
+    }
+  });
 }
 
 function enforceLiveAccountsHandoverPolicy() {

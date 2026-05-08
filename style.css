@@ -828,6 +828,31 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: none !important;
 }
 
+body[data-page-scope="commercial-funnel"] .app-content {
+  gap: 12px;
+}
+
+body[data-page-scope="commercial-funnel"] .pipeline-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
+body[data-page-scope="commercial-funnel"] .panel-head,
+body[data-page-scope="commercial-funnel"] .subpanel-head {
+  gap: 10px;
+}
+
+body[data-page-scope="commercial-funnel"] .pipeline-funnel-overview-shell,
+body[data-page-scope="commercial-funnel"] .pipeline-operating-shell {
+  padding: 14px;
+  border-radius: 14px;
+}
+
+body[data-page-scope="commercial-funnel"] .filter-grid {
+  gap: 10px;
+  padding: 10px;
+}
+
 .view-context-bar {
   display: flex;
   justify-content: space-between;

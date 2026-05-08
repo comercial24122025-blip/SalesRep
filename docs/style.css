@@ -804,8 +804,6 @@ body[data-page-scope="executive-overview"] .views {
   display: none !important;
 }
 
-body[data-page-scope="commercial-funnel"] #pipeline-stage-guide-shell,
-body[data-page-scope="commercial-funnel"] #pipeline-follow-up-shell,
 body[data-page-scope="commercial-funnel"] #pipeline-table-shell,
 body[data-page-scope="pipeline-kanban"] #pipeline-stage-guide-shell,
 body[data-page-scope="pipeline-kanban"] #pipeline-follow-up-shell,
@@ -828,6 +826,31 @@ body[data-page-scope="pipeline-kanban"] .company-command-bar,
 body[data-page-scope="stage-guide"] .company-command-bar,
 body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: none !important;
+}
+
+body[data-page-scope="commercial-funnel"] .app-content {
+  gap: 12px;
+}
+
+body[data-page-scope="commercial-funnel"] .pipeline-panel {
+  gap: 12px;
+  padding: 14px;
+}
+
+body[data-page-scope="commercial-funnel"] .panel-head,
+body[data-page-scope="commercial-funnel"] .subpanel-head {
+  gap: 10px;
+}
+
+body[data-page-scope="commercial-funnel"] .pipeline-funnel-overview-shell,
+body[data-page-scope="commercial-funnel"] .pipeline-operating-shell {
+  padding: 14px;
+  border-radius: 14px;
+}
+
+body[data-page-scope="commercial-funnel"] .filter-grid {
+  gap: 10px;
+  padding: 10px;
 }
 
 .view-context-bar {
@@ -898,8 +921,8 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-panel {
   display: grid;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 20px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.78)),
@@ -913,7 +936,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .ai-agent-head h2 {
@@ -924,14 +947,15 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 }
 
 .ai-agent-head p {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--ink-muted);
+  font-size: 0.9rem;
 }
 
 .ai-agent-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 10px;
   align-items: end;
 }
 
@@ -947,7 +971,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-query textarea {
   width: 100%;
-  min-height: 82px;
+  min-height: 64px;
   resize: vertical;
   border: 1px solid rgba(198, 213, 235, 0.92);
   border-radius: 14px;
@@ -970,7 +994,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-output {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .ai-agent-output:empty {
@@ -981,8 +1005,8 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding-top: 12px;
+  gap: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(210, 221, 233, 0.9);
 }
 
@@ -3827,6 +3851,16 @@ button.executive-readout-card {
   overflow: auto;
   padding-right: 2px;
   overscroll-behavior: contain;
+}
+
+.deal-modal-panel .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.82), rgba(248, 251, 255, 0.98));
+  border-top: 1px solid rgba(214, 224, 240, 0.8);
+  padding-top: 10px;
+  margin-top: 14px;
 }
 
 body.deal-modal-open {
@@ -6969,4 +7003,64 @@ button.stage-card {
 
 .qa-smoke-item.qa-fail {
   border-left-color: var(--danger);
+}
+
+.stage-account-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.stage-account-segment {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
+.stage-account-segment header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.stage-account-segment ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.stage-account-link {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #f8fbff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.stage-account-link:hover {
+  border-color: var(--brand-300);
+  background: #eef5ff;
+}
+
+.release-version-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  background: #fff;
+  margin-bottom: 8px;
 }

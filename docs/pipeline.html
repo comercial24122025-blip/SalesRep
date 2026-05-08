@@ -204,6 +204,7 @@
               </nav>
             </div>
             <div class="app-sidebar-footer">
+              <div class="release-version-chip" id="release-version-label" aria-label="Release version">Release v1.0.0 · Operativa</div>
               <details class="sidebar-config">
                 <summary class="sidebar-config-toggle" aria-label="Workspace config" title="Workspace config">&#9881;</summary>
                 <div class="sidebar-config-panel">
@@ -788,7 +789,7 @@
               <section class="panel form-panel pipeline-form-panel deal-modal-panel" role="dialog" aria-modal="true" aria-labelledby="deal-form-title">
               <div class="panel-head">
                 <div>
-                  <p class="panel-kicker">Account workspace</p>
+                  <p class="panel-kicker">Account Workspace</p>
                   <h2 id="deal-form-title">New Account</h2>
                 </div>
                 <div class="head-actions">
@@ -806,6 +807,7 @@
                     <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-status">Status</button>
                     <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-requests">Requests</button>
                     <button type="button" class="button button-ghost button-small" data-form-jump="deal-section-context">Context</button>
+                    <button type="button" class="button button-secondary button-small" id="manual-account-input-button">Manual Input</button>
                   </div>
                   <div class="quick-fill-strip">
                     <span>Quick fill</span>
@@ -1779,12 +1781,28 @@
                   <span id="pipeline-count" class="chip">0 deals</span>
                   <button id="open-new-deal-modal-button" class="button button-primary button-small">New Account</button>
                   <button id="export-pipeline-csv" class="button button-ghost button-small">Export CSV</button>
+                  <label class="field field-inline field-compact pipeline-export-stage-field">
+                    <span class="sr-only">Export stage</span>
+                    <select id="export-pipeline-stage" class="field-input">
+                      <option value="all">All stages</option>
+                      <option value="Lead">Lead</option>
+                      <option value="Proposal">Proposal</option>
+                      <option value="Legal">Legal</option>
+                      <option value="DD">DD</option>
+                      <option value="Integration">Integration</option>
+                      <option value="Go Live">Go Live</option>
+                      <option value="Live">Live</option>
+                      <option value="Handover">Handover</option>
+                    </select>
+                  </label>
+                  <button id="export-pipeline-stage-csv" class="button button-ghost button-small">Export Stage</button>
                 </div>
               </div>
 
               <section id="pipeline-funnel-overview-shell" class="pipeline-funnel-overview-shell">
                 <div id="pipeline-summary" class="summary-grid"></div>
                 <div id="pipeline-stage-strip" class="stage-strip"></div>
+                <div id="pipeline-stage-account-list" class="stage-account-list"></div>
               </section>
 
               <div id="pipeline-stage-guide-shell" class="pipeline-operating-shell">

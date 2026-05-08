@@ -6,9 +6,12 @@ const API_RESET_DEMO_URL = resolveApiUrl("/api/reset-demo");
 const API_DOWNLOAD_URL = resolveApiUrl("/api/download");
 const API_UPLOAD_URL = resolveApiUrl("/api/upload");
 const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
+const GITHUB_DEFAULT_REPO = "comercial24122025-blip/SalesRep";
+const GITHUB_DEFAULT_BRANCH = "main";
+const GITHUB_DEFAULT_WORKBOOK_PATH = "data/pipeline-command-center.xlsx";
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
-const DEAL_FORM_AUTOSAVE_DELAY_MS = 450;
+const DEAL_FORM_AUTOSAVE_DELAY_MS = 60000;
 const DEAL_FORM_SECTION_DEFS = [
   ["deal-section-core", "Core"],
   ["deal-section-scoring", "Scoring"],
@@ -50,7 +53,7 @@ const CONTRACT_STATUS_OPTIONS = ["Not Started", "Negotiation", "Signed", "Blocke
 const PROGRESS_STATUS_OPTIONS = ["Not Started", "Started", "In Progress", "Completed", "Blocked"];
 const GO_LIVE_STATUS_OPTIONS = ["Not Started", "Legal Sign-Off", "Completed", "Live", "Blocked"];
 const DEAL_PRIORITY_OPTIONS = ["High Priority", "Medium", "Low", "Observation"];
-const INACTIVE_DEAL_STATUSES = ["canceled", "cancelled", "inactive", "on hold", "closed lost"];
+const INACTIVE_DEAL_STATUSES = ["canceled", "cancelled", "inactive", "on hold", "closed lost", "closed completed"];
 const TASK_SCOPE_TYPES = ["Client", "Market", "Target", "Operator", "Deal"];
 const TASK_STATUS_OPTIONS = ["Open", "In Progress", "Waiting", "Blocked", "Done"];
 const TASK_PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -959,6 +962,7 @@ const elements = {
   pipelineCount: document.getElementById("pipeline-count"),
   pipelineSummary: document.getElementById("pipeline-summary"),
   pipelineStageStrip: document.getElementById("pipeline-stage-strip"),
+  pipelineStageAccountList: document.getElementById("pipeline-stage-account-list"),
   pipelineBoard: document.getElementById("pipeline-board"),
   dealTableBody: document.getElementById("deal-table-body"),
   dealWorkflowGuide: document.getElementById("deal-workflow-guide"),
@@ -982,6 +986,7 @@ const elements = {
   dealModalShell: document.getElementById("deal-modal-shell"),
   dealModalCloseButton: document.getElementById("deal-modal-close-button"),
   openNewDealModalButton: document.getElementById("open-new-deal-modal-button"),
+  manualAccountInputButton: document.getElementById("manual-account-input-button"),
   targetFormTitle: document.getElementById("target-form-title"),
   targetSubmitButton: document.getElementById("target-submit-button"),
   targetSummaryTitle: document.getElementById("target-summary-title"),
@@ -1296,6 +1301,7 @@ async function init() {
     return;
   }
   bindEvents();
+  enhanceExecutiveNavigation();
   ui.activeView = ui.pageView || "dashboard";
   resetDealForm();
   resetMarketIntelForm();
@@ -1308,10 +1314,14 @@ async function init() {
   await hydrateFromExcel();
   const reassignedOwners = backfillMissingDealOwners("Erick Mendez");
   const liveHandoverUpdates = enforceLiveAccountsHandoverPolicy();
+  const closedCompletedUpdates = enforceClosedCompletedFor2024SignedLiveDeals();
   if (reassignedOwners > 0) {
     await persistState();
   }
   if (liveHandoverUpdates > 0) {
+    await persistState();
+  }
+  if (closedCompletedUpdates > 0) {
     await persistState();
   }
   renderAll();
@@ -1320,6 +1330,26 @@ async function init() {
   restorePendingTaskDraft();
   startRemoteStateSync();
   setLoadingState(false);
+}
+
+function enhanceExecutiveNavigation() {
+  const navLabelMap = {
+    "executive-overview.html": "Executive Overview",
+    "pipeline-kanban.html": "Stage Pipeline",
+    "pipeline.html": "Opportunities & New Deals",
+    "accounts.html": "Growth Opportunities",
+    "focus-window.html": "Strategic Deals",
+    "market-intel.html": "Market Overview",
+    "forecast.html": "Market Forecast",
+    "kpis.html": "Market Benchmark",
+  };
+
+  pageLinks.forEach((link) => {
+    const page = cleanText(link.dataset.pageLink);
+    if (navLabelMap[page]) {
+      link.textContent = navLabelMap[page];
+    }
+  });
 }
 
 function enforceLiveAccountsHandoverPolicy() {
@@ -1361,6 +1391,52 @@ function enforceLiveAccountsHandoverPolicy() {
   return updatedDeals;
 }
 
+function enforceClosedCompletedFor2024SignedLiveDeals() {
+  let updatedDeals = 0;
+  state.deals = state.deals.map((deal) => {
+    if (!isLiveAccountStage(deal.stage)) {
+      return deal;
+    }
+    if (!isSignedInYear(deal, 2024)) {
+      return deal;
+    }
+    if (isInactiveDealStatus(deal.status)) {
+      return deal;
+    }
+    updatedDeals += 1;
+    return normalizeDeal({
+      ...deal,
+      status: "Closed Completed",
+      stage: "Handover",
+    });
+  });
+
+  if (updatedDeals > 0) {
+    ui.lastLocalMutationAt = Date.now();
+    setBanner(`${updatedDeals} live deals signed in 2024 marked as Closed Completed.`, "success");
+  }
+  return updatedDeals;
+}
+
+function isSignedInYear(deal, year) {
+  const candidates = [deal?.signedDate, deal?.signatureDate, deal?.contractSignedDate, deal?.agreementDate, deal?.closeDate];
+  for (const candidate of candidates) {
+    const parsed = parseDateValue(candidate);
+    if (parsed && parsed.getUTCFullYear() === year) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parseDateValue(value) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
 function bindEvents() {
   ui.lastScrollY = window.scrollY || 0;
 
@@ -1388,6 +1464,12 @@ function bindEvents() {
     const aiGrowthTaskAction = event.target.closest("[data-ai-growth-tasks]");
     if (aiGrowthTaskAction) {
       createGrowthFocusTasksFromAi();
+      return;
+    }
+
+    const aiCreateEventAction = event.target.closest("[data-ai-create-event]");
+    if (aiCreateEventAction) {
+      createAiSuggestedEvent();
     }
   });
 
@@ -1512,11 +1594,9 @@ function bindEvents() {
   dealForm.addEventListener("submit", handleDealSubmit);
   dealForm.addEventListener("input", () => {
     queueDealFieldHighlights();
-    renderDealInlineGrid();
   });
   dealForm.addEventListener("change", () => {
     queueDealFieldHighlights({ immediate: true });
-    renderDealInlineGrid();
   });
   elements.dealInlineGrid?.addEventListener("input", (event) => {
     const gridField = event.target.closest("[data-inline-grid-field]");
@@ -1946,6 +2026,7 @@ function bindEvents() {
   elements.pipelineSummary.addEventListener("click", handlePipelineSummaryAction);
   elements.targetProgress.addEventListener("click", handleTargetProgressAction);
   elements.pipelineBoard.addEventListener("click", handleDealAction);
+  elements.pipelineStageAccountList?.addEventListener("click", handleDealAction);
   elements.dealTableBody.addEventListener("click", handleDealAction);
   elements.dealWorkflowGuide?.addEventListener("click", handleDealWorkflowGuideAction);
   elements.pipelineOperatingGuide?.addEventListener("click", handleStageFunnelAction);
@@ -2024,6 +2105,12 @@ function bindEvents() {
     openDealModal();
     renderViewState();
   });
+  elements.manualAccountInputButton?.addEventListener("click", () => {
+    const firstField = dealForm?.querySelector("input[name='deal']");
+    firstField?.focus();
+    firstField?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setBanner("Manual account input enabled. Fill the fields and save.", "default");
+  });
   elements.dealModalCloseButton?.addEventListener("click", closeDealModal);
   elements.dealModalShell?.addEventListener("click", (event) => {
     if (event.target.closest("[data-deal-modal-close]")) {
@@ -2052,6 +2139,18 @@ function bindEvents() {
     const filename = buildExportFilename("pipeline-visible", "csv");
     downloadCsv(filename, rows, PIPELINE_CSV_COLUMNS);
     setBanner(`Pipeline CSV exported (${rows.length} visible deals).`, "success");
+  });
+
+  document.getElementById("export-pipeline-stage-csv")?.addEventListener("click", () => {
+    const stageSelect = document.getElementById("export-pipeline-stage");
+    const selectedStage = cleanText(stageSelect?.value) || "all";
+    const visibleDeals = getFilteredDeals();
+    const rows = selectedStage === "all" ? visibleDeals : visibleDeals.filter((deal) => cleanText(deal.stage) === selectedStage);
+    const stageSlug = selectedStage === "all" ? "all-stages" : selectedStage.toLowerCase().replace(/\s+/g, "-");
+    const filename = buildExportFilename(`pipeline-${stageSlug}`, "csv");
+    downloadCsv(filename, rows, PIPELINE_CSV_COLUMNS);
+    const label = selectedStage === "all" ? "all stages" : selectedStage;
+    setBanner(`Pipeline CSV exported (${rows.length} deals, ${label}).`, "success");
   });
 
   document.getElementById("export-targets-csv").addEventListener("click", () => {
@@ -2193,6 +2292,7 @@ async function persistState() {
     broadcastWorkspaceMutation("excel-save");
     return true;
   } catch (error) {
+    const errorMessage = cleanText(error?.message) || "Excel backend unavailable.";
     updateServerMetaFromPayload(
       {
         workbookPath: "GitHub published workspace baseline",
@@ -2207,7 +2307,7 @@ async function persistState() {
     recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
       storageMode: "session",
     });
-    setBanner("Excel backend unavailable. The online workspace stays visible, but changes are session-only until a workbook backend is connected.", "warn");
+    setBanner(`${errorMessage} Workspace visible online, but save is session-only until backend is connected.`, "warn");
     return false;
   }
 }
@@ -4171,7 +4271,37 @@ async function handleEventSubmit(event) {
   });
 
   const isEditing = Boolean(ui.editingEventId);
-  state.events = isEditing ? state.events.map((item) => (item.id === draft.id ? draft : item)) : [draft, ...(state.events || [])];
+  const existingEvents = Array.isArray(state.events) ? state.events : [];
+  if (isEditing) {
+    const existingIndex = existingEvents.findIndex((item) => item.id === draft.id);
+    if (existingIndex >= 0) {
+      existingEvents[existingIndex] = draft;
+    } else {
+      existingEvents.unshift(draft);
+    }
+    state.events = existingEvents;
+  } else {
+    state.events = [draft, ...existingEvents];
+  }
+
+  const linkedClientName = cleanText(draft.client);
+  if (linkedClientName && !hasExistingAccountForClient(linkedClientName)) {
+    state.deals.unshift(
+      normalizeDeal({
+        id: generateId("deal"),
+        deal: linkedClientName,
+        client: linkedClientName,
+        operator: linkedClientName,
+        market: cleanText(draft.market) || "Unassigned",
+        stage: "Lead",
+        type: "New Account",
+        status: "Open",
+        kam: cleanText(draft.owner) || getActiveUser()?.fullName || "Unassigned",
+        actionItems: `Prospect created from event ${draft.eventName || "meeting"}.`,
+        updates: cleanText(draft.followUpNotes) || cleanText(draft.objective),
+      })
+    );
+  }
   if (draft.linkedTaskId) {
     state.tasks = state.tasks.map((task) =>
       task.id === draft.linkedTaskId
@@ -4187,6 +4317,15 @@ async function handleEventSubmit(event) {
   renderAll();
   resetEventForm();
   setBanner(buildExcelBanner(saved ? `Networking meeting ${isEditing ? "updated" : "saved"}.` : "Networking meeting saved in memory only."), saved ? "success" : "warn");
+}
+
+function hasExistingAccountForClient(name) {
+  const needle = normalizeSearchText(name);
+  if (!needle) return false;
+  return state.deals.some((deal) => {
+    const candidates = [deal.client, deal.operator, deal.deal].map((value) => normalizeSearchText(value));
+    return candidates.includes(needle);
+  });
 }
 
 async function handleEventAction(event) {
@@ -4828,6 +4967,18 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "forecast-latam") {
     return `${header}${renderAiLatamForecastResponse(scopedDeals)}`;
   }
+  if (normalizedMode === "requests") {
+    return `${header}${renderAiRequestsPrepResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "operator-strategy") {
+    return `${header}${renderAiOperatorStrategyResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "market-strategy") {
+    return `${header}${renderAiMarketStrategyResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "event-planner") {
+    return `${header}${renderAiEventPlannerResponse(scopedDeals)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
 }
@@ -4882,6 +5033,10 @@ function getAiAgentTitle(mode) {
     "market-tasks": "Market tasks to hit target",
     "risk-by-client": "Client process risks",
     "forecast-latam": "LATAM forecast",
+    requests: "Request preparation",
+    "operator-strategy": "Operator strategy",
+    "market-strategy": "Market strategy",
+    "event-planner": "Event planner",
     summary: "Daily summary",
   };
   return titles[mode] || titles.summary;
@@ -5216,6 +5371,98 @@ function renderAiLatamForecastResponse(deals) {
       )}
     </div>
   `;
+}
+
+function renderAiRequestsPrepResponse(deals) {
+  const target = deals[0];
+  if (!target) return renderAiList("Request preparation", ["No deals in scope. Add filters or clear search."]);
+  const name = getPrimaryOperatorName(target);
+  return `
+    <div class="ai-agent-columns">
+      ${renderAiList("Proposal request", [
+        `${name}: define commercial scope, validity date, and product mix.`,
+        "Include pricing base (GGR/NGR), setup fee, deductions, bonus cap, tax, and withholding.",
+      ])}
+      ${renderAiList("Legal / DD / Integration", [
+        "Legal: legal entity, registration number, address, legal representative, contract status.",
+        "DD: company license, DD contact name/email, risk score, verification ticket.",
+        "Integration: tech owner, Jira ticket, products in scope, weekly integration update.",
+      ])}
+    </div>
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-secondary button-small" data-action="edit-deal" data-id="${escapeAttribute(target.id)}">Open Deal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-proposal-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Proposal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-legal-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Legal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-dd-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare DD</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-integration-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Integration</button>
+    </div>
+  `;
+}
+
+function renderAiOperatorStrategyResponse(deals) {
+  const rows = buildForecastOperatorRows(deals).slice(0, 6);
+  return renderAiList(
+    "Strategy per operator",
+    rows.map((row) => `${row.operator} (${row.market}): move ${row.topStage} forward, protect blockers, and target ${formatCompactCurrency(row.forecastValue || 0)} weighted.`)
+  );
+}
+
+function renderAiMarketStrategyResponse(deals) {
+  const rows = getAiRevenueByMarket(deals).slice(0, 8);
+  return renderAiList(
+    "Strategy per market",
+    rows.map((row) => `${row.label}: prioritize top 3 accounts, reduce SLA risk, and run weekly conversion plan around ${formatCompactCurrency(row.value)} weighted.`)
+  );
+}
+
+function renderAiEventPlannerResponse(deals) {
+  const scoped = deals.slice(0, 5);
+  const list = scoped.length
+    ? scoped.map((deal) => `${getPrimaryOperatorName(deal)} · ${deal.market || "No market"} · objective: move ${getDealVisibleStage(deal)} to next stage.`)
+    : ["No scoped deals available for event planning."];
+  return `
+    ${renderAiList("Event agenda suggestions", list)}
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-primary button-small" data-ai-create-event="true">Create Event</button>
+      <button type="button" class="button button-secondary button-small" data-ai-open-view="events" data-ai-target-selector="#event-table-body">Open Event View</button>
+    </div>
+  `;
+}
+
+async function createAiSuggestedEvent() {
+  const topDeals = getScopedDeals()
+    .filter((deal) => !isInactiveDeal(deal))
+    .slice(0, 5);
+  const date = new Date().toISOString().slice(0, 10);
+  const title = `LATAM Operator Execution Sprint · ${date}`;
+  const existing = (state.events || []).some((event) => cleanText(event.eventName) === title);
+  if (existing) {
+    activateView("events", { targetSelector: "#event-table-body" });
+    setBanner("Event already exists. Opened event view.", "warn");
+    return;
+  }
+
+  const notes = topDeals.length
+    ? topDeals.map((deal, idx) => `${idx + 1}. ${getPrimaryOperatorName(deal)} (${deal.market || "No market"}) · move ${getDealVisibleStage(deal)} forward.`).join("\n")
+    : "No scoped operators found. Add operators and retry.";
+
+  state.events.unshift(
+    normalizeEvent({
+      id: generateId("event"),
+      eventName: title,
+      eventDate: date,
+      location: "TBD",
+      operator: topDeals[0] ? getPrimaryOperatorName(topDeals[0]) : "",
+      objective: "Speed stage movement and remove blockers across prioritized operators.",
+      notes,
+      linkedTask: "Create follow-up tasks from event meetings.",
+      status: "Planned",
+    })
+  );
+  const saved = await persistState();
+  renderAll();
+  activateView("events", { targetSelector: "#event-table-body" });
+  setBanner(saved ? "AI event created and synced." : "AI event created in session only.", saved ? "success" : "warn");
 }
 
 function renderAiMetricCard(label, value, copy, view, targetSelector) {
@@ -7605,6 +7852,46 @@ function renderPipelineStageStrip(deals) {
     .join("");
 }
 
+function renderPipelineStageAccountList(deals) {
+  if (!elements.pipelineStageAccountList) return;
+  const segments = VIEW_STAGE_ORDER.map((stage) => {
+    const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === stage);
+    return { stage, deals: stageDeals };
+  }).filter((item) => item.deals.length > 0);
+
+  if (!segments.length) {
+    elements.pipelineStageAccountList.innerHTML = "";
+    return;
+  }
+
+  elements.pipelineStageAccountList.innerHTML = segments
+    .map(({ stage, deals: stageDeals }) => {
+      return `
+        <article class="stage-account-segment ${stageClassName(stage)}">
+          <header>
+            <strong>${escapeHtml(stage)}</strong>
+            <span>${stageDeals.length}</span>
+          </header>
+          <ul>
+            ${stageDeals
+              .slice(0, 12)
+              .map(
+                (deal) => `
+                  <li>
+                    <button type="button" class="stage-account-link" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">
+                      ${escapeHtml(getPrimaryOperatorName(deal) || deal.client || "Unnamed account")}
+                    </button>
+                  </li>
+                `
+              )
+              .join("")}
+          </ul>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderPipeline() {
   const scopedDeals = getScopedDeals();
   const baseDeals = getPipelineBaseDeals();
@@ -7615,6 +7902,7 @@ function renderPipeline() {
   renderPipelineSearchStatus(deals.length, baseDeals.length, scopedDeals.length);
   renderPipelineSummary(deals);
   renderPipelineStageStrip(deals);
+  renderPipelineStageAccountList(deals);
   renderPipelineOperatingGuide(deals);
   renderPipelineFollowUpNotifications(deals);
   renderPipelineBoard(deals);
@@ -17375,20 +17663,24 @@ async function uploadExcelWorkbook(file) {
     return;
   }
 
-  if (!serverMeta.ready) {
-    setBanner("Excel upload requires the local/server deployment. The published GitHub app works from the online workspace baseline and needs a workbook backend for persistent updates.", "warn");
-    return;
-  }
-
   const safeName = String(file.name || "uploaded-workbook.xlsx");
   const lowerName = safeName.toLowerCase();
   if (lowerName.endsWith(".xls") && !lowerName.endsWith(".xlsx")) {
     setBanner("This upload requires a modern Excel workbook (.xlsx or .xlsm). Please resave the file and try again.", "danger");
     return;
   }
-  setLoadingState(true, "Importing Excel", `Loading ${safeName} into Cube One and rebuilding the local workbook.`);
+  setLoadingState(true, "Importing Excel", `Uploading ${safeName} to GitHub workspace and refreshing state.`);
 
   try {
+    if (!serverMeta.ready) {
+      await uploadExcelWorkbookToGitHub(file, safeName);
+      await refreshRemoteState({ force: true });
+      renderAll();
+      runPostRefreshDataChecks({ source: "github upload" });
+      setBanner(buildExcelBanner(`Workbook uploaded to GitHub: ${GITHUB_DEFAULT_WORKBOOK_PATH}.`), "success");
+      return;
+    }
+
     const response = await fetch(`${API_UPLOAD_URL}?filename=${encodeURIComponent(safeName)}`, {
       method: "POST",
       headers: {
@@ -17418,6 +17710,55 @@ async function uploadExcelWorkbook(file) {
   } finally {
     setLoadingState(false);
   }
+}
+
+async function uploadExcelWorkbookToGitHub(file, safeName) {
+  const token = window.prompt("GitHub token (repo contents write):");
+  if (!token) {
+    throw new Error("GitHub token is required.");
+  }
+  const ownerRepo = window.prompt("GitHub repo (owner/repo):", GITHUB_DEFAULT_REPO) || GITHUB_DEFAULT_REPO;
+  const branch = window.prompt("GitHub branch:", GITHUB_DEFAULT_BRANCH) || GITHUB_DEFAULT_BRANCH;
+  const path = window.prompt("Workbook path in repo:", GITHUB_DEFAULT_WORKBOOK_PATH) || GITHUB_DEFAULT_WORKBOOK_PATH;
+
+  const existingRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  let sha = "";
+  if (existingRes.ok) {
+    const existing = await existingRes.json();
+    sha = cleanText(existing?.sha);
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  const content = btoa(binary);
+
+  const putRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: `Upload workbook ${safeName}`,
+      content,
+      branch,
+      sha: sha || undefined,
+    }),
+  });
+  if (!putRes.ok) {
+    const payload = await safeReadJson(putRes);
+    throw new Error(payload?.message || `GitHub upload failed (${putRes.status}).`);
+  }
+  serverMeta.storageMode = "static";
+  serverMeta.ready = false;
+  serverMeta.lastUpdatedAt = new Date().toISOString();
 }
 
 function isStrictIsoDate(text) {
