@@ -2385,13 +2385,16 @@ a.view-tab {
 }
 
 .quick-fill-inline-select select {
-  min-height: 34px;
-  border-radius: 8px;
+  min-height: 30px;
+  border-radius: 6px;
   border: 1px solid var(--line);
-  padding: 6px 10px;
+  padding: 4px 8px;
   background: #fff;
   color: var(--ink);
   font-weight: 600;
+  font-size: 0.74rem;
+  min-width: 128px;
+  max-width: 148px;
 }
 
 .quick-fill-strip span {
@@ -2414,10 +2417,10 @@ a.view-tab {
 .deal-inline-grid-shell {
   display: grid;
   gap: 8px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(191, 219, 254, 0.58);
-  background: rgba(255, 255, 255, 0.82);
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: #f8fbff;
 }
 
 .deal-inline-grid-shell summary {
@@ -2436,16 +2439,20 @@ a.view-tab {
 
 .deal-inline-grid {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .inline-grid-section {
   display: grid;
-  gap: 6px;
-  padding: 8px;
-  border-radius: 10px;
-  background: rgba(246, 250, 255, 0.85);
-  border: 1px solid rgba(191, 219, 254, 0.42);
+  gap: 0;
+  padding: 0;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  overflow: hidden;
 }
 
 .inline-grid-head {
@@ -2454,6 +2461,12 @@ a.view-tab {
   justify-content: space-between;
   gap: 8px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 8px 10px;
+  background: #eef4fb;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.34);
 }
 
 .inline-grid-title {
@@ -2462,6 +2475,26 @@ a.view-tab {
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.inline-grid-required-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px 10px 8px;
+  background: #f7fbff;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.inline-grid-required-chip {
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  background: rgba(254, 242, 242, 0.95);
+  color: #b91c1c;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .inline-grid-mode-toggle {
@@ -2492,38 +2525,59 @@ a.view-tab {
 
 .inline-grid-body {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 0;
 }
 
 .inline-grid-section-full .inline-grid-body {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
 }
 
 .inline-grid-cell {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+  padding: 8px 10px;
+  border-right: 1px solid rgba(148, 163, 184, 0.2);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .inline-grid-cell span {
-  color: var(--ink-soft);
-  font-size: 0.68rem;
-  font-weight: 700;
+  color: #4b617e;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .inline-grid-cell input,
 .inline-grid-cell select,
 .inline-grid-cell textarea {
   width: 100%;
-  min-height: 34px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(180, 198, 220, 0.9);
-  background: rgba(255, 255, 255, 0.96);
+  min-height: 30px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  background: #fff;
   color: var(--ink);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+}
+
+.inline-grid-cell input:focus,
+.inline-grid-cell select:focus,
+.inline-grid-cell textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.14);
+}
+
+.inline-grid-cell.is-range-anchor {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.inline-grid-cell.is-range-highlight {
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .inline-grid-cell-wide {

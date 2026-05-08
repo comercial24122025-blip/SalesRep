@@ -1056,11 +1056,12 @@ const ui = {
   pageScope: "home",
   aiAgentMode: "summary",
   inlineGridModeBySection: {
-    Core: "compact",
-    Status: "compact",
+    Core: "full",
+    Status: "full",
     Requests: "full",
   },
   qaSmokeResults: [],
+  inlineGridRangeAnchor: null,
 };
 
 let state = {
@@ -1475,6 +1476,87 @@ function bindEvents() {
     ui.inlineGridModeBySection[section] = mode;
     persistInlineGridModePreference();
     renderDealInlineGrid();
+  });
+  elements.dealInlineGrid?.addEventListener("keydown", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField) return;
+    const row = Number(gridField.dataset.inlineGridRow);
+    const col = Number(gridField.dataset.inlineGridCol);
+    let nextRow = row;
+    let nextCol = col;
+
+    if (event.key === "Enter" || event.key === "ArrowDown") nextRow = row + 1;
+    if (event.key === "ArrowUp") nextRow = row - 1;
+    if (event.key === "ArrowRight") nextCol = col + 1;
+    if (event.key === "ArrowLeft") nextCol = col - 1;
+    if (event.key === "Tab") {
+      nextCol = event.shiftKey ? col - 1 : col + 1;
+    }
+
+    if (nextRow !== row || nextCol !== col) {
+      event.preventDefault();
+      focusInlineGridCellByCoords(nextRow, nextCol);
+    }
+  });
+  elements.dealInlineGrid?.addEventListener("focusin", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField) return;
+    const row = Number(gridField.dataset.inlineGridRow);
+    const col = Number(gridField.dataset.inlineGridCol);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+    if (!event.shiftKey) {
+      ui.inlineGridRangeAnchor = { row, col };
+      highlightInlineGridRange(ui.inlineGridRangeAnchor, ui.inlineGridRangeAnchor);
+      return;
+    }
+    highlightInlineGridRange(ui.inlineGridRangeAnchor || { row, col }, { row, col });
+  });
+  elements.dealInlineGrid?.addEventListener("mousedown", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField) return;
+    const row = Number(gridField.dataset.inlineGridRow);
+    const col = Number(gridField.dataset.inlineGridCol);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+    ui.inlineGridRangeAnchor = { row, col };
+    highlightInlineGridRange(ui.inlineGridRangeAnchor, ui.inlineGridRangeAnchor);
+  });
+  elements.dealInlineGrid?.addEventListener("mouseover", (event) => {
+    if (!(event.buttons & 1) || !ui.inlineGridRangeAnchor) return;
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField) return;
+    const row = Number(gridField.dataset.inlineGridRow);
+    const col = Number(gridField.dataset.inlineGridCol);
+    if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+    highlightInlineGridRange(ui.inlineGridRangeAnchor, { row, col });
+  });
+  elements.dealInlineGrid?.addEventListener("paste", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField) return;
+    const text = event.clipboardData?.getData("text/plain") || "";
+    if (!text.includes("\n") && !text.includes("\t")) return;
+    event.preventDefault();
+    const startRow = Number(gridField.dataset.inlineGridRow);
+    const startCol = Number(gridField.dataset.inlineGridCol);
+    const rows = text.split(/\r?\n/).filter(Boolean).map((line) => line.split("\t"));
+    const cellMap = new Map(getInlineGridInputs().map((input) => [`${input.dataset.inlineGridRow}:${input.dataset.inlineGridCol}`, input]));
+    rows.forEach((cols, rowOffset) => {
+      cols.forEach((value, colOffset) => {
+        const key = `${startRow + rowOffset}:${startCol + colOffset}`;
+        const target = cellMap.get(key);
+        if (!target) return;
+        target.value = value.trim();
+        const fieldName = target.dataset.inlineGridField;
+        const formField = dealForm?.elements?.[fieldName];
+        if (formField) {
+          formField.value = target.value;
+          formField.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      });
+    });
+    const endRow = startRow + Math.max(rows.length - 1, 0);
+    const endCol = startCol + Math.max(...rows.map((row) => row.length), 1) - 1;
+    highlightInlineGridRange({ row: startRow, col: startCol }, { row: endRow, col: endCol });
+    queueDealFieldHighlights({ immediate: true });
   });
   elements.dealFieldSummary?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-focus-deal-field]");
@@ -11314,6 +11396,7 @@ const INLINE_GRID_FIELDS = {
     ["legalSignoffRequest", "Legal Signoff Request", "textarea"],
   ],
 };
+const INLINE_GRID_REQUIRED_FIELDS = ["deal", "client", "operator", "kam", "market", "stage", "dealValue", "legalStatus", "ddStatus", "integrationStatus", "actionItems"];
 
 function renderDealInlineGrid() {
   if (!elements.dealInlineGrid || !dealForm) {
@@ -11321,8 +11404,9 @@ function renderDealInlineGrid() {
   }
 
   const sections = Object.entries(INLINE_GRID_FIELDS)
-    .map(([section, fields]) => {
+    .map(([section, fields], sectionIndex) => {
       const mode = ui.inlineGridModeBySection?.[section] === "full" ? "full" : "compact";
+      const requiredFields = fields.filter(([name]) => INLINE_GRID_REQUIRED_FIELDS.includes(name));
       return `
       <section class="inline-grid-section inline-grid-section-${escapeAttribute(mode)}">
         <div class="inline-grid-head">
@@ -11332,8 +11416,20 @@ function renderDealInlineGrid() {
             <button type="button" class="inline-grid-mode-button ${mode === "full" ? "is-active" : ""}" data-inline-mode-toggle="${escapeAttribute(section)}" data-inline-mode="full">Full</button>
           </div>
         </div>
+        ${
+          requiredFields.length
+            ? `<div class="inline-grid-required-row">
+              ${requiredFields
+                .map(
+                  ([name, label]) =>
+                    `<button type="button" class="inline-grid-required-chip" data-focus-deal-field="${escapeAttribute(name)}">${escapeHtml(label)}</button>`
+                )
+                .join("")}
+            </div>`
+            : ""
+        }
         <div class="inline-grid-body">
-          ${fields.map(([name, label, type]) => renderInlineGridField(name, label, type)).join("")}
+          ${fields.map(([name, label, type], colIndex) => renderInlineGridField(name, label, type, sectionIndex, colIndex)).join("")}
         </div>
       </section>
     `;
@@ -11343,7 +11439,7 @@ function renderDealInlineGrid() {
   elements.dealInlineGrid.innerHTML = sections;
 }
 
-function renderInlineGridField(name, label, type) {
+function renderInlineGridField(name, label, type, rowIndex = 0, colIndex = 0) {
   const field = dealForm?.elements?.[name];
   if (!field) {
     return "";
@@ -11361,7 +11457,7 @@ function renderInlineGridField(name, label, type) {
     return `
       <label class="inline-grid-cell">
         <span>${escapeHtml(label)}</span>
-        <select data-inline-grid-field="${escapeAttribute(name)}">${options}</select>
+        <select data-inline-grid-field="${escapeAttribute(name)}" data-inline-grid-row="${rowIndex}" data-inline-grid-col="${colIndex}">${options}</select>
       </label>
     `;
   }
@@ -11370,7 +11466,7 @@ function renderInlineGridField(name, label, type) {
     return `
       <label class="inline-grid-cell inline-grid-cell-wide">
         <span>${escapeHtml(label)}</span>
-        <textarea rows="2" data-inline-grid-field="${escapeAttribute(name)}">${escapeHtml(currentValue)}</textarea>
+        <textarea rows="2" data-inline-grid-field="${escapeAttribute(name)}" data-inline-grid-row="${rowIndex}" data-inline-grid-col="${colIndex}">${escapeHtml(currentValue)}</textarea>
       </label>
     `;
   }
@@ -11378,9 +11474,48 @@ function renderInlineGridField(name, label, type) {
   return `
     <label class="inline-grid-cell">
       <span>${escapeHtml(label)}</span>
-      <input type="${escapeAttribute(type)}" value="${escapeAttribute(currentValue)}" data-inline-grid-field="${escapeAttribute(name)}" />
+      <input type="${escapeAttribute(type)}" value="${escapeAttribute(currentValue)}" data-inline-grid-field="${escapeAttribute(name)}" data-inline-grid-row="${rowIndex}" data-inline-grid-col="${colIndex}" />
     </label>
   `;
+}
+
+function getInlineGridInputs() {
+  return Array.from(elements.dealInlineGrid?.querySelectorAll("[data-inline-grid-field]") || []);
+}
+
+function focusInlineGridCellByCoords(row, col) {
+  const target = getInlineGridInputs().find((item) => Number(item.dataset.inlineGridRow) === row && Number(item.dataset.inlineGridCol) === col);
+  if (target) {
+    target.focus();
+    if (typeof target.select === "function" && target.tagName !== "SELECT") {
+      target.select();
+    }
+  }
+}
+
+function clearInlineGridRangeHighlight() {
+  elements.dealInlineGrid?.querySelectorAll(".inline-grid-cell.is-range-anchor, .inline-grid-cell.is-range-highlight").forEach((cell) => {
+    cell.classList.remove("is-range-anchor", "is-range-highlight");
+  });
+}
+
+function highlightInlineGridRange(anchor, current) {
+  if (!anchor || !current) return;
+  clearInlineGridRangeHighlight();
+  const [startRow, endRow] = [Math.min(anchor.row, current.row), Math.max(anchor.row, current.row)];
+  const [startCol, endCol] = [Math.min(anchor.col, current.col), Math.max(anchor.col, current.col)];
+  getInlineGridInputs().forEach((input) => {
+    const row = Number(input.dataset.inlineGridRow);
+    const col = Number(input.dataset.inlineGridCol);
+    const cell = input.closest(".inline-grid-cell");
+    if (!cell) return;
+    if (row === anchor.row && col === anchor.col) {
+      cell.classList.add("is-range-anchor");
+    }
+    if (row >= startRow && row <= endRow && col >= startCol && col <= endCol) {
+      cell.classList.add("is-range-highlight");
+    }
+  });
 }
 
 function buildDealGuidanceRows(missingFields = [], pendingFields = []) {
