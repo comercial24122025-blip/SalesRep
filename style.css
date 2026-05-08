@@ -2384,6 +2384,16 @@ a.view-tab {
   scrollbar-width: thin;
 }
 
+.quick-fill-inline-select select {
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .quick-fill-strip span {
   color: var(--ink-faint);
   font-size: 0.64rem;

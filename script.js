@@ -1267,6 +1267,10 @@ async function init() {
   resetWorkspaceForm();
   resetUserForm();
   await hydrateFromExcel();
+  const reassignedOwners = backfillMissingDealOwners("Erick Mendez");
+  if (reassignedOwners > 0) {
+    await persistState();
+  }
   renderAll();
   runPostRefreshDataChecks({ source: "initial load" });
   activateView(ui.activeView, { scroll: false, pageNavigation: false });
@@ -1303,6 +1307,21 @@ function bindEvents() {
     if (aiGrowthTaskAction) {
       createGrowthFocusTasksFromAi();
     }
+  });
+
+  document.addEventListener("change", (event) => {
+    const quickFillSelect = event.target.closest("[data-fill-field-select]");
+    if (!quickFillSelect) {
+      return;
+    }
+    const fieldName = quickFillSelect.dataset.fillFieldSelect;
+    const value = cleanText(quickFillSelect.value);
+    if (!fieldName || !value || !dealForm?.elements?.[fieldName]) {
+      return;
+    }
+    dealForm.elements[fieldName].value = value;
+    dealForm.elements[fieldName].dispatchEvent(new Event("input", { bubbles: true }));
+    quickFillSelect.value = "";
   });
 
   elements.operatingFlowToggle?.addEventListener("click", () => {
@@ -3390,6 +3409,33 @@ function normalizeTarget(input) {
     totalGoLive: toNullableNumber(input.totalGoLive) || 0,
     totalGoLiveValue: toNullableNumber(input.totalGoLiveValue) || 0,
   };
+}
+
+function backfillMissingDealOwners(defaultOwner = "Erick Mendez") {
+  const ownerName = cleanText(defaultOwner);
+  if (!ownerName || !Array.isArray(state.deals) || state.deals.length === 0) {
+    return 0;
+  }
+
+  let changed = 0;
+  state.deals = state.deals.map((deal) => {
+    const currentOwner = cleanText(getDealOwner(deal));
+    if (currentOwner) {
+      return deal;
+    }
+    changed += 1;
+    return normalizeDeal({
+      ...deal,
+      kam: ownerName,
+      followUpOwner: cleanText(deal.followUpOwner) || ownerName,
+    });
+  });
+
+  if (changed > 0) {
+    ui.lastLocalMutationAt = Date.now();
+    setBanner(`${changed} missing owners auto-assigned to ${ownerName}.`, "success");
+  }
+  return changed;
 }
 
 function normalizeMarketIntel(input) {
