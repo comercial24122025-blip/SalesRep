@@ -4571,6 +4571,15 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "growth") {
     return `${header}${renderAiGrowthResponse(scopedDeals, scopedTasks, revenue)}`;
   }
+  if (normalizedMode === "market-tasks") {
+    return `${header}${renderAiMarketTasksResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "risk-by-client") {
+    return `${header}${renderAiRiskByClientResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "forecast-latam") {
+    return `${header}${renderAiLatamForecastResponse(scopedDeals)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
 }
@@ -4583,6 +4592,9 @@ function getAiAgentTitle(mode) {
     tracking: "Execution tracking",
     strategy: "Business strategy",
     growth: "Account growth plan",
+    "market-tasks": "Market tasks to hit target",
+    "risk-by-client": "Client process risks",
+    "forecast-latam": "LATAM forecast",
     summary: "Daily summary",
   };
   return titles[mode] || titles.summary;
@@ -4852,6 +4864,63 @@ function renderAiTrackingResponse(deals, buckets, alerts) {
       ${renderAiMetricCard("Due today", `${buckets.today.length}`, "Actions to finish today", "tasks", "#task-board")}
     </div>
     ${renderAiList("Top execution signals", alerts.slice(0, 5).map((alert) => `${alert.title}: ${alert.detail}`))}
+  `;
+}
+
+function renderAiMarketTasksResponse(deals) {
+  const byMarket = getAiRevenueByMarket(deals).slice(0, 6);
+  const actions = byMarket.map((row) => {
+    const marketDeals = deals.filter((deal) => cleanText(deal.market) === cleanText(row.label));
+    const overdue = marketDeals.filter((deal) => {
+      const sla = getStageSlaState(deal);
+      return sla.tone === "stuck" || sla.tone === "at-risk";
+    }).length;
+    return `${row.label}: prioritize ${formatCompactCurrency(row.value)} weighted · clear ${overdue} SLA risks · push top 3 deals to next stage this week.`;
+  });
+  return `
+    ${renderAiList("Tasks per market to reach target", actions)}
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-primary button-small" data-ai-growth-tasks="true">Push growth tasks to My Actions</button>
+    </div>
+  `;
+}
+
+function renderAiRiskByClientResponse(deals) {
+  const items = deals
+    .map((deal) => {
+      const sla = getStageSlaState(deal);
+      const blocked = isBlockedDeal(deal);
+      const risk = sla.tone === "stuck" ? "High" : sla.tone === "at-risk" || blocked ? "Medium" : "Low";
+      return {
+        client: getPrimaryOperatorName(deal),
+        stage: getDealVisibleStage(deal),
+        risk,
+        note: getDealNextAction(deal),
+      };
+    })
+    .sort((a, b) => (a.risk === b.risk ? 0 : a.risk === "High" ? -1 : b.risk === "High" ? 1 : a.risk === "Medium" ? -1 : 1))
+    .slice(0, 12)
+    .map((item) => `${item.client} · ${item.stage} · Risk ${item.risk} · Next: ${item.note}`);
+  return renderAiList("Risk in process by client", items);
+}
+
+function renderAiLatamForecastResponse(deals) {
+  const marketRows = getAiRevenueByMarket(deals);
+  const operatorRows = buildForecastOperatorRows(deals).slice(0, 10);
+  const latamTotal = marketRows.reduce((sum, row) => sum + row.value, 0);
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("LATAM total weighted", formatCompactCurrency(latamTotal), "All LATAM markets in current scope", "targets", "#target-progress")}
+      ${renderAiMetricCard("Countries covered", String(marketRows.length), "Forecast by country available below", "targets", "#target-progress")}
+      ${renderAiMetricCard("Operators tracked", String(operatorRows.length), "Top weighted operators shown", "pipeline", "#pipeline-board")}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Forecast per country", marketRows.slice(0, 12).map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+      ${renderAiList(
+        "Forecast per operator",
+        operatorRows.map((row) => `${row.operator || "No operator"} · ${row.market || "No market"}: ${formatCompactCurrency(row.forecastValue || row.weightedCount || 0)}`)
+      )}
+    </div>
   `;
 }
 
