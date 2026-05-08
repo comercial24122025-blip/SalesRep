@@ -1779,6 +1779,21 @@
                   <span id="pipeline-count" class="chip">0 deals</span>
                   <button id="open-new-deal-modal-button" class="button button-primary button-small">New Account</button>
                   <button id="export-pipeline-csv" class="button button-ghost button-small">Export CSV</button>
+                  <label class="field field-inline field-compact pipeline-export-stage-field">
+                    <span class="sr-only">Export stage</span>
+                    <select id="export-pipeline-stage" class="field-input">
+                      <option value="all">All stages</option>
+                      <option value="Lead">Lead</option>
+                      <option value="Proposal">Proposal</option>
+                      <option value="Legal">Legal</option>
+                      <option value="DD">DD</option>
+                      <option value="Integration">Integration</option>
+                      <option value="Go Live">Go Live</option>
+                      <option value="Live">Live</option>
+                      <option value="Handover">Handover</option>
+                    </select>
+                  </label>
+                  <button id="export-pipeline-stage-csv" class="button button-ghost button-small">Export Stage</button>
                 </div>
               </div>
 
