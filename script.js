@@ -1296,6 +1296,12 @@ function bindEvents() {
       activateView(aiViewLink.dataset.aiOpenView, {
         targetSelector: aiViewLink.dataset.aiTargetSelector || "",
       });
+      return;
+    }
+
+    const aiGrowthTaskAction = event.target.closest("[data-ai-growth-tasks]");
+    if (aiGrowthTaskAction) {
+      createGrowthFocusTasksFromAi();
     }
   });
 
@@ -4499,6 +4505,8 @@ function renderAiGrowthResponse(deals, tasks, revenue) {
     .slice(0, 4);
   const staleLive = liveDeals.filter((deal) => daysSince(deal.lastFollowUp) > 21).length;
   const objectiveTasks = getMyActionTasks(tasks, getActiveUser()).filter((task) => task.status !== "Done");
+  const growthByMarket = getAiRevenueByMarket(openPipelineDeals).slice(0, 5);
+  const maxMarket = Math.max(...growthByMarket.map((item) => item.value), 1);
 
   return `
     <div class="ai-agent-cards">
@@ -4520,7 +4528,79 @@ function renderAiGrowthResponse(deals, tasks, revenue) {
         "4) Weekly target check: compare weighted forecast vs market objective and reassign owners.",
       ])}
     </div>
+    <div class="ai-agent-report">
+      <p><strong>Growth by market (weighted)</strong></p>
+      <div class="ai-growth-bars">
+        ${growthByMarket
+          .map(
+            (item) => `
+              <div class="ai-growth-bar">
+                <span>${escapeHtml(item.label)}</span>
+                <small>${escapeHtml(formatCompactCurrency(item.value))}</small>
+                <i style="width:${Math.max(8, (item.value / maxMarket) * 100)}%"></i>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+    </div>
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-primary button-small" data-ai-growth-tasks="true">Push growth tasks to My Actions</button>
+    </div>
   `;
+}
+
+async function createGrowthFocusTasksFromAi() {
+  const candidates = getScopedDeals()
+    .filter((deal) => !isInactiveDeal(deal) && !isLiveAccountStage(deal.stage))
+    .map((deal) => ({ deal, weighted: getForecastValue(deal) }))
+    .sort((left, right) => right.weighted - left.weighted)
+    .slice(0, 5);
+
+  if (!candidates.length) {
+    setBanner("No growth candidates available in current scope.", "warn");
+    return;
+  }
+
+  let created = 0;
+  for (const item of candidates) {
+    const deal = item.deal;
+    const owner = getDealOwner(deal) || getActiveUser()?.fullName || "Unassigned";
+    const dueDate = addDaysToIsoDate(new Date().toISOString().slice(0, 10), 2);
+    const title = `Growth push · ${getPrimaryOperatorName(deal)}`;
+    const existing = state.tasks.some(
+      (task) => cleanText(task.dealId) === cleanText(deal.id) && cleanText(task.title) === cleanText(title) && cleanText(task.status) !== "Done"
+    );
+    if (existing) {
+      continue;
+    }
+    state.tasks.unshift(
+      normalizeTask({
+        id: generateId("task"),
+        taskNumber: "",
+        title,
+        scopeType: "Client",
+        dealId: deal.id,
+        deal: deal.deal,
+        client: deal.client,
+        operator: deal.operator,
+        market: deal.market,
+        owner,
+        status: "Open",
+        priority: "High",
+        dueDate,
+        nextStep: `Move ${getPrimaryOperatorName(deal)} to next stage with dated action and blocker clearance.`,
+        notes: `Weighted ${formatCompactCurrency(item.weighted)} · Stage ${deal.stage || "N/A"}`,
+      })
+    );
+    created += 1;
+  }
+
+  ensureTaskNumbers();
+  await persistState();
+  renderAll();
+  activateView("tasks", { targetSelector: "#task-board" });
+  setBanner(created > 0 ? `${created} growth tasks pushed to My Actions.` : "Growth tasks already exist for top accounts.", created > 0 ? "success" : "warn");
 }
 
 function filterAiDealsByQuery(deals, queryText) {

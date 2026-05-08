@@ -662,19 +662,19 @@ button.stat-card {
 .data-status-bar {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
+  gap: 8px;
+  margin-top: 8px;
   align-items: stretch;
 }
 
 .data-status-item,
 .data-notification-pill {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   align-content: center;
-  min-height: 72px;
-  padding: 12px 14px;
-  border-radius: 16px;
+  min-height: 56px;
+  padding: 8px 10px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(191, 219, 254, 0.16);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -684,17 +684,38 @@ button.stat-card {
 .data-status-item span,
 .data-notification-pill span {
   color: rgba(226, 232, 240, 0.72);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .data-status-item strong,
 .data-notification-pill strong {
   color: #f8fbff;
-  font-size: 0.96rem;
+  font-size: 0.84rem;
   letter-spacing: -0.02em;
+}
+
+.data-notification-pill {
+  min-height: 56px;
+}
+
+.signal-grid {
+  gap: 10px;
+}
+
+.signal-card {
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.signal-card strong {
+  font-size: 1.2rem;
+}
+
+.signal-card small {
+  font-size: 0.75rem;
 }
 
 .data-notification-pill {
@@ -981,6 +1002,32 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   color: var(--ink-muted);
   font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.ai-agent-actions-inline {
+  margin-top: 10px;
+}
+
+.ai-growth-bars {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-growth-bar {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.ai-growth-bar i {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+  display: block;
 }
 
 .ai-agent-cards,
@@ -6570,7 +6617,6 @@ button.stage-card {
   }
 
   .hero-stats,
-  .data-status-bar,
   .command-kpi-grid,
   .signal-grid,
   .progress-grid,
@@ -6676,7 +6722,57 @@ button.stage-card {
 
 .entity-trigger-hint {
   display: none;
-}
+  }
+
+  .data-status-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 2px;
+    scroll-snap-type: x proximity;
+  }
+
+  .data-status-bar > * {
+    min-width: 150px;
+    scroll-snap-align: start;
+  }
+
+  .data-status-bar::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .data-status-item,
+  .data-notification-pill {
+    min-height: 52px;
+    padding: 7px 9px;
+    border-radius: 10px;
+  }
+
+  .data-status-item span,
+  .data-notification-pill span {
+    font-size: 0.58rem;
+  }
+
+  .data-status-item strong,
+  .data-notification-pill strong {
+    font-size: 0.79rem;
+  }
+
+  .signal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .signal-card {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .signal-card strong {
+    font-size: 1.05rem;
+  }
 }
 
 .qa-center-panel .panel-header {
