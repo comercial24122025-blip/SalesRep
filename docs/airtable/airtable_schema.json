@@ -1,0 +1,109 @@
+{
+  "baseName": "Revenue Execution System",
+  "tables": [
+    {
+      "name": "Deals",
+      "primaryField": "Deal Name",
+      "fields": [
+        { "name": "Deal ID", "type": "autonumber" },
+        { "name": "Deal Name", "type": "singleLineText" },
+        { "name": "Operator Name", "type": "singleLineText" },
+        { "name": "Market", "type": "singleSelect", "options": ["Peru", "Mexico", "Venezuela", "Brazil", "Colombia", "Chile", "Argentina", "Other"] },
+        { "name": "Stage", "type": "singleSelect", "options": ["Lead", "Proposal", "Legal", "DD", "Integration", "Go Live", "Live", "Handover"] },
+        { "name": "Deal Value USD", "type": "currency" },
+        { "name": "Estimated Monthly Revenue", "type": "currency" },
+        { "name": "Product Mix", "type": "multipleSelects", "options": ["Live", "RNG", "Slots"] },
+        { "name": "Owner BD", "type": "collaborator" },
+        { "name": "Owner KAM", "type": "collaborator" },
+        { "name": "Tech Owner", "type": "collaborator" },
+        { "name": "Stage Entry Date", "type": "date" },
+        { "name": "Days in Stage", "type": "formula", "formula": "DATETIME_DIFF(TODAY(), {Stage Entry Date}, 'days')" },
+        { "name": "Next Action", "type": "singleLineText" },
+        { "name": "Action Owner", "type": "collaborator" },
+        { "name": "Action Due Date", "type": "date" },
+        { "name": "Risk Level", "type": "singleSelect", "options": ["Healthy", "At Risk", "Stuck"] },
+        { "name": "Contract Uploaded", "type": "checkbox" },
+        { "name": "API Ready", "type": "checkbox" },
+        { "name": "DD Status Rollup", "type": "rollup", "sourceTable": "DD", "sourceField": "DD Status" },
+        { "name": "Open Actions", "type": "count", "sourceTable": "Actions", "filter": "Status != Done" },
+        { "name": "Close Probability", "type": "formula" },
+        { "name": "Weighted Forecast", "type": "formula", "formula": "{Deal Value USD} * {Close Probability}" },
+        { "name": "Gate Status", "type": "formula" }
+      ],
+      "views": ["Command Center - All Deals", "Pipeline Kanban", "At Risk Deals", "Legal SLA Watch", "DD SLA Watch", "Go Lives This Month"]
+    },
+    {
+      "name": "Actions",
+      "primaryField": "Description",
+      "fields": [
+        { "name": "Action ID", "type": "autonumber" },
+        { "name": "Deal", "type": "linkToAnotherRecord", "linkedTable": "Deals" },
+        { "name": "Description", "type": "longText" },
+        { "name": "Owner", "type": "collaborator" },
+        { "name": "Due Date", "type": "date" },
+        { "name": "Status", "type": "singleSelect", "options": ["Open", "Done"] },
+        { "name": "Priority", "type": "singleSelect", "options": ["High", "Medium", "Low"] },
+        { "name": "Days Overdue", "type": "formula", "formula": "IF(AND({Status} != 'Done', {Due Date} < TODAY()), DATETIME_DIFF(TODAY(), {Due Date}, 'days'), 0)" },
+        { "name": "Urgency", "type": "formula" }
+      ],
+      "views": ["My Tasks", "Overdue", "Due Today", "Upcoming"]
+    },
+    {
+      "name": "DD",
+      "primaryField": "Deal",
+      "fields": [
+        { "name": "Deal", "type": "linkToAnotherRecord", "linkedTable": "Deals" },
+        { "name": "Financial Check", "type": "checkbox" },
+        { "name": "License Verified", "type": "checkbox" },
+        { "name": "Risk Score", "type": "singleSelect", "options": ["Low", "Medium", "High"] },
+        { "name": "DD Status", "type": "singleSelect", "options": ["Pending", "Approved", "Rejected"] },
+        { "name": "DD Start Date", "type": "date" },
+        { "name": "DD End Date", "type": "date" },
+        { "name": "DD Days Open", "type": "formula" },
+        { "name": "DD Gate Ready", "type": "formula" }
+      ],
+      "views": ["DD Queue", "DD Approved", "DD Rejected"]
+    },
+    {
+      "name": "Integrations",
+      "primaryField": "Deal",
+      "fields": [
+        { "name": "Deal", "type": "linkToAnotherRecord", "linkedTable": "Deals" },
+        { "name": "Operator", "type": "lookup", "sourceTable": "Deals", "sourceField": "Operator Name" },
+        { "name": "Tech Contact", "type": "singleLineText" },
+        { "name": "API Ready", "type": "checkbox" },
+        { "name": "Integration Status", "type": "singleSelect", "options": ["Not Started", "In Progress", "Testing", "Completed"] },
+        { "name": "Integration Start Date", "type": "date" },
+        { "name": "Days in Integration", "type": "formula", "formula": "DATETIME_DIFF(TODAY(), {Integration Start Date}, 'days')" },
+        { "name": "Weekly Status Update", "type": "longText" },
+        { "name": "Risk Level", "type": "singleSelect", "options": ["Healthy", "At Risk", "Stuck"] },
+        { "name": "Launch Gate", "type": "formula" }
+      ],
+      "views": ["Integration Tracker", "Integration SLA Watch", "Testing Queue"]
+    },
+    {
+      "name": "Accounts",
+      "primaryField": "Operator Name",
+      "fields": [
+        { "name": "Operator Name", "type": "singleLineText" },
+        { "name": "Market", "type": "singleSelect", "options": ["Peru", "Mexico", "Venezuela", "Brazil", "Colombia", "Chile", "Argentina", "Other"] },
+        { "name": "Go Live Date", "type": "date" },
+        { "name": "Linked Deal", "type": "linkToAnotherRecord", "linkedTable": "Deals" },
+        { "name": "Monthly Revenue", "type": "currency" },
+        { "name": "Revenue Last Month", "type": "currency" },
+        { "name": "Growth %", "type": "formula", "formula": "IF({Revenue Last Month} = 0, BLANK(), ({Monthly Revenue} - {Revenue Last Month}) / {Revenue Last Month})" },
+        { "name": "Active Products", "type": "multipleSelects", "options": ["Live", "RNG", "Slots"] },
+        { "name": "Product Penetration %", "type": "percent" },
+        { "name": "KAM Owner", "type": "collaborator" }
+      ],
+      "views": ["Account Performance", "Growth Watch"]
+    }
+  ],
+  "automations": [
+    { "name": "Legal SLA Alert", "trigger": "Deals.Stage = Legal and Deals.Days in Stage > 20", "action": "Notify Owner BD and RevOps" },
+    { "name": "DD SLA Alert", "trigger": "Deals.Stage = DD and Deals.Days in Stage > 35", "action": "Notify Owner BD and DD owner" },
+    { "name": "Integration SLA Alert", "trigger": "Integrations.Days in Integration > 45 and Integration Status != Completed", "action": "Notify Tech Owner and RevOps" },
+    { "name": "Daily Action Reminder", "trigger": "Weekdays at 09:00", "action": "Digest overdue and due-today Actions by owner" }
+  ],
+  "interfaces": ["Command Center", "Pipeline", "My Tasks", "Integration Tracker", "Account Performance"]
+}

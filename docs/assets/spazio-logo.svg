@@ -1,0 +1,20 @@
+<svg width="512" height="160" viewBox="0 0 512 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="logo-bg" x1="18" y1="14" x2="110" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0C1630"/>
+      <stop offset="0.52" stop-color="#133A78"/>
+      <stop offset="1" stop-color="#0A84FF"/>
+    </linearGradient>
+    <linearGradient id="logo-stroke" x1="38" y1="32" x2="90" y2="102" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FBFF"/>
+      <stop offset="0.6" stop-color="#B8DCFF"/>
+      <stop offset="1" stop-color="#EAF5FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="16" width="128" height="128" rx="32" fill="url(#logo-bg)"/>
+  <rect x="20" y="36" width="88" height="88" rx="28" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.18)"/>
+  <path d="M80 52H52C40.9543 52 34 58.7157 34 68C34 76.0634 39.2788 81.4084 49.8365 84.4883L62.2367 88.1048C73.5969 91.4185 80 96.5338 80 105.5C80 114.87 72.7053 120 60.2759 120H36" stroke="url(#logo-stroke)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="84" cy="54" r="6" fill="#F7FBFF"/>
+  <text x="156" y="86" fill="#111827" font-family="Avenir Next, SF Pro Display, Helvetica Neue, Arial, sans-serif" font-size="64" font-weight="700" letter-spacing="-1.8">Spazio</text>
+  <text x="158" y="116" fill="#4B5563" font-family="Avenir Next, SF Pro Text, Helvetica Neue, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="2.4">COMMERCIAL OPERATING CLOUD</text>
+</svg>

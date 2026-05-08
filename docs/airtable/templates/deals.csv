@@ -1,0 +1,4 @@
+Deal Name,Operator Name,Market,Stage,Deal Value USD,Estimated Monthly Revenue,Product Mix,Owner BD,Owner KAM,Tech Owner,Stage Entry Date,Next Action,Action Owner,Action Due Date,Risk Level,Contract Uploaded,API Ready
+AndesBet Legal Launch,AndesBet,Peru,Legal,120000,18000,"Live, Slots",,,,,2026-05-01,Upload final contract package,,2026-05-06,At Risk,0,0
+MexicoPlay DD,MexicoPlay,Mexico,DD,200000,30000,"Live, RNG, Slots",,,,,2026-04-22,Approve DD once license check clears,,2026-05-07,Healthy,1,0
+Caribe365 Integration,Caribe365,Venezuela,Integration,90000,12000,"Live, RNG",,,,,2026-04-01,Confirm API retry testing,,2026-05-08,Stuck,1,0
