@@ -804,8 +804,6 @@ body[data-page-scope="executive-overview"] .views {
   display: none !important;
 }
 
-body[data-page-scope="commercial-funnel"] #pipeline-stage-guide-shell,
-body[data-page-scope="commercial-funnel"] #pipeline-follow-up-shell,
 body[data-page-scope="commercial-funnel"] #pipeline-table-shell,
 body[data-page-scope="pipeline-kanban"] #pipeline-stage-guide-shell,
 body[data-page-scope="pipeline-kanban"] #pipeline-follow-up-shell,
@@ -3827,6 +3825,16 @@ button.executive-readout-card {
   overflow: auto;
   padding-right: 2px;
   overscroll-behavior: contain;
+}
+
+.deal-modal-panel .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  background: linear-gradient(180deg, rgba(248, 251, 255, 0.82), rgba(248, 251, 255, 0.98));
+  border-top: 1px solid rgba(214, 224, 240, 0.8);
+  padding-top: 10px;
+  margin-top: 14px;
 }
 
 body.deal-modal-open {
