@@ -4525,6 +4525,7 @@ function renderAiAgentPanel() {
 
 function handleAiAgentPrompt(mode = "summary") {
   ui.aiAgentMode = cleanText(mode) || "summary";
+  applyAiScopeSync(elements.aiAgentQuery?.value || "");
   renderAiAgentPanel();
   elements.aiAgentOutput?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
@@ -4533,9 +4534,11 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   const queryText = cleanText(query);
   const baseDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
   const baseTasks = getScopedTasks();
-  const queriedDeals = filterAiDealsByQuery(baseDeals, queryText);
+  const aiScope = resolveAiScope(baseDeals, queryText);
+  const scopedBaseDeals = aiScope.deals.length ? aiScope.deals : baseDeals;
+  const queriedDeals = filterAiDealsByQuery(scopedBaseDeals, queryText);
   const queriedTasks = filterAiTasksByQuery(baseTasks, queryText);
-  const scopedDeals = queryText && queriedDeals.length ? queriedDeals : baseDeals;
+  const scopedDeals = queryText && queriedDeals.length ? queriedDeals : scopedBaseDeals;
   const scopedTasks = queryText && queriedTasks.length ? queriedTasks : baseTasks;
   const myTasks = getMyActionTasks(scopedTasks, getActiveUser());
   const buckets = getActionBuckets(myTasks);
@@ -4547,7 +4550,7 @@ function buildAiAgentResponse(mode = "summary", query = "") {
     <div class="ai-agent-output-head">
       <div>
         <strong>${escapeHtml(getAiAgentTitle(normalizedMode))}</strong>
-        <span>${escapeHtml(queryText || "Workspace-wide execution readout")}</span>
+        <span>${escapeHtml(aiScope.label || queryText || "Workspace-wide execution readout")}</span>
       </div>
       <small>${escapeHtml(formatStatusBarTimestamp(serverMeta.lastUpdatedAt || ui.lastPersistAt))}</small>
     </div>
@@ -4582,6 +4585,45 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
+}
+
+function resolveAiScope(deals, queryText) {
+  const query = cleanText(queryText).toLowerCase();
+  if (!query) {
+    return { deals, label: "Workspace-wide execution readout" };
+  }
+  const markets = uniqueValues(deals.map((deal) => deal.market).filter(Boolean));
+  const matchedMarket = markets.find((market) => query.includes(cleanText(market).toLowerCase()));
+  if (matchedMarket) {
+    return {
+      deals: deals.filter((deal) => cleanText(deal.market) === cleanText(matchedMarket)),
+      label: `Market summary · ${matchedMarket}`,
+    };
+  }
+  const operators = uniqueValues(deals.map((deal) => getPrimaryOperatorName(deal)).filter(Boolean));
+  const matchedOperator = operators.find((operator) => query.includes(cleanText(operator).toLowerCase()));
+  if (matchedOperator) {
+    return {
+      deals: deals.filter((deal) => cleanText(getPrimaryOperatorName(deal)) === cleanText(matchedOperator)),
+      label: `Operator summary · ${matchedOperator}`,
+    };
+  }
+  return { deals, label: "All markets summary" };
+}
+
+function applyAiScopeSync(queryText) {
+  const scopedDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const scope = resolveAiScope(scopedDeals, queryText);
+  if (scope.label.startsWith("Market summary")) {
+    const market = scope.label.split("·")[1]?.trim();
+    if (market) {
+      ui.filters.market = market;
+      if (elements.filterMarket) {
+        elements.filterMarket.value = market;
+      }
+      renderAll();
+    }
+  }
 }
 
 function getAiAgentTitle(mode) {
@@ -4793,6 +4835,13 @@ function renderAiSummaryResponse(deals, buckets, alerts, revenue) {
     <div class="ai-agent-recommendation">
       <strong>Recommended next move</strong>
       <p>${escapeHtml(topAlert ? `${topAlert.title}: ${topAlert.detail}` : "No critical blockers detected. Work the due-today queue and keep stage movement current.")}</p>
+    </div>
+    <div class="ai-agent-view-grid">
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#commercial-funnel-shell"><strong>Commercial funnel</strong><span>Open and sync by current AI scope</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-board"><strong>Pipeline Kanban</strong><span>Move deals and clear blockers</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-stage-guide-shell"><strong>Stage Operating Guide</strong><span>Validate gate requirements</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-table-shell"><strong>Pipeline</strong><span>Review full sheet and status</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="tasks" data-ai-target-selector="#task-board"><strong>Tasks · Fix today</strong><span>Execute overdue and due-today actions</span></button>
     </div>
   `;
 }
