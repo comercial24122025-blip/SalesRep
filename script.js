@@ -8,7 +8,7 @@ const API_UPLOAD_URL = resolveApiUrl("/api/upload");
 const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
-const DEAL_FORM_AUTOSAVE_DELAY_MS = 450;
+const DEAL_FORM_AUTOSAVE_DELAY_MS = 60000;
 const DEAL_FORM_SECTION_DEFS = [
   ["deal-section-core", "Core"],
   ["deal-section-scoring", "Scoring"],
@@ -1564,11 +1564,9 @@ function bindEvents() {
   dealForm.addEventListener("submit", handleDealSubmit);
   dealForm.addEventListener("input", () => {
     queueDealFieldHighlights();
-    renderDealInlineGrid();
   });
   dealForm.addEventListener("change", () => {
     queueDealFieldHighlights({ immediate: true });
-    renderDealInlineGrid();
   });
   elements.dealInlineGrid?.addEventListener("input", (event) => {
     const gridField = event.target.closest("[data-inline-grid-field]");
