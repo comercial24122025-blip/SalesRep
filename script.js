@@ -50,7 +50,7 @@ const CONTRACT_STATUS_OPTIONS = ["Not Started", "Negotiation", "Signed", "Blocke
 const PROGRESS_STATUS_OPTIONS = ["Not Started", "Started", "In Progress", "Completed", "Blocked"];
 const GO_LIVE_STATUS_OPTIONS = ["Not Started", "Legal Sign-Off", "Completed", "Live", "Blocked"];
 const DEAL_PRIORITY_OPTIONS = ["High Priority", "Medium", "Low", "Observation"];
-const INACTIVE_DEAL_STATUSES = ["canceled", "cancelled", "inactive", "on hold", "closed lost"];
+const INACTIVE_DEAL_STATUSES = ["canceled", "cancelled", "inactive", "on hold", "closed lost", "closed completed"];
 const TASK_SCOPE_TYPES = ["Client", "Market", "Target", "Operator", "Deal"];
 const TASK_STATUS_OPTIONS = ["Open", "In Progress", "Waiting", "Blocked", "Done"];
 const TASK_PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -959,6 +959,7 @@ const elements = {
   pipelineCount: document.getElementById("pipeline-count"),
   pipelineSummary: document.getElementById("pipeline-summary"),
   pipelineStageStrip: document.getElementById("pipeline-stage-strip"),
+  pipelineStageAccountList: document.getElementById("pipeline-stage-account-list"),
   pipelineBoard: document.getElementById("pipeline-board"),
   dealTableBody: document.getElementById("deal-table-body"),
   dealWorkflowGuide: document.getElementById("deal-workflow-guide"),
@@ -1308,10 +1309,14 @@ async function init() {
   await hydrateFromExcel();
   const reassignedOwners = backfillMissingDealOwners("Erick Mendez");
   const liveHandoverUpdates = enforceLiveAccountsHandoverPolicy();
+  const closedCompletedUpdates = enforceClosedCompletedFor2024SignedLiveDeals();
   if (reassignedOwners > 0) {
     await persistState();
   }
   if (liveHandoverUpdates > 0) {
+    await persistState();
+  }
+  if (closedCompletedUpdates > 0) {
     await persistState();
   }
   renderAll();
@@ -1359,6 +1364,52 @@ function enforceLiveAccountsHandoverPolicy() {
   }
 
   return updatedDeals;
+}
+
+function enforceClosedCompletedFor2024SignedLiveDeals() {
+  let updatedDeals = 0;
+  state.deals = state.deals.map((deal) => {
+    if (!isLiveAccountStage(deal.stage)) {
+      return deal;
+    }
+    if (!isSignedInYear(deal, 2024)) {
+      return deal;
+    }
+    if (isInactiveDealStatus(deal.status)) {
+      return deal;
+    }
+    updatedDeals += 1;
+    return normalizeDeal({
+      ...deal,
+      status: "Closed Completed",
+      stage: "Handover",
+    });
+  });
+
+  if (updatedDeals > 0) {
+    ui.lastLocalMutationAt = Date.now();
+    setBanner(`${updatedDeals} live deals signed in 2024 marked as Closed Completed.`, "success");
+  }
+  return updatedDeals;
+}
+
+function isSignedInYear(deal, year) {
+  const candidates = [deal?.signedDate, deal?.signatureDate, deal?.contractSignedDate, deal?.agreementDate, deal?.closeDate];
+  for (const candidate of candidates) {
+    const parsed = parseDateValue(candidate);
+    if (parsed && parsed.getUTCFullYear() === year) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function parseDateValue(value) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
 }
 
 function bindEvents() {
@@ -2052,6 +2103,18 @@ function bindEvents() {
     const filename = buildExportFilename("pipeline-visible", "csv");
     downloadCsv(filename, rows, PIPELINE_CSV_COLUMNS);
     setBanner(`Pipeline CSV exported (${rows.length} visible deals).`, "success");
+  });
+
+  document.getElementById("export-pipeline-stage-csv")?.addEventListener("click", () => {
+    const stageSelect = document.getElementById("export-pipeline-stage");
+    const selectedStage = cleanText(stageSelect?.value) || "all";
+    const visibleDeals = getFilteredDeals();
+    const rows = selectedStage === "all" ? visibleDeals : visibleDeals.filter((deal) => cleanText(deal.stage) === selectedStage);
+    const stageSlug = selectedStage === "all" ? "all-stages" : selectedStage.toLowerCase().replace(/\s+/g, "-");
+    const filename = buildExportFilename(`pipeline-${stageSlug}`, "csv");
+    downloadCsv(filename, rows, PIPELINE_CSV_COLUMNS);
+    const label = selectedStage === "all" ? "all stages" : selectedStage;
+    setBanner(`Pipeline CSV exported (${rows.length} deals, ${label}).`, "success");
   });
 
   document.getElementById("export-targets-csv").addEventListener("click", () => {
@@ -7605,6 +7668,38 @@ function renderPipelineStageStrip(deals) {
     .join("");
 }
 
+function renderPipelineStageAccountList(deals) {
+  if (!elements.pipelineStageAccountList) return;
+  const segments = VIEW_STAGE_ORDER.map((stage) => {
+    const stageDeals = deals.filter((deal) => getDealVisibleStage(deal) === stage);
+    return { stage, deals: stageDeals };
+  }).filter((item) => item.deals.length > 0);
+
+  if (!segments.length) {
+    elements.pipelineStageAccountList.innerHTML = "";
+    return;
+  }
+
+  elements.pipelineStageAccountList.innerHTML = segments
+    .map(({ stage, deals: stageDeals }) => {
+      return `
+        <article class="stage-account-segment ${stageClassName(stage)}">
+          <header>
+            <strong>${escapeHtml(stage)}</strong>
+            <span>${stageDeals.length}</span>
+          </header>
+          <ul>
+            ${stageDeals
+              .slice(0, 12)
+              .map((deal) => `<li>${escapeHtml(getPrimaryOperatorName(deal) || deal.client || "Unnamed account")}</li>`)
+              .join("")}
+          </ul>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function renderPipeline() {
   const scopedDeals = getScopedDeals();
   const baseDeals = getPipelineBaseDeals();
@@ -7615,6 +7710,7 @@ function renderPipeline() {
   renderPipelineSearchStatus(deals.length, baseDeals.length, scopedDeals.length);
   renderPipelineSummary(deals);
   renderPipelineStageStrip(deals);
+  renderPipelineStageAccountList(deals);
   renderPipelineOperatingGuide(deals);
   renderPipelineFollowUpNotifications(deals);
   renderPipelineBoard(deals);
