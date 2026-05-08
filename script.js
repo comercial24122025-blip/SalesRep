@@ -983,6 +983,7 @@ const elements = {
   dealModalShell: document.getElementById("deal-modal-shell"),
   dealModalCloseButton: document.getElementById("deal-modal-close-button"),
   openNewDealModalButton: document.getElementById("open-new-deal-modal-button"),
+  manualAccountInputButton: document.getElementById("manual-account-input-button"),
   targetFormTitle: document.getElementById("target-form-title"),
   targetSubmitButton: document.getElementById("target-submit-button"),
   targetSummaryTitle: document.getElementById("target-summary-title"),
@@ -2076,6 +2077,12 @@ function bindEvents() {
     openDealModal();
     renderViewState();
   });
+  elements.manualAccountInputButton?.addEventListener("click", () => {
+    const firstField = dealForm?.querySelector("input[name='deal']");
+    firstField?.focus();
+    firstField?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setBanner("Manual account input enabled. Fill the fields and save.", "default");
+  });
   elements.dealModalCloseButton?.addEventListener("click", closeDealModal);
   elements.dealModalShell?.addEventListener("click", (event) => {
     if (event.target.closest("[data-deal-modal-close]")) {
@@ -2257,6 +2264,7 @@ async function persistState() {
     broadcastWorkspaceMutation("excel-save");
     return true;
   } catch (error) {
+    const errorMessage = cleanText(error?.message) || "Excel backend unavailable.";
     updateServerMetaFromPayload(
       {
         workbookPath: "GitHub published workspace baseline",
@@ -2271,7 +2279,7 @@ async function persistState() {
     recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
       storageMode: "session",
     });
-    setBanner("Excel backend unavailable. The online workspace stays visible, but changes are session-only until a workbook backend is connected.", "warn");
+    setBanner(`${errorMessage} Workspace visible online, but save is session-only until backend is connected.`, "warn");
     return false;
   }
 }

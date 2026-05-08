@@ -896,8 +896,8 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-panel {
   display: grid;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 10px;
+  padding: 12px 14px;
   border-radius: 20px;
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(245, 249, 255, 0.78)),
@@ -911,7 +911,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .ai-agent-head h2 {
@@ -922,14 +922,15 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 }
 
 .ai-agent-head p {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--ink-muted);
+  font-size: 0.9rem;
 }
 
 .ai-agent-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 10px;
   align-items: end;
 }
 
@@ -945,7 +946,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-query textarea {
   width: 100%;
-  min-height: 82px;
+  min-height: 64px;
   resize: vertical;
   border: 1px solid rgba(198, 213, 235, 0.92);
   border-radius: 14px;
@@ -968,7 +969,7 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
 
 .ai-agent-output {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .ai-agent-output:empty {
@@ -979,8 +980,8 @@ body[data-page-scope="follow-up-notifications"] .company-command-bar {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding-top: 12px;
+  gap: 8px;
+  padding-top: 8px;
   border-top: 1px solid rgba(210, 221, 233, 0.9);
 }
 
