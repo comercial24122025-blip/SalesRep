@@ -814,6 +814,7 @@ const VIEW_CONTEXT_META = {
 };
 const COMPANY_FINDER_VIEWS = new Set(["dashboard", "crm", "pipeline"]);
 const NAV_HIGHLIGHT_DURATION_MS = 1800;
+const TASK_DRAFT_SESSION_KEY = "cube-one-task-draft";
 
 const elements = {
   focusSummary: document.getElementById("focus-summary"),
@@ -825,6 +826,9 @@ const elements = {
   viewContextTitle: document.getElementById("view-context-title"),
   viewContextCopy: document.getElementById("view-context-copy"),
   viewContextAction: document.getElementById("view-context-action"),
+  aiAgentQuery: document.getElementById("ai-agent-query"),
+  aiAgentOutput: document.getElementById("ai-agent-output"),
+  aiAgentStatus: document.getElementById("ai-agent-status"),
   heroStats: document.getElementById("hero-stats"),
   dataSourceStatus: document.getElementById("data-source-status"),
   dataLastSyncStatus: document.getElementById("data-last-sync-status"),
@@ -938,6 +942,7 @@ const elements = {
   restoreDealDraftButton: document.getElementById("restore-deal-draft-button"),
   discardDealDraftButton: document.getElementById("discard-deal-draft-button"),
   dealIntakeAssistant: document.getElementById("deal-intake-assistant"),
+  dealInlineGrid: document.getElementById("deal-inline-grid"),
   dealFollowUpGuide: document.getElementById("deal-follow-up-guide"),
   pipelineOperatingGuide: document.getElementById("pipeline-operating-guide"),
   pipelineOperatingStageChip: document.getElementById("pipeline-operating-stage-chip"),
@@ -971,6 +976,9 @@ const elements = {
   userSummary: document.getElementById("user-summary"),
   adminAccessSummary: document.getElementById("admin-access-summary"),
   adminWorkspaceCards: document.getElementById("admin-workspace-cards"),
+  runQaSmokeButton: document.getElementById("run-qa-smoke-button"),
+  qaLastRun: document.getElementById("qa-last-run"),
+  qaSmokeResults: document.getElementById("qa-smoke-results"),
   userBoard: document.getElementById("user-board"),
   userTableBody: document.getElementById("user-table-body"),
   kpiGrid: document.getElementById("kpi-grid"),
@@ -1046,6 +1054,13 @@ const ui = {
   lastPersistAt: "",
   pageView: "dashboard",
   pageScope: "home",
+  aiAgentMode: "summary",
+  inlineGridModeBySection: {
+    Core: "compact",
+    Status: "compact",
+    Requests: "full",
+  },
+  qaSmokeResults: [],
 };
 
 let state = {
@@ -1253,7 +1268,9 @@ async function init() {
   resetUserForm();
   await hydrateFromExcel();
   renderAll();
+  runPostRefreshDataChecks({ source: "initial load" });
   activateView(ui.activeView, { scroll: false, pageNavigation: false });
+  restorePendingTaskDraft();
   startRemoteStateSync();
   setLoadingState(false);
 }
@@ -1265,6 +1282,21 @@ function bindEvents() {
     button.addEventListener("click", () => {
       activateView(button.dataset.viewTrigger, { targetSelector: button.dataset.targetSelector || "" });
     });
+  });
+
+  document.addEventListener("click", (event) => {
+    const aiAction = event.target.closest("[data-ai-agent-prompt]");
+    if (aiAction) {
+      handleAiAgentPrompt(aiAction.dataset.aiAgentPrompt);
+      return;
+    }
+
+    const aiViewLink = event.target.closest("[data-ai-open-view]");
+    if (aiViewLink) {
+      activateView(aiViewLink.dataset.aiOpenView, {
+        targetSelector: aiViewLink.dataset.aiTargetSelector || "",
+      });
+    }
   });
 
   elements.operatingFlowToggle?.addEventListener("click", () => {
@@ -1307,6 +1339,7 @@ function bindEvents() {
     try {
       await hydrateFromExcel();
       renderAll();
+      runPostRefreshDataChecks({ source: "refresh" });
     } finally {
       setLoadingState(false);
     }
@@ -1363,6 +1396,8 @@ function bindEvents() {
   elements.activeUserSelect.addEventListener("change", (event) => {
     ui.activeUserId = event.target.value;
     persistActiveUserSelection();
+    restoreInlineGridModePreference();
+    renderDealInlineGrid();
     renderWorkspaceChrome();
     renderAdminView();
   });
@@ -1370,9 +1405,51 @@ function bindEvents() {
   dealForm.addEventListener("submit", handleDealSubmit);
   dealForm.addEventListener("input", () => {
     queueDealFieldHighlights();
+    renderDealInlineGrid();
   });
   dealForm.addEventListener("change", () => {
     queueDealFieldHighlights({ immediate: true });
+    renderDealInlineGrid();
+  });
+  elements.dealInlineGrid?.addEventListener("input", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField || !dealForm) {
+      return;
+    }
+    const fieldName = gridField.dataset.inlineGridField;
+    const formField = dealForm.elements[fieldName];
+    if (!formField) {
+      return;
+    }
+    formField.value = gridField.value;
+    formField.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  elements.dealInlineGrid?.addEventListener("change", (event) => {
+    const gridField = event.target.closest("[data-inline-grid-field]");
+    if (!gridField || !dealForm) {
+      return;
+    }
+    const fieldName = gridField.dataset.inlineGridField;
+    const formField = dealForm.elements[fieldName];
+    if (!formField) {
+      return;
+    }
+    formField.value = gridField.value;
+    formField.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  elements.dealInlineGrid?.addEventListener("click", (event) => {
+    const modeButton = event.target.closest("[data-inline-mode-toggle]");
+    if (!modeButton) {
+      return;
+    }
+    const section = modeButton.dataset.inlineModeToggle;
+    const mode = modeButton.dataset.inlineMode === "full" ? "full" : "compact";
+    if (!section) {
+      return;
+    }
+    ui.inlineGridModeBySection[section] = mode;
+    persistInlineGridModePreference();
+    renderDealInlineGrid();
   });
   elements.dealFieldSummary?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-focus-deal-field]");
@@ -1802,6 +1879,10 @@ function bindEvents() {
     const filename = buildExportFilename("operator-campaigns", "csv");
     downloadCsv(filename, rows, CAMPAIGN_CSV_COLUMNS);
     setBanner(`Campaign CSV exported (${rows.length} records).`, "success");
+  });
+
+  elements.runQaSmokeButton?.addEventListener("click", () => {
+    runQaSmokeChecks({ announce: true });
   });
 }
 
@@ -3752,12 +3833,15 @@ function renderAll() {
   rebuildDerivedState();
   synchronizeTaskSequence();
   ensureActiveUser();
+  restoreInlineGridModePreference();
   renderGlobalFilters();
   renderViewState();
   renderWorkspaceChrome();
   renderDataStatusBar();
   renderCompanyFinder();
+  renderAiAgentPanel();
   renderDealFormAssist();
+  renderDealInlineGrid();
   renderModuleFlow();
   renderWorkflowCommandBar();
   renderHeroMetrics();
@@ -4253,7 +4337,7 @@ function renderDataStatusBar() {
   const taskBuckets = getActionBuckets(myTasks);
   const fixNowAlerts = getFixNowAlerts(scopedDeals, scopedTasks);
   const dealAlerts = fixNowAlerts.filter((alert) => alert.dealId);
-  const criticalAlerts = dealAlerts.filter((alert) => alert.type === "critical").length;
+  const criticalAlerts = dealAlerts.filter((alert) => alert.tone === "danger" || alert.type === "critical").length;
   const warningAlerts = dealAlerts.length - criticalAlerts;
   const attentionCount = criticalAlerts + warningAlerts + taskBuckets.overdue.length + taskBuckets.today.length + taskBuckets.blocked.length;
   const saveState = getDataSaveStatusState(unsavedCount);
@@ -4294,6 +4378,311 @@ function renderDataStatusBar() {
   elements.globalNotificationCount.textContent = `${attentionCount} signals`;
   elements.globalNotificationCopy.textContent = copyParts.slice(0, 2).join(" · ") || `${warningAlerts} pipeline warnings`;
   setStatusTone(elements.globalNotificationCount, criticalAlerts > 0 || taskBuckets.overdue.length > 0 ? "danger" : "warning");
+}
+
+function renderAiAgentPanel() {
+  if (!elements.aiAgentOutput || !elements.aiAgentStatus) {
+    return;
+  }
+
+  elements.aiAgentStatus.textContent = serverMeta.ready ? "Live workspace" : "Local insights";
+  elements.aiAgentOutput.innerHTML = buildAiAgentResponse(ui.aiAgentMode || "summary", elements.aiAgentQuery?.value || "");
+}
+
+function handleAiAgentPrompt(mode = "summary") {
+  ui.aiAgentMode = cleanText(mode) || "summary";
+  renderAiAgentPanel();
+  elements.aiAgentOutput?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function buildAiAgentResponse(mode = "summary", query = "") {
+  const queryText = cleanText(query);
+  const baseDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const baseTasks = getScopedTasks();
+  const queriedDeals = filterAiDealsByQuery(baseDeals, queryText);
+  const queriedTasks = filterAiTasksByQuery(baseTasks, queryText);
+  const scopedDeals = queryText && queriedDeals.length ? queriedDeals : baseDeals;
+  const scopedTasks = queryText && queriedTasks.length ? queriedTasks : baseTasks;
+  const myTasks = getMyActionTasks(scopedTasks, getActiveUser());
+  const buckets = getActionBuckets(myTasks);
+  const alerts = getFixNowAlerts(scopedDeals, scopedTasks);
+  const revenue = getCockpitRevenue(scopedDeals);
+  const normalizedMode = cleanText(mode) || "summary";
+
+  const header = `
+    <div class="ai-agent-output-head">
+      <div>
+        <strong>${escapeHtml(getAiAgentTitle(normalizedMode))}</strong>
+        <span>${escapeHtml(queryText || "Workspace-wide execution readout")}</span>
+      </div>
+      <small>${escapeHtml(formatStatusBarTimestamp(serverMeta.lastUpdatedAt || ui.lastPersistAt))}</small>
+    </div>
+  `;
+
+  if (normalizedMode === "analytics") {
+    return `${header}${renderAiAnalyticsResponse(scopedDeals, revenue)}`;
+  }
+  if (normalizedMode === "report") {
+    return `${header}${renderAiReportResponse(scopedDeals, scopedTasks, alerts, revenue)}`;
+  }
+  if (normalizedMode === "views") {
+    return `${header}${renderAiViewsResponse()}`;
+  }
+  if (normalizedMode === "tracking") {
+    return `${header}${renderAiTrackingResponse(scopedDeals, buckets, alerts)}`;
+  }
+  if (normalizedMode === "strategy") {
+    return `${header}${renderAiStrategyResponse(scopedDeals, scopedTasks, alerts, revenue)}`;
+  }
+  if (normalizedMode === "growth") {
+    return `${header}${renderAiGrowthResponse(scopedDeals, scopedTasks, revenue)}`;
+  }
+
+  return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
+}
+
+function getAiAgentTitle(mode) {
+  const titles = {
+    analytics: "Analytics",
+    report: "Executive report",
+    views: "Recommended views",
+    tracking: "Execution tracking",
+    strategy: "Business strategy",
+    growth: "Account growth plan",
+    summary: "Daily summary",
+  };
+  return titles[mode] || titles.summary;
+}
+
+function renderAiStrategyResponse(deals, tasks, alerts, revenue) {
+  const myActions = getActionBuckets(getMyActionTasks(tasks, getActiveUser()));
+  const topMarkets = getAiRevenueByMarket(deals).slice(0, 3).map((item) => `${item.label} (${formatCompactCurrency(item.value)})`);
+  const strategicFocus = alerts.slice(0, 3).map((alert) => alert.title);
+
+  return `
+    <div class="ai-skill-strip">
+      <span class="ai-skill-chip">Sales Manager</span>
+      <span class="ai-skill-chip">Key Account Manager</span>
+      <span class="ai-skill-chip">Customer Service Manager</span>
+      <span class="ai-skill-chip">B2B Account Manager</span>
+      <span class="ai-skill-chip">Business Development Manager</span>
+      <span class="ai-skill-chip">Sales Director</span>
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Director priorities", [
+        `Protect ${formatCompactCurrency(revenue.atRisk)} at risk before quarter close.`,
+        `Focus top markets: ${topMarkets.join(", ") || "No market concentration yet."}`,
+        `${myActions.overdue.length} overdue actions need immediate owner follow-up.`,
+      ])}
+      ${renderAiList("Execution playbook", [
+        "Sales Manager: clear blocked deals and enforce next action + due date.",
+        "KAM / B2B: push live accounts to upsell/cross-sell with monthly checkpoints.",
+        "CS Manager: monitor pending requests and response-time breaches daily.",
+      ])}
+    </div>
+    ${renderAiList("Immediate strategic signals", strategicFocus.length ? strategicFocus : ["No critical strategic signal detected right now."])}
+  `;
+}
+
+function renderAiGrowthResponse(deals, tasks, revenue) {
+  const liveDeals = deals.filter((deal) => isLiveAccountStage(deal.stage));
+  const openPipelineDeals = deals.filter((deal) => !isLiveAccountStage(deal.stage) && !isInactiveDeal(deal));
+  const growthCandidates = openPipelineDeals
+    .map((deal) => ({
+      name: getPrimaryOperatorName(deal),
+      market: deal.market || "No market",
+      owner: getDealOwner(deal) || "Unassigned",
+      weighted: getForecastValue(deal),
+      next: getDealNextAction(deal),
+    }))
+    .sort((a, b) => b.weighted - a.weighted)
+    .slice(0, 4);
+  const staleLive = liveDeals.filter((deal) => daysSince(deal.lastFollowUp) > 21).length;
+  const objectiveTasks = getMyActionTasks(tasks, getActiveUser()).filter((task) => task.status !== "Done");
+
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("Live accounts", String(liveDeals.length), `${staleLive} need follow-up refresh`, "campaigns", "#campaign-board")}
+      ${renderAiMetricCard("Open growth pipeline", formatCompactCurrency(revenue.weighted), `${openPipelineDeals.length} accounts to convert into revenue`, "pipeline", "#pipeline-board")}
+      ${renderAiMetricCard("Objective tasks", String(objectiveTasks.length), "Actions linked to execution and growth objectives", "tasks", "#task-board")}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList(
+        "Top growth accounts",
+        growthCandidates.length
+          ? growthCandidates.map((item) => `${item.name} · ${item.market} · ${formatCompactCurrency(item.weighted)} · Next: ${item.next}`)
+          : ["No eligible growth accounts in current filters."]
+      )}
+      ${renderAiList("Objective execution plan", [
+        "1) Protect at-risk revenue first: clear legal/DD/integration blockers this week.",
+        "2) Convert top weighted accounts into commit pipeline with dated next actions.",
+        "3) For live accounts, enforce follow-up cadence and activate upsell/cross-sell tasks.",
+        "4) Weekly target check: compare weighted forecast vs market objective and reassign owners.",
+      ])}
+    </div>
+  `;
+}
+
+function filterAiDealsByQuery(deals, queryText) {
+  const needle = cleanText(queryText).toLowerCase();
+  if (!needle) {
+    return deals;
+  }
+
+  return deals.filter((deal) => {
+    const haystack = [
+      getPrimaryOperatorName(deal),
+      deal.client,
+      deal.operator,
+      deal.market,
+      deal.stage,
+      getDealVisibleStage(deal),
+      getDealOwner(deal),
+      deal.accountType,
+      deal.productScope,
+    ]
+      .map((value) => cleanText(value).toLowerCase())
+      .join(" ");
+    return haystack.includes(needle) || needle.split(/\s+/).some((word) => word.length > 2 && haystack.includes(word));
+  });
+}
+
+function filterAiTasksByQuery(tasks, queryText) {
+  const needle = cleanText(queryText).toLowerCase();
+  if (!needle) {
+    return tasks;
+  }
+
+  return tasks.filter((task) => {
+    const haystack = [task.title, task.deal, task.client, task.operator, task.market, task.owner, task.status, task.priority]
+      .map((value) => cleanText(value).toLowerCase())
+      .join(" ");
+    return haystack.includes(needle) || needle.split(/\s+/).some((word) => word.length > 2 && haystack.includes(word));
+  });
+}
+
+function renderAiSummaryResponse(deals, buckets, alerts, revenue) {
+  const topAlert = alerts[0];
+  const openDeals = deals.length;
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("What to do today", `${buckets.overdue.length + buckets.today.length}`, `${buckets.overdue.length} overdue · ${buckets.today.length} due today`, "tasks", "#task-board")}
+      ${renderAiMetricCard("Revenue at risk", formatCompactCurrency(revenue.atRisk), `${revenue.atRiskDeals} deals with blockers, SLA risk, or missing execution data`, "dashboard", ".cockpit-command-center")}
+      ${renderAiMetricCard("Open pipeline", `${openDeals}`, `${formatCompactCurrency(revenue.weighted)} weighted forecast`, "pipeline", "#pipeline-board")}
+    </div>
+    <div class="ai-agent-recommendation">
+      <strong>Recommended next move</strong>
+      <p>${escapeHtml(topAlert ? `${topAlert.title}: ${topAlert.detail}` : "No critical blockers detected. Work the due-today queue and keep stage movement current.")}</p>
+    </div>
+  `;
+}
+
+function renderAiAnalyticsResponse(deals, revenue) {
+  const marketRows = getAiRevenueByMarket(deals).slice(0, 5);
+  const stageRows = getAiRevenueByStage(deals).slice(0, 6);
+
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("Pipeline", formatCompactCurrency(revenue.pipeline), "Total open value", "pipeline", "#pipeline-board")}
+      ${renderAiMetricCard("Weighted", formatCompactCurrency(revenue.weighted), "Stage, market, and operator adjusted", "forecast", "#target-progress")}
+      ${renderAiMetricCard("Commit", formatCompactCurrency(revenue.commit), "DD through Handover confidence band", "forecast", "#target-progress")}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Top weighted markets", marketRows.map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+      ${renderAiList("Stage concentration", stageRows.map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+    </div>
+  `;
+}
+
+function renderAiReportResponse(deals, tasks, alerts, revenue) {
+  const blockedDeals = deals.filter((deal) => isBlockedDeal(deal)).length;
+  const overSlaDeals = deals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
+  const openTasks = tasks.filter((task) => task.status !== "Done").length;
+
+  return `
+    <div class="ai-agent-report">
+      <p><strong>Executive readout:</strong> ${escapeHtml(deals.length)} active deals are carrying ${escapeHtml(formatCompactCurrency(revenue.weighted))} in weighted forecast, with ${escapeHtml(formatCompactCurrency(revenue.atRisk))} currently exposed to execution risk.</p>
+      <p><strong>Execution pressure:</strong> ${escapeHtml(String(overSlaDeals))} deals are over SLA, ${escapeHtml(String(blockedDeals))} deals are blocked, and ${escapeHtml(String(openTasks))} actions remain open.</p>
+      <p><strong>Focus:</strong> ${escapeHtml(alerts[0]?.title || "No critical issue is dominating the workspace right now.")}</p>
+    </div>
+  `;
+}
+
+function renderAiViewsResponse() {
+  const views = [
+    ["Home", "Fix Now, My Actions, revenue risk", "dashboard", ".cockpit-command-center"],
+    ["My Actions", "Overdue, due today, blocked, upcoming", "tasks", "#task-board"],
+    ["Pipeline", "Kanban, SLA pressure, stage movement", "pipeline", "#pipeline-board"],
+    ["Requests", "Proposal, Legal, DD, Integration handoffs", "requests", "#requests-board"],
+    ["Forecast", "Weighted revenue, targets, KPIs", "targets", "#target-progress"],
+  ];
+
+  return `
+    <div class="ai-agent-view-grid">
+      ${views
+        .map(([label, copy, view, target]) => `
+          <button type="button" class="ai-view-card" data-ai-open-view="${escapeHtml(view)}" data-ai-target-selector="${escapeHtml(target)}">
+            <strong>${escapeHtml(label)}</strong>
+            <span>${escapeHtml(copy)}</span>
+          </button>
+        `)
+        .join("")}
+    </div>
+  `;
+}
+
+function renderAiTrackingResponse(deals, buckets, alerts) {
+  const stuck = deals.filter((deal) => getStageSlaState(deal).tone === "stuck");
+  const atRisk = deals.filter((deal) => getStageSlaState(deal).tone === "at-risk");
+  const blocked = deals.filter((deal) => isBlockedDeal(deal));
+
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("Over SLA", `${stuck.length}`, "Needs intervention now", "pipeline", "#pipeline-board")}
+      ${renderAiMetricCard("At risk", `${atRisk.length}`, "Close to SLA limit", "pipeline", "#pipeline-board")}
+      ${renderAiMetricCard("Blocked", `${blocked.length}`, "Dependency or missing input", "tasks", "#task-board")}
+      ${renderAiMetricCard("Due today", `${buckets.today.length}`, "Actions to finish today", "tasks", "#task-board")}
+    </div>
+    ${renderAiList("Top execution signals", alerts.slice(0, 5).map((alert) => `${alert.title}: ${alert.detail}`))}
+  `;
+}
+
+function renderAiMetricCard(label, value, copy, view, targetSelector) {
+  return `
+    <button type="button" class="ai-metric-card" data-ai-open-view="${escapeHtml(view)}" data-ai-target-selector="${escapeHtml(targetSelector)}">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(String(value))}</strong>
+      <small>${escapeHtml(copy)}</small>
+    </button>
+  `;
+}
+
+function renderAiList(title, items = []) {
+  const list = items.length ? items : ["No current data for this slice."];
+  return `
+    <div class="ai-agent-list">
+      <strong>${escapeHtml(title)}</strong>
+      ${list.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function getAiRevenueByMarket(deals) {
+  const rows = new Map();
+  deals.forEach((deal) => {
+    const label = cleanText(deal.market) || "No market";
+    rows.set(label, (rows.get(label) || 0) + getForecastValue(deal));
+  });
+  return Array.from(rows, ([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value);
+}
+
+function getAiRevenueByStage(deals) {
+  const rows = new Map();
+  deals.forEach((deal) => {
+    const label = getDealVisibleStage(deal) || cleanText(deal.stage) || "No stage";
+    rows.set(label, (rows.get(label) || 0) + getForecastValue(deal));
+  });
+  return Array.from(rows, ([label, value]) => ({ label, value })).sort((left, right) => right.value - left.value);
 }
 
 function formatHistoryTimestamp(value) {
@@ -6979,6 +7368,95 @@ function renderCompanyProfileSummaryActions(activeDeal) {
       editLabel: "Open Deal Workspace",
     }),
   ].join("");
+
+  renderQaSmokeResults();
+}
+
+function runQaSmokeChecks(options = {}) {
+  const announce = options.announce !== false;
+  const activeDeals = state.deals.filter((deal) => !isInactiveDeal(deal));
+  const openTasks = state.tasks.filter((task) => task.status !== "Done");
+  const fixNow = getFixNowAlerts(activeDeals, state.tasks);
+  const stageIssues = activeDeals.filter((deal) => cleanText(deal.stage) && !VIEW_STAGE_ORDER.includes(cleanText(deal.stage)) && !STAGE_ORDER.includes(cleanText(deal.stage)));
+  const missingOwner = activeDeals.filter((deal) => !cleanText(getDealOwner(deal))).length;
+  const missingNext = activeDeals.filter((deal) => !cleanText(getDealNextAction(deal))).length;
+  const missingFollowUp = activeDeals.filter((deal) => !cleanText(deal.followUpCadence) || !cleanText(deal.followUpOwner) || !cleanText(deal.nextFollowUpDate)).length;
+  const weightedRevenue = getCockpitRevenue(activeDeals).weighted;
+
+  const checks = [
+    {
+      area: "Navigation",
+      status: views.length >= 7 && viewTabs.length >= 7 ? "OK" : "WARN",
+      detail: `${viewTabs.length} primary navigation tabs detected.`,
+    },
+    {
+      area: "Pipeline Integrity",
+      status: stageIssues.length === 0 ? "OK" : "FAIL",
+      detail: stageIssues.length === 0 ? "All active accounts mapped to valid stages." : `${stageIssues.length} accounts have invalid/unmapped stage values.`,
+    },
+    {
+      area: "Execution Discipline",
+      status: missingNext === 0 ? "OK" : missingNext < Math.max(5, Math.round(activeDeals.length * 0.08)) ? "WARN" : "FAIL",
+      detail: `${missingNext} accounts are missing next action.`,
+    },
+    {
+      area: "Ownership Coverage",
+      status: missingOwner === 0 ? "OK" : missingOwner < Math.max(5, Math.round(activeDeals.length * 0.08)) ? "WARN" : "FAIL",
+      detail: `${missingOwner} accounts are missing owner assignment.`,
+    },
+    {
+      area: "Follow-up Readiness",
+      status: missingFollowUp === 0 ? "OK" : missingFollowUp < Math.max(8, Math.round(activeDeals.length * 0.15)) ? "WARN" : "FAIL",
+      detail: `${missingFollowUp} accounts missing cadence/owner/next follow-up.`,
+    },
+    {
+      area: "Task Engine",
+      status: openTasks.length > 0 ? "OK" : "WARN",
+      detail: `${openTasks.length} open tasks in execution queue.`,
+    },
+    {
+      area: "Requests Pressure",
+      status: fixNow.length < Math.max(10, Math.round(activeDeals.length * 0.2)) ? "OK" : "WARN",
+      detail: `${fixNow.length} active fix-now signals currently flagged.`,
+    },
+    {
+      area: "Forecast Readiness",
+      status: weightedRevenue > 0 ? "OK" : "FAIL",
+      detail: weightedRevenue > 0 ? `${formatCompactCurrency(weightedRevenue)} weighted forecast in scope.` : "Weighted forecast is zero; check deal values and stages.",
+    },
+  ];
+
+  ui.qaSmokeResults = checks;
+  if (elements.qaLastRun) {
+    elements.qaLastRun.textContent = `Run ${formatStatusBarTimestamp(new Date().toISOString())}`;
+  }
+  renderQaSmokeResults();
+
+  if (announce) {
+    const failCount = checks.filter((check) => check.status === "FAIL").length;
+    const warnCount = checks.filter((check) => check.status === "WARN").length;
+    setBanner(`QA smoke complete: ${checks.length - failCount - warnCount} OK · ${warnCount} WARN · ${failCount} FAIL.`, failCount > 0 ? "danger" : warnCount > 0 ? "warn" : "success");
+  }
+}
+
+function renderQaSmokeResults() {
+  if (!elements.qaSmokeResults) {
+    return;
+  }
+  const checks = ui.qaSmokeResults || [];
+  if (!checks.length) {
+    elements.qaSmokeResults.innerHTML = '<div class="empty-state">Run smoke tests to validate current workspace flows.</div>';
+    return;
+  }
+
+  elements.qaSmokeResults.innerHTML = checks
+    .map((check) => `
+      <article class="qa-smoke-item qa-${check.status.toLowerCase()}">
+        <strong>${escapeHtml(check.area)} <span>${escapeHtml(check.status)}</span></strong>
+        <p>${escapeHtml(check.detail)}</p>
+      </article>
+    `)
+    .join("");
 }
 
 function renderCompanyProfileEditField(field, source) {
@@ -10135,6 +10613,57 @@ function openWorkflowModule(view) {
   activateView(view);
 }
 
+function openTaskDraftInTasksPage(draft, message = "Nueva tarea preparada en My Actions.") {
+  const normalizedDraft = normalizeTask(draft);
+
+  if (ui.pageView !== "tasks") {
+    try {
+      window.sessionStorage?.setItem(
+        TASK_DRAFT_SESSION_KEY,
+        JSON.stringify({
+          draft: normalizedDraft,
+          message,
+        })
+      );
+    } catch (error) {
+      // Session draft transfer is best-effort; the task page remains the source of truth.
+    }
+    window.location.href = buildPageUrlForView("tasks");
+    return;
+  }
+
+  ui.editingTaskId = null;
+  fillTaskForm(normalizedDraft);
+  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true, pageNavigation: false });
+  setBanner(message, "default");
+}
+
+function restorePendingTaskDraft() {
+  if (ui.pageView !== "tasks") {
+    return;
+  }
+
+  let payload = null;
+  try {
+    const rawPayload = window.sessionStorage?.getItem(TASK_DRAFT_SESSION_KEY);
+    if (rawPayload) {
+      payload = JSON.parse(rawPayload);
+      window.sessionStorage?.removeItem(TASK_DRAFT_SESSION_KEY);
+    }
+  } catch (error) {
+    payload = null;
+  }
+
+  if (!payload?.draft) {
+    return;
+  }
+
+  ui.editingTaskId = null;
+  fillTaskForm(normalizeTask(payload.draft));
+  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true, pageNavigation: false });
+  setBanner(payload.message || "Nueva tarea preparada en My Actions.", "default");
+}
+
 function prefillTaskFromDeal(deal) {
   const draft = normalizeTask({
     ...buildTaskPrefillFromSnapshot(deal),
@@ -10144,18 +10673,12 @@ function prefillTaskFromDeal(deal) {
     nextStep: deal.actionItems || buildDealOperationalGuide(deal).recommendation,
     notes: deal.statusText || deal.comments,
   });
-  ui.editingTaskId = null;
-  fillTaskForm(draft);
-  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true });
-  setBanner(`Nueva tarea prefijada desde ${deal.deal}.`, "default");
+  openTaskDraftInTasksPage(draft, `Nueva tarea prefijada desde ${deal.deal || deal.client || deal.operator || "deal"}.`);
 }
 
 function prefillTaskFromDealSnapshot(deal) {
   const draft = buildTaskPrefillFromSnapshot(deal);
-  ui.editingTaskId = null;
-  fillTaskForm(draft);
-  activateView("tasks", { targetSelector: "#task-form", focusField: true, editMode: true });
-  setBanner(`Follow-up task prepared from ${deal.deal || deal.client || deal.operator || "current deal"}.`, "default");
+  openTaskDraftInTasksPage(draft, `Follow-up task prepared from ${deal.deal || deal.client || deal.operator || "current deal"}.`);
 }
 
 function prefillTaskFromMarket(market) {
@@ -10166,11 +10689,7 @@ function prefillTaskFromMarket(market) {
     market,
     targetYear: getActiveTargetYear(),
   });
-  ui.activeView = "tasks";
-  ui.editingTaskId = null;
-  fillTaskForm(draft);
-  renderViewState();
-  setBanner(`Nueva tarea prefijada para ${market || "mercado"}.`, "default");
+  openTaskDraftInTasksPage(draft, `Nueva tarea prefijada para ${market || "mercado"}.`);
 }
 
 function prefillTaskFromTarget(target) {
@@ -10184,11 +10703,7 @@ function prefillTaskFromTarget(target) {
     nextStep: `Cubrir target de ${target.newSigned} nuevos firmados.`,
     notes: `Integrations ${target.integrations} · DD ${target.ddPipeline} · Go Live ${target.newGoLive}`,
   });
-  ui.activeView = "tasks";
-  ui.editingTaskId = null;
-  fillTaskForm(draft);
-  renderViewState();
-  setBanner(`Nueva tarea prefijada para target ${target.market} ${target.year}.`, "default");
+  openTaskDraftInTasksPage(draft, `Nueva tarea prefijada para target ${target.market} ${target.year}.`);
 }
 
 function prefillDealFromMarketIntel(record) {
@@ -10449,6 +10964,19 @@ function refreshDealFieldHighlights() {
   const labels = Array.from(dealForm.querySelectorAll("label"));
   const missingFields = [];
   const pendingFields = [];
+  const processMissing = {
+    legal: [],
+    dd: [],
+    integration: [],
+    followUp: [],
+  };
+  const processRequiredFields = {
+    legal: ["companyName", "companyRegistrationNumber", "companyRegisteredAddress", "companyLegalRepresentative", "companyLicense"],
+    dd: ["ddContactName", "ddContactEmail", "companyLicense", "companyRegistrationNumber"],
+    integration: ["integrationRequest", "jira", "integrationEmail", "platform", "productsPotential"],
+    followUp: ["followUpCadence", "followUpOwner", "nextFollowUpDate", "actionItems"],
+  };
+  const processFieldSet = new Set(Object.values(processRequiredFields).flat());
 
   labels.forEach((label) => {
     const field = label.querySelector("input, select, textarea");
@@ -10476,6 +11004,14 @@ function refreshDealFieldHighlights() {
       if (field.name && labelText) {
         missingFields.push({ name: field.name, label: labelText });
       }
+      if (field.name && processFieldSet.has(field.name)) {
+        label.classList.add("field-critical-missing");
+        Object.entries(processRequiredFields).forEach(([key, fieldList]) => {
+          if (fieldList.includes(field.name)) {
+            processMissing[key].push({ name: field.name, label: labelText });
+          }
+        });
+      }
       return;
     }
 
@@ -10484,10 +11020,22 @@ function refreshDealFieldHighlights() {
       if (field.name && labelText) {
         pendingFields.push({ name: field.name, label: labelText });
       }
+      if (field.name && processFieldSet.has(field.name)) {
+        label.classList.add("field-critical-missing");
+      }
+    }
+
+    if (!isReadonly && field.name && processFieldSet.has(field.name) && !value) {
+      label.classList.add("field-critical-missing");
+      Object.entries(processRequiredFields).forEach(([key, fieldList]) => {
+        if (fieldList.includes(field.name)) {
+          processMissing[key].push({ name: field.name, label: labelText });
+        }
+      });
     }
   });
 
-  renderDealFieldSummary(missingFields, pendingFields);
+  renderDealFieldSummary(missingFields, pendingFields, processMissing);
 }
 
 function isDealFieldPriorityEmpty(fieldName, value) {
@@ -10521,7 +11069,7 @@ function isDealFieldPending(fieldName, value, pendingValues) {
   return pendingFields.has(fieldName) && pendingValues.has(value);
 }
 
-function renderDealFieldSummary(missingFields = [], pendingFields = []) {
+function renderDealFieldSummary(missingFields = [], pendingFields = [], processMissing = {}) {
   if (!elements.dealFieldSummary) {
     return;
   }
@@ -10558,8 +11106,190 @@ function renderDealFieldSummary(missingFields = [], pendingFields = []) {
           </div>
         </div>
       ` : ""}
+      <div class="deal-field-summary-guidance">
+        <span>Dynamic help</span>
+        <div class="deal-guidance-list">
+          ${buildDealGuidanceRows(missingFields, pendingFields)}
+        </div>
+      </div>
+      ${buildProcessMissingSummary(processMissing)}
     </div>
   `;
+}
+
+function buildProcessMissingSummary(processMissing = {}) {
+  const lanes = [
+    ["legal", "Legal request"],
+    ["dd", "DD request"],
+    ["integration", "Integration request"],
+    ["followUp", "Follow-up"],
+  ];
+  const hasAny = lanes.some(([key]) => (processMissing[key] || []).length > 0);
+  if (!hasAny) {
+    return "";
+  }
+
+  return `
+    <div class="deal-process-missing">
+      <span>Missing steps</span>
+      <div class="deal-process-missing-grid">
+        ${lanes
+          .map(([key, label]) => {
+            const items = processMissing[key] || [];
+            if (!items.length) {
+              return `
+                <article class="deal-process-card is-ready">
+                  <strong>${escapeHtml(label)}</strong>
+                  <small>Ready</small>
+                </article>
+              `;
+            }
+            return `
+              <article class="deal-process-card is-blocked">
+                <strong>${escapeHtml(label)}</strong>
+                <small>${items.length} missing</small>
+                <div class="deal-field-chip-row">
+                  ${items
+                    .slice(0, 3)
+                    .map((field) => `<button type="button" class="deal-field-chip is-missing" data-focus-deal-field="${escapeAttribute(field.name)}">${escapeHtml(field.label)}</button>`)
+                    .join("")}
+                </div>
+              </article>
+            `;
+          })
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+const INLINE_GRID_FIELDS = {
+  Core: [
+    ["deal", "Deal", "text"],
+    ["client", "Account", "text"],
+    ["operator", "Operator", "text"],
+    ["kam", "Owner", "text"],
+    ["market", "Market", "text"],
+    ["stage", "Stage", "select"],
+    ["dealValue", "Deal Value", "number"],
+  ],
+  Status: [
+    ["agreement", "Agreement", "select"],
+    ["legalStatus", "Legal", "select"],
+    ["ddStatus", "DD", "select"],
+    ["integrationStatus", "Integration", "select"],
+    ["goLiveStatus", "Go Live", "select"],
+    ["ddTicket", "DD Ticket", "text"],
+    ["jira", "Jira", "text"],
+  ],
+  Requests: [
+    ["proposalRequest", "Proposal Request", "textarea"],
+    ["integrationRequest", "Integration Request", "textarea"],
+    ["legalSignoffRequest", "Legal Signoff Request", "textarea"],
+  ],
+};
+
+function renderDealInlineGrid() {
+  if (!elements.dealInlineGrid || !dealForm) {
+    return;
+  }
+
+  const sections = Object.entries(INLINE_GRID_FIELDS)
+    .map(([section, fields]) => {
+      const mode = ui.inlineGridModeBySection?.[section] === "full" ? "full" : "compact";
+      return `
+      <section class="inline-grid-section inline-grid-section-${escapeAttribute(mode)}">
+        <div class="inline-grid-head">
+          <div class="inline-grid-title">${escapeHtml(section)}</div>
+          <div class="inline-grid-mode-toggle">
+            <button type="button" class="inline-grid-mode-button ${mode === "compact" ? "is-active" : ""}" data-inline-mode-toggle="${escapeAttribute(section)}" data-inline-mode="compact">Compact</button>
+            <button type="button" class="inline-grid-mode-button ${mode === "full" ? "is-active" : ""}" data-inline-mode-toggle="${escapeAttribute(section)}" data-inline-mode="full">Full</button>
+          </div>
+        </div>
+        <div class="inline-grid-body">
+          ${fields.map(([name, label, type]) => renderInlineGridField(name, label, type)).join("")}
+        </div>
+      </section>
+    `;
+    })
+    .join("");
+
+  elements.dealInlineGrid.innerHTML = sections;
+}
+
+function renderInlineGridField(name, label, type) {
+  const field = dealForm?.elements?.[name];
+  if (!field) {
+    return "";
+  }
+
+  const currentValue = field.value ?? "";
+  if (type === "select") {
+    const options = Array.from(field.options || [])
+      .map((option) => {
+        const value = option.value ?? "";
+        const selected = value === currentValue ? " selected" : "";
+        return `<option value="${escapeAttribute(value)}"${selected}>${escapeHtml(option.textContent || value)}</option>`;
+      })
+      .join("");
+    return `
+      <label class="inline-grid-cell">
+        <span>${escapeHtml(label)}</span>
+        <select data-inline-grid-field="${escapeAttribute(name)}">${options}</select>
+      </label>
+    `;
+  }
+
+  if (type === "textarea") {
+    return `
+      <label class="inline-grid-cell inline-grid-cell-wide">
+        <span>${escapeHtml(label)}</span>
+        <textarea rows="2" data-inline-grid-field="${escapeAttribute(name)}">${escapeHtml(currentValue)}</textarea>
+      </label>
+    `;
+  }
+
+  return `
+    <label class="inline-grid-cell">
+      <span>${escapeHtml(label)}</span>
+      <input type="${escapeAttribute(type)}" value="${escapeAttribute(currentValue)}" data-inline-grid-field="${escapeAttribute(name)}" />
+    </label>
+  `;
+}
+
+function buildDealGuidanceRows(missingFields = [], pendingFields = []) {
+  const topItems = [...missingFields, ...pendingFields].slice(0, 5);
+  if (!topItems.length) {
+    return `<p class="deal-guidance-item">No pending actions detected.</p>`;
+  }
+
+  return topItems
+    .map((field) => `
+      <button type="button" class="deal-guidance-item" data-focus-deal-field="${escapeAttribute(field.name)}">
+        <strong>${escapeHtml(field.label)}</strong>
+        <span>${escapeHtml(getDealFieldGuidanceText(field.name))}</span>
+      </button>
+    `)
+    .join("");
+}
+
+function getDealFieldGuidanceText(fieldName) {
+  const guidance = {
+    operator: "Define the operator/legal account name used for contract and DD.",
+    kam: "Assign an account owner so tasks and follow-up routing can be enforced.",
+    market: "Select the primary market/country to activate market-based reporting.",
+    stage: "Choose the current stage to unlock SLA, risk, and movement controls.",
+    dealValue: "Set a commercial value to include this account in weighted forecast.",
+    actionItems: "Add the next action to drive execution and avoid deal stagnation.",
+    legalStatus: "Update legal review status before moving toward DD stage.",
+    ddStatus: "Set DD progression to keep integration gates accurate.",
+    integrationStatus: "Track integration state to protect go-live readiness.",
+    goLiveStatus: "Confirm launch readiness state for post-live handover.",
+    followUpCadence: "Set cadence (weekly/biweekly/monthly) to automate action planning.",
+    agreement: "Set commercial agreement state for clear contract negotiation visibility.",
+  };
+
+  return guidance[fieldName] || "Open this field and complete the required operational value.";
 }
 
 function getDealFieldLabelText(label) {
@@ -13542,7 +14272,45 @@ function getStoredActiveUserId() {
 }
 
 function persistActiveUserSelection() {
-  return;
+  state.workspace = normalizeWorkspace(state.workspace);
+  state.workspace.activeUserId = ui.activeUserId || "";
+  void persistState();
+}
+
+function getInlineGridPreferences() {
+  state.workspace = normalizeWorkspace(state.workspace);
+  if (!state.workspace.inlineGridPreferences || typeof state.workspace.inlineGridPreferences !== "object") {
+    state.workspace.inlineGridPreferences = {};
+  }
+  return state.workspace.inlineGridPreferences;
+}
+
+function restoreInlineGridModePreference() {
+  const userId = cleanText(ui.activeUserId);
+  if (!userId) {
+    return;
+  }
+  const preferences = getInlineGridPreferences();
+  const preferred = preferences[userId];
+  if (!preferred || typeof preferred !== "object") {
+    return;
+  }
+  ui.inlineGridModeBySection = {
+    ...ui.inlineGridModeBySection,
+    ...preferred,
+  };
+}
+
+function persistInlineGridModePreference() {
+  const userId = cleanText(ui.activeUserId);
+  if (!userId) {
+    return;
+  }
+  const preferences = getInlineGridPreferences();
+  preferences[userId] = {
+    ...ui.inlineGridModeBySection,
+  };
+  void persistState();
 }
 
 function buildDealContextLine(deal) {
@@ -15932,6 +16700,7 @@ async function uploadExcelWorkbook(file) {
     const payload = await response.json();
     await hydrateFromExcel({ showSuccessBanner: false });
     renderAll();
+    runPostRefreshDataChecks({ source: "upload" });
 
     const summary = buildUploadSummary(payload);
     setBanner(summary, "success");
@@ -15943,6 +16712,60 @@ async function uploadExcelWorkbook(file) {
   } finally {
     setLoadingState(false);
   }
+}
+
+function isStrictIsoDate(text) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(cleanText(text));
+}
+
+function runPostRefreshDataChecks(options = {}) {
+  const source = cleanText(options.source) || "refresh";
+  const allowedStages = new Set(STAGE_ORDER);
+  const issues = {
+    invalidDates: [],
+    missingOwners: [],
+    invalidStages: [],
+  };
+
+  state.deals.forEach((deal) => {
+    const label = getPrimaryOperatorName(deal);
+    const owner = cleanText(getDealOwner(deal));
+    const stage = cleanText(deal.stage);
+    const dateFields = ["lastFollowUp", "nextFollowUpDate", "liveDate", "signedEta", "liveSince"];
+
+    if (!owner) {
+      issues.missingOwners.push(label);
+    }
+    if (stage && !allowedStages.has(stage)) {
+      issues.invalidStages.push(`${label} (${stage})`);
+    }
+
+    dateFields.forEach((field) => {
+      const value = cleanText(deal[field]);
+      if (value && !isStrictIsoDate(value)) {
+        issues.invalidDates.push(`${label} · ${field}: ${value}`);
+      }
+    });
+  });
+
+  state.tasks.forEach((task) => {
+    const dueDate = cleanText(task.dueDate);
+    if (dueDate && !isStrictIsoDate(dueDate)) {
+      issues.invalidDates.push(`${task.title || "Untitled task"} · dueDate: ${dueDate}`);
+    }
+  });
+
+  const totalIssues = issues.invalidDates.length + issues.missingOwners.length + issues.invalidStages.length;
+  if (totalIssues === 0) {
+    return;
+  }
+
+  const summary = [];
+  if (issues.invalidDates.length) summary.push(`${issues.invalidDates.length} date format issues`);
+  if (issues.missingOwners.length) summary.push(`${issues.missingOwners.length} missing owners`);
+  if (issues.invalidStages.length) summary.push(`${issues.invalidStages.length} invalid stages`);
+
+  setBanner(`Data quality check after ${source}: ${summary.join(" · ")}.`, "warn");
 }
 
 function triggerBlobDownload(blob, filename) {
@@ -16151,7 +16974,7 @@ function normalizeDateInput(value) {
   }
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) {
-    return text;
+    return "";
   }
   return date.toISOString().slice(0, 10);
 }

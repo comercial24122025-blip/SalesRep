@@ -69,12 +69,14 @@
           </div>
         </div>
 
-        <section id="focus-window-panel" class="insight-toolbar" aria-label="Filtros globales">
-          <div>
-            <p class="panel-kicker">Focus window</p>
-            <h2>Executive Overview</h2>
-            <p id="focus-summary" class="toolbar-note">Showing the full pipeline currently loaded.</p>
-          </div>
+        <details id="focus-window-panel" class="insight-toolbar focus-window-dropdown" aria-label="Filtros globales" open>
+          <summary class="focus-window-summary">
+            <div>
+              <p class="panel-kicker">Focus window</p>
+              <h2>Executive Overview</h2>
+              <p id="focus-summary" class="toolbar-note">Showing the full pipeline currently loaded.</p>
+            </div>
+          </summary>
           <div class="toolbar-filters">
             <label>
               Year
@@ -96,7 +98,7 @@
             </label>
             <button id="clear-time-filters" type="button" class="button button-ghost button-small">Reset View</button>
           </div>
-        </section>
+        </details>
 
         <section id="hero-stats" class="hero-stats" aria-label="Resumen ejecutivo">
           <button type="button" class="stat-card is-clickable" data-action="open-executive-kpi" data-kpi-key="weighted-forecast">
@@ -223,6 +225,37 @@
         <div class="view-context-actions">
           <button id="view-context-action" type="button" class="button button-secondary button-small" data-view-trigger="pipeline">Open Pipeline</button>
         </div>
+      </section>
+
+      <section class="ai-agent-panel" aria-label="Cube AI execution agent">
+        <div class="ai-agent-head">
+          <div>
+            <p class="panel-kicker">Cube AI</p>
+            <h2>Execution Agent</h2>
+            <p>Ask for summaries, analytics, reports, views, and execution tracking from the live workspace.</p>
+          </div>
+          <span id="ai-agent-status" class="chip">Local insights</span>
+        </div>
+        <div class="ai-agent-grid">
+          <label class="ai-agent-query" for="ai-agent-query">
+            Ask Cube AI
+            <textarea
+              id="ai-agent-query"
+              rows="3"
+              placeholder="Example: summarize risks in Peru, show revenue at risk, or what should the team do today?"
+            ></textarea>
+          </label>
+          <div class="ai-agent-actions" aria-label="AI quick actions">
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="summary">Summary</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="analytics">Analytics</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="report">Report</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="views">Views</button>
+            <button type="button" class="button button-primary button-small" data-ai-agent-prompt="tracking">Execution tracking</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="strategy">Strategy</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="growth">Growth plan</button>
+          </div>
+        </div>
+        <div id="ai-agent-output" class="ai-agent-output" aria-live="polite"></div>
       </section>
 
       <section class="company-command-bar" aria-label="Company finder">
@@ -767,6 +800,10 @@
                     <button type="button" class="button button-ghost button-small" data-fill-field="market" data-fill-value="Mexico">Mexico</button>
                     <button type="button" class="button button-ghost button-small" data-fill-field="platform" data-fill-value="BetConstruct">BetConstruct</button>
                   </div>
+                  <details class="deal-inline-grid-shell" open>
+                    <summary class="deal-inline-grid-summary">Inline Edit Grid (Core · Status · Requests)</summary>
+                    <div id="deal-inline-grid" class="deal-inline-grid" aria-label="Inline section editor"></div>
+                  </details>
                   <div class="deal-autosave-shell" aria-label="Deal autosave status">
                     <div class="deal-autosave-summary">
                       <div>
@@ -2445,6 +2482,19 @@
               </div>
 
               <div id="admin-workspace-cards" class="decision-grid"></div>
+              <section class="panel panel-secondary qa-center-panel">
+                <div class="panel-head">
+                  <div>
+                    <p class="panel-kicker">Quality assurance</p>
+                    <h3>QA Center</h3>
+                  </div>
+                  <div class="head-actions">
+                    <button type="button" id="run-qa-smoke-button" class="button button-primary button-small">Run Smoke Tests</button>
+                    <span id="qa-last-run" class="chip">Not run</span>
+                  </div>
+                </div>
+                <div id="qa-smoke-results" class="qa-smoke-results"></div>
+              </section>
               <div id="user-board" class="crm-owner-board"></div>
 
               <div class="table-wrap">
