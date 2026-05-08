@@ -1440,6 +1440,12 @@ function bindEvents() {
     const aiGrowthTaskAction = event.target.closest("[data-ai-growth-tasks]");
     if (aiGrowthTaskAction) {
       createGrowthFocusTasksFromAi();
+      return;
+    }
+
+    const aiCreateEventAction = event.target.closest("[data-ai-create-event]");
+    if (aiCreateEventAction) {
+      createAiSuggestedEvent();
     }
   });
 
@@ -4241,7 +4247,37 @@ async function handleEventSubmit(event) {
   });
 
   const isEditing = Boolean(ui.editingEventId);
-  state.events = isEditing ? state.events.map((item) => (item.id === draft.id ? draft : item)) : [draft, ...(state.events || [])];
+  const existingEvents = Array.isArray(state.events) ? state.events : [];
+  if (isEditing) {
+    const existingIndex = existingEvents.findIndex((item) => item.id === draft.id);
+    if (existingIndex >= 0) {
+      existingEvents[existingIndex] = draft;
+    } else {
+      existingEvents.unshift(draft);
+    }
+    state.events = existingEvents;
+  } else {
+    state.events = [draft, ...existingEvents];
+  }
+
+  const linkedClientName = cleanText(draft.client);
+  if (linkedClientName && !hasExistingAccountForClient(linkedClientName)) {
+    state.deals.unshift(
+      normalizeDeal({
+        id: generateId("deal"),
+        deal: linkedClientName,
+        client: linkedClientName,
+        operator: linkedClientName,
+        market: cleanText(draft.market) || "Unassigned",
+        stage: "Lead",
+        type: "New Account",
+        status: "Open",
+        kam: cleanText(draft.owner) || getActiveUser()?.fullName || "Unassigned",
+        actionItems: `Prospect created from event ${draft.eventName || "meeting"}.`,
+        updates: cleanText(draft.followUpNotes) || cleanText(draft.objective),
+      })
+    );
+  }
   if (draft.linkedTaskId) {
     state.tasks = state.tasks.map((task) =>
       task.id === draft.linkedTaskId
@@ -4257,6 +4293,15 @@ async function handleEventSubmit(event) {
   renderAll();
   resetEventForm();
   setBanner(buildExcelBanner(saved ? `Networking meeting ${isEditing ? "updated" : "saved"}.` : "Networking meeting saved in memory only."), saved ? "success" : "warn");
+}
+
+function hasExistingAccountForClient(name) {
+  const needle = normalizeSearchText(name);
+  if (!needle) return false;
+  return state.deals.some((deal) => {
+    const candidates = [deal.client, deal.operator, deal.deal].map((value) => normalizeSearchText(value));
+    return candidates.includes(needle);
+  });
 }
 
 async function handleEventAction(event) {
@@ -4898,6 +4943,18 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "forecast-latam") {
     return `${header}${renderAiLatamForecastResponse(scopedDeals)}`;
   }
+  if (normalizedMode === "requests") {
+    return `${header}${renderAiRequestsPrepResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "operator-strategy") {
+    return `${header}${renderAiOperatorStrategyResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "market-strategy") {
+    return `${header}${renderAiMarketStrategyResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "event-planner") {
+    return `${header}${renderAiEventPlannerResponse(scopedDeals)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
 }
@@ -4952,6 +5009,10 @@ function getAiAgentTitle(mode) {
     "market-tasks": "Market tasks to hit target",
     "risk-by-client": "Client process risks",
     "forecast-latam": "LATAM forecast",
+    requests: "Request preparation",
+    "operator-strategy": "Operator strategy",
+    "market-strategy": "Market strategy",
+    "event-planner": "Event planner",
     summary: "Daily summary",
   };
   return titles[mode] || titles.summary;
@@ -5286,6 +5347,98 @@ function renderAiLatamForecastResponse(deals) {
       )}
     </div>
   `;
+}
+
+function renderAiRequestsPrepResponse(deals) {
+  const target = deals[0];
+  if (!target) return renderAiList("Request preparation", ["No deals in scope. Add filters or clear search."]);
+  const name = getPrimaryOperatorName(target);
+  return `
+    <div class="ai-agent-columns">
+      ${renderAiList("Proposal request", [
+        `${name}: define commercial scope, validity date, and product mix.`,
+        "Include pricing base (GGR/NGR), setup fee, deductions, bonus cap, tax, and withholding.",
+      ])}
+      ${renderAiList("Legal / DD / Integration", [
+        "Legal: legal entity, registration number, address, legal representative, contract status.",
+        "DD: company license, DD contact name/email, risk score, verification ticket.",
+        "Integration: tech owner, Jira ticket, products in scope, weekly integration update.",
+      ])}
+    </div>
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-secondary button-small" data-action="edit-deal" data-id="${escapeAttribute(target.id)}">Open Deal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-proposal-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Proposal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-legal-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Legal</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-dd-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare DD</button>
+      <button type="button" class="button button-secondary button-small" data-action="create-integration-request-from-deal" data-id="${escapeAttribute(target.id)}">Prepare Integration</button>
+    </div>
+  `;
+}
+
+function renderAiOperatorStrategyResponse(deals) {
+  const rows = buildForecastOperatorRows(deals).slice(0, 6);
+  return renderAiList(
+    "Strategy per operator",
+    rows.map((row) => `${row.operator} (${row.market}): move ${row.topStage} forward, protect blockers, and target ${formatCompactCurrency(row.forecastValue || 0)} weighted.`)
+  );
+}
+
+function renderAiMarketStrategyResponse(deals) {
+  const rows = getAiRevenueByMarket(deals).slice(0, 8);
+  return renderAiList(
+    "Strategy per market",
+    rows.map((row) => `${row.label}: prioritize top 3 accounts, reduce SLA risk, and run weekly conversion plan around ${formatCompactCurrency(row.value)} weighted.`)
+  );
+}
+
+function renderAiEventPlannerResponse(deals) {
+  const scoped = deals.slice(0, 5);
+  const list = scoped.length
+    ? scoped.map((deal) => `${getPrimaryOperatorName(deal)} · ${deal.market || "No market"} · objective: move ${getDealVisibleStage(deal)} to next stage.`)
+    : ["No scoped deals available for event planning."];
+  return `
+    ${renderAiList("Event agenda suggestions", list)}
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-primary button-small" data-ai-create-event="true">Create Event</button>
+      <button type="button" class="button button-secondary button-small" data-ai-open-view="events" data-ai-target-selector="#event-table-body">Open Event View</button>
+    </div>
+  `;
+}
+
+async function createAiSuggestedEvent() {
+  const topDeals = getScopedDeals()
+    .filter((deal) => !isInactiveDeal(deal))
+    .slice(0, 5);
+  const date = new Date().toISOString().slice(0, 10);
+  const title = `LATAM Operator Execution Sprint · ${date}`;
+  const existing = (state.events || []).some((event) => cleanText(event.eventName) === title);
+  if (existing) {
+    activateView("events", { targetSelector: "#event-table-body" });
+    setBanner("Event already exists. Opened event view.", "warn");
+    return;
+  }
+
+  const notes = topDeals.length
+    ? topDeals.map((deal, idx) => `${idx + 1}. ${getPrimaryOperatorName(deal)} (${deal.market || "No market"}) · move ${getDealVisibleStage(deal)} forward.`).join("\n")
+    : "No scoped operators found. Add operators and retry.";
+
+  state.events.unshift(
+    normalizeEvent({
+      id: generateId("event"),
+      eventName: title,
+      eventDate: date,
+      location: "TBD",
+      operator: topDeals[0] ? getPrimaryOperatorName(topDeals[0]) : "",
+      objective: "Speed stage movement and remove blockers across prioritized operators.",
+      notes,
+      linkedTask: "Create follow-up tasks from event meetings.",
+      status: "Planned",
+    })
+  );
+  const saved = await persistState();
+  renderAll();
+  activateView("events", { targetSelector: "#event-table-body" });
+  setBanner(saved ? "AI event created and synced." : "AI event created in session only.", saved ? "success" : "warn");
 }
 
 function renderAiMetricCard(label, value, copy, view, targetSelector) {
