@@ -5271,6 +5271,14 @@ function renderAiReportResponse(deals, tasks, alerts, revenue) {
   const blockedDeals = deals.filter((deal) => isBlockedDeal(deal)).length;
   const overSlaDeals = deals.filter((deal) => getStageSlaState(deal).tone === "stuck").length;
   const openTasks = tasks.filter((task) => task.status !== "Done").length;
+  const pipelineByMarket = getAiRevenueByMarket(deals).slice(0, 8);
+  const forecastByMarket = getAiRevenueByMarket(deals).slice(0, 8);
+  const operatorRows = buildForecastOperatorRows(deals).slice(0, 8);
+  const tasksByMarket = buildTaskDistribution(tasks, "market").slice(0, 8);
+  const tasksByOperator = buildTaskDistribution(tasks, "operator").slice(0, 8);
+  const tasksByTarget = buildTaskDistribution(tasks, "target").slice(0, 8);
+  const tasksByCampaign = buildTaskDistribution(tasks, "campaign").slice(0, 8);
+  const campaignProjection = buildCampaignGrowthProjection();
 
   return `
     <div class="ai-agent-report">
@@ -5278,7 +5286,62 @@ function renderAiReportResponse(deals, tasks, alerts, revenue) {
       <p><strong>Execution pressure:</strong> ${escapeHtml(String(overSlaDeals))} deals are over SLA, ${escapeHtml(String(blockedDeals))} deals are blocked, and ${escapeHtml(String(openTasks))} actions remain open.</p>
       <p><strong>Focus:</strong> ${escapeHtml(alerts[0]?.title || "No critical issue is dominating the workspace right now.")}</p>
     </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Forecast by market", forecastByMarket.map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+      ${renderAiList("Pipeline by market", pipelineByMarket.map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList(
+        "Growth strategies by market",
+        forecastByMarket.map((row) => `${row.label}: prioritize top weighted accounts, clear SLA blockers, run weekly conversion review.`)
+      )}
+      ${renderAiList(
+        "Growth strategies by operator",
+        operatorRows.map((row) => `${row.operator} (${row.market}): move ${row.topStage} to next stage, protect blockers, enforce next action + due date.`)
+      )}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Tasks by market", tasksByMarket.map((row) => `${row.label}: ${row.count} open tasks`))}
+      ${renderAiList("Tasks by operator", tasksByOperator.map((row) => `${row.label}: ${row.count} open tasks`))}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Tasks by target", tasksByTarget.map((row) => `${row.label}: ${row.count} open tasks`))}
+      ${renderAiList("Tasks by campaign", tasksByCampaign.map((row) => `${row.label}: ${row.count} open tasks`))}
+    </div>
+    ${renderAiList("Campaign growth projection", campaignProjection)}
   `;
+}
+
+function buildTaskDistribution(tasks, groupBy) {
+  const source = Array.isArray(tasks) ? tasks : [];
+  const groups = new Map();
+  source
+    .filter((task) => cleanText(task.status) !== "Done")
+    .forEach((task) => {
+      let label = "Unassigned";
+      if (groupBy === "market") label = cleanText(task.market) || "No market";
+      if (groupBy === "operator") label = cleanText(task.operator || task.client || task.deal) || "No operator";
+      if (groupBy === "target") label = cleanText(task.targetYear || task.scopeType || "No target");
+      if (groupBy === "campaign") label = cleanText(task.scopeType === "Campaign" ? task.title : task.scopeType) || "No campaign";
+      groups.set(label, (groups.get(label) || 0) + 1);
+    });
+  return Array.from(groups, ([label, count]) => ({ label, count })).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+function buildCampaignGrowthProjection() {
+  const campaigns = Array.isArray(state.campaigns) ? state.campaigns : [];
+  const rows = campaigns
+    .filter((campaign) => !["Cancelled"].includes(cleanText(campaign.status)))
+    .map((campaign) => {
+      const title = cleanText(campaign.title || campaign.type || "Campaign");
+      const market = cleanText(campaign.market) || "No market";
+      const base = Number(campaign.budgetEur || 0);
+      const lift = Number(campaign.forecastLiftEur || 0);
+      const projected = base + lift;
+      return `${title} · ${market}: ${formatCompactCurrency(projected)} projected (${formatCompactCurrency(base)} base + ${formatCompactCurrency(lift)} lift)`;
+    })
+    .slice(0, 10);
+  return rows.length ? rows : ["No campaign growth projection available in current scope."];
 }
 
 function renderAiViewsResponse() {
