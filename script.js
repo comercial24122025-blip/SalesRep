@@ -1997,6 +1997,7 @@ function bindEvents() {
   elements.pipelineSummary.addEventListener("click", handlePipelineSummaryAction);
   elements.targetProgress.addEventListener("click", handleTargetProgressAction);
   elements.pipelineBoard.addEventListener("click", handleDealAction);
+  elements.pipelineStageAccountList?.addEventListener("click", handleDealAction);
   elements.dealTableBody.addEventListener("click", handleDealAction);
   elements.dealWorkflowGuide?.addEventListener("click", handleDealWorkflowGuideAction);
   elements.pipelineOperatingGuide?.addEventListener("click", handleStageFunnelAction);
@@ -7691,7 +7692,15 @@ function renderPipelineStageAccountList(deals) {
           <ul>
             ${stageDeals
               .slice(0, 12)
-              .map((deal) => `<li>${escapeHtml(getPrimaryOperatorName(deal) || deal.client || "Unnamed account")}</li>`)
+              .map(
+                (deal) => `
+                  <li>
+                    <button type="button" class="stage-account-link" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">
+                      ${escapeHtml(getPrimaryOperatorName(deal) || deal.client || "Unnamed account")}
+                    </button>
+                  </li>
+                `
+              )
               .join("")}
           </ul>
         </article>

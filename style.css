@@ -7000,3 +7000,19 @@ button.stage-card {
   font-size: 12px;
   color: var(--ink-muted);
 }
+
+.stage-account-link {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--line);
+  background: #f8fbff;
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.stage-account-link:hover {
+  border-color: var(--brand-300);
+  background: #eef5ff;
+}
