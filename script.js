@@ -6,6 +6,9 @@ const API_RESET_DEMO_URL = resolveApiUrl("/api/reset-demo");
 const API_DOWNLOAD_URL = resolveApiUrl("/api/download");
 const API_UPLOAD_URL = resolveApiUrl("/api/upload");
 const API_EXPORT_DOCX_URL = resolveApiUrl("/api/export-docx");
+const GITHUB_DEFAULT_REPO = "comercial24122025-blip/SalesRep";
+const GITHUB_DEFAULT_BRANCH = "main";
+const GITHUB_DEFAULT_WORKBOOK_PATH = "data/pipeline-command-center.xlsx";
 const STATIC_STATE_URL = resolveAssetUrl("data/published-state.json");
 const STATIC_WORKBOOK_URL = resolveAssetUrl("data/pipeline-command-center.xlsx");
 const DEAL_FORM_AUTOSAVE_DELAY_MS = 60000;
@@ -17639,20 +17642,24 @@ async function uploadExcelWorkbook(file) {
     return;
   }
 
-  if (!serverMeta.ready) {
-    setBanner("Excel upload requires the local/server deployment. The published GitHub app works from the online workspace baseline and needs a workbook backend for persistent updates.", "warn");
-    return;
-  }
-
   const safeName = String(file.name || "uploaded-workbook.xlsx");
   const lowerName = safeName.toLowerCase();
   if (lowerName.endsWith(".xls") && !lowerName.endsWith(".xlsx")) {
     setBanner("This upload requires a modern Excel workbook (.xlsx or .xlsm). Please resave the file and try again.", "danger");
     return;
   }
-  setLoadingState(true, "Importing Excel", `Loading ${safeName} into Cube One and rebuilding the local workbook.`);
+  setLoadingState(true, "Importing Excel", `Uploading ${safeName} to GitHub workspace and refreshing state.`);
 
   try {
+    if (!serverMeta.ready) {
+      await uploadExcelWorkbookToGitHub(file, safeName);
+      await refreshRemoteState({ force: true });
+      renderAll();
+      runPostRefreshDataChecks({ source: "github upload" });
+      setBanner(buildExcelBanner(`Workbook uploaded to GitHub: ${GITHUB_DEFAULT_WORKBOOK_PATH}.`), "success");
+      return;
+    }
+
     const response = await fetch(`${API_UPLOAD_URL}?filename=${encodeURIComponent(safeName)}`, {
       method: "POST",
       headers: {
@@ -17682,6 +17689,55 @@ async function uploadExcelWorkbook(file) {
   } finally {
     setLoadingState(false);
   }
+}
+
+async function uploadExcelWorkbookToGitHub(file, safeName) {
+  const token = window.prompt("GitHub token (repo contents write):");
+  if (!token) {
+    throw new Error("GitHub token is required.");
+  }
+  const ownerRepo = window.prompt("GitHub repo (owner/repo):", GITHUB_DEFAULT_REPO) || GITHUB_DEFAULT_REPO;
+  const branch = window.prompt("GitHub branch:", GITHUB_DEFAULT_BRANCH) || GITHUB_DEFAULT_BRANCH;
+  const path = window.prompt("Workbook path in repo:", GITHUB_DEFAULT_WORKBOOK_PATH) || GITHUB_DEFAULT_WORKBOOK_PATH;
+
+  const existingRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  let sha = "";
+  if (existingRes.ok) {
+    const existing = await existingRes.json();
+    sha = cleanText(existing?.sha);
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  const content = btoa(binary);
+
+  const putRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: `Upload workbook ${safeName}`,
+      content,
+      branch,
+      sha: sha || undefined,
+    }),
+  });
+  if (!putRes.ok) {
+    const payload = await safeReadJson(putRes);
+    throw new Error(payload?.message || `GitHub upload failed (${putRes.status}).`);
+  }
+  serverMeta.storageMode = "static";
+  serverMeta.ready = false;
+  serverMeta.lastUpdatedAt = new Date().toISOString();
 }
 
 function isStrictIsoDate(text) {
