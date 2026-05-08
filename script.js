@@ -882,6 +882,8 @@ const elements = {
   commandMarketBreakdown: document.getElementById("command-market-breakdown"),
   commandOperatorBreakdown: document.getElementById("command-operator-breakdown"),
   commandUpcomingGoLives: document.getElementById("command-upcoming-golives"),
+  commandExecGraphics: document.getElementById("command-exec-graphics"),
+  commandGrowthForecast: document.getElementById("command-growth-forecast"),
   forecastSummary: document.getElementById("forecast-summary"),
   executiveKpiReadout: document.getElementById("executive-kpi-readout"),
   forecastMarkets: document.getElementById("forecast-markets"),
@@ -1269,7 +1271,11 @@ async function init() {
   resetUserForm();
   await hydrateFromExcel();
   const reassignedOwners = backfillMissingDealOwners("Erick Mendez");
+  const liveHandoverUpdates = enforceLiveAccountsHandoverPolicy();
   if (reassignedOwners > 0) {
+    await persistState();
+  }
+  if (liveHandoverUpdates > 0) {
     await persistState();
   }
   renderAll();
@@ -1278,6 +1284,45 @@ async function init() {
   restorePendingTaskDraft();
   startRemoteStateSync();
   setLoadingState(false);
+}
+
+function enforceLiveAccountsHandoverPolicy() {
+  const today = "2026-05-08";
+  const nextFollowUp = "2026-06-08";
+  let updatedDeals = 0;
+
+  const liveDealIds = new Set();
+  state.deals = state.deals.map((deal) => {
+    if (!isLiveAccountStage(deal.stage)) {
+      return deal;
+    }
+    liveDealIds.add(deal.id);
+    updatedDeals += 1;
+    return normalizeDeal({
+      ...deal,
+      stage: "Handover",
+      handover: "Ready",
+      followUpCadence: "Monthly",
+      lastFollowUp: today,
+      nextFollowUpDate: nextFollowUp,
+      actionItems: "No task assigned",
+    });
+  });
+
+  if (liveDealIds.size > 0) {
+    state.tasks = state.tasks.filter((task) => {
+      if (task.status === "Done") return true;
+      if (!task.dealId) return true;
+      return !liveDealIds.has(task.dealId);
+    });
+  }
+
+  if (updatedDeals > 0) {
+    ui.lastLocalMutationAt = Date.now();
+    setBanner(`${updatedDeals} live accounts moved to Handover with monthly follow-up policy.`, "success");
+  }
+
+  return updatedDeals;
 }
 
 function bindEvents() {
@@ -3316,6 +3361,7 @@ function normalizeDeal(input) {
     revenuePotentialEur,
     agreement,
   });
+  const stagePriority = getStageExecutionPriority(stage);
 
   return {
     ...base,
@@ -3352,7 +3398,7 @@ function normalizeDeal(input) {
     productsCurrent: cleanText(input.productsCurrent),
     productsPotential: cleanText(input.productsPotential),
     currentCompetitors: cleanText(input.currentCompetitors),
-    targetPriority: cleanText(input.targetPriority) || base.targetPriority,
+    targetPriority: stagePriority || cleanText(input.targetPriority) || base.targetPriority,
     strategicFit: cleanText(input.strategicFit),
     status: cleanText(input.status),
     integration: cleanText(input.integration),
@@ -3467,6 +3513,15 @@ function normalizeDeal(input) {
     integrationCompletedFlag,
     goLiveFlag,
   };
+}
+
+function getStageExecutionPriority(stage) {
+  const value = cleanText(stage);
+  if (value === "Legal") return "Priority 1";
+  if (value === "DD") return "Priority 2";
+  if (value === "Integration") return "Priority 3";
+  if (value === "Proposal") return "Priority 4";
+  return "";
 }
 
 function normalizeTarget(input) {
@@ -5537,6 +5592,88 @@ function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMa
   renderTimePressurePanel(stageDurationMap);
   renderMarketOperatorBreakdown(activeDeals);
   renderUpcomingGoLives(upcoming);
+  renderExecutionGraphics(activeDeals, taskBuckets, revenue);
+  renderGrowthForecastDashboard(activeDeals);
+}
+
+function renderExecutionGraphics(deals, taskBuckets, revenue) {
+  if (!elements.commandExecGraphics) return;
+  const total = Math.max(deals.length, 1);
+  const liveDeals = deals.filter((deal) => isLiveAccountStage(deal.stage)).length;
+  const oppDeals = deals.filter((deal) => ["Lead", "Proposal", "Legal", "DD", "Integration", "Go Live"].includes(cleanText(deal.stage))).length;
+  const todoCount = taskBuckets.overdue.length + taskBuckets.today.length + taskBuckets.blocked.length;
+  const loadPct = Math.round((todoCount / Math.max(total, 1)) * 100);
+  const growthPct = Math.round((liveDeals / total) * 100);
+  const oppPct = Math.round((oppDeals / total) * 100);
+  const todoPct = Math.min(100, Math.round((todoCount / Math.max(todoCount + taskBuckets.upcoming.length, 1)) * 100));
+
+  const bars = [
+    { label: "Load", value: `${todoCount} actions`, pct: loadPct, tone: "warn", meta: `${taskBuckets.overdue.length} overdue` },
+    { label: "Growth", value: formatCompactCurrency(revenue.weighted), pct: growthPct, tone: "ok", meta: `${liveDeals} live accounts` },
+    { label: "Opportunities", value: `${oppDeals} deals`, pct: oppPct, tone: "info", meta: "active funnel potential" },
+    { label: "To Do", value: `${todoCount} now`, pct: todoPct, tone: "danger", meta: `${taskBuckets.today.length} due today` },
+  ];
+
+  elements.commandExecGraphics.innerHTML = bars
+    .map(
+      (bar) => `
+        <article class="exec-graphic-card ${bar.tone}">
+          <header>
+            <strong>${escapeHtml(bar.label)}</strong>
+            <span>${escapeHtml(bar.value)}</span>
+          </header>
+          <div class="exec-graphic-track"><i style="width:${Math.max(6, bar.pct)}%"></i></div>
+          <small>${escapeHtml(bar.meta)}</small>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderGrowthForecastDashboard(deals) {
+  if (!elements.commandGrowthForecast) return;
+  const candidates = deals
+    .filter((deal) => !isLiveAccountStage(deal.stage))
+    .map((deal) => ({
+      name: getPrimaryOperatorName(deal),
+      market: deal.market || "No market",
+      owner: getDealOwner(deal) || "Unassigned",
+      stage: getDealVisibleStage(deal),
+      weighted: getForecastValue(deal),
+    }))
+    .sort((a, b) => b.weighted - a.weighted)
+    .slice(0, 8);
+
+  if (!candidates.length) {
+    elements.commandGrowthForecast.innerHTML = '<div class="empty-state">No growth opportunities in current scope.</div>';
+    return;
+  }
+
+  const totalWeighted = candidates.reduce((sum, item) => sum + item.weighted, 0);
+  const maxWeighted = Math.max(...candidates.map((item) => item.weighted), 1);
+
+  elements.commandGrowthForecast.innerHTML = `
+    <div class="growth-forecast-kpi">
+      <strong>${escapeHtml(formatCompactCurrency(totalWeighted))}</strong>
+      <span>Top weighted growth opportunity pool</span>
+    </div>
+    <div class="growth-forecast-list">
+      ${candidates
+        .map(
+          (item) => `
+            <article class="growth-forecast-item">
+              <header>
+                <strong>${escapeHtml(item.name)}</strong>
+                <span>${escapeHtml(formatCompactCurrency(item.weighted))}</span>
+              </header>
+              <small>${escapeHtml(`${item.market} · ${item.owner} · ${item.stage}`)}</small>
+              <div class="growth-forecast-track"><i style="width:${Math.max(8, (item.weighted / maxWeighted) * 100)}%"></i></div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function getDealExecutionGaps(deal) {
