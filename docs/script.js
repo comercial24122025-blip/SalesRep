@@ -674,12 +674,29 @@ const CAMPAIGN_CSV_COLUMNS = [
   ["Updated At", "updatedAt"],
 ];
 
+const EVENT_CSV_COLUMNS = [
+  ["Event Name", "eventName"],
+  ["Event Date", "eventDate"],
+  ["Meeting Time", "meetingTime"],
+  ["Operator", "operator"],
+  ["Client", "client"],
+  ["Market", "market"],
+  ["Owner", "owner"],
+  ["Show Description", "showDescription"],
+  ["Objective", "objective"],
+  ["Linked Task ID", "linkedTaskId"],
+  ["Follow-up Notes", "followUpNotes"],
+  ["Created At", "createdAt"],
+  ["Updated At", "updatedAt"],
+];
+
 const appBanner = document.getElementById("app-banner");
 const dealForm = document.getElementById("deal-form");
 const marketIntelForm = document.getElementById("market-intel-form");
 const targetForm = document.getElementById("target-form");
 const taskForm = document.getElementById("task-form");
 const campaignForm = document.getElementById("campaign-form");
+const eventForm = document.getElementById("event-form");
 const workspaceForm = document.getElementById("workspace-form");
 const userForm = document.getElementById("user-form");
 const DEAL_FORM_SECTION_FIELD_MAP = buildDealFormSectionFieldMap();
@@ -696,6 +713,7 @@ const VIEW_SCROLL_TARGETS = {
   requests: "#requests-board",
   targets: "#target-progress",
   campaigns: "#campaign-board",
+  events: "#event-table-body",
   catalogue: "#kpi-grid",
 };
 const VIEW_PAGE_MAP = {
@@ -704,6 +722,7 @@ const VIEW_PAGE_MAP = {
   pipeline: "pipeline.html",
   requests: "requests.html",
   campaigns: "accounts.html",
+  events: "events.html",
   targets: "forecast.html",
   admin: "admin.html",
   crm: "market-intel.html",
@@ -716,6 +735,7 @@ const LEGACY_ROUTE_VIEW_MAP = {
   pipeline: "pipeline",
   requests: "requests",
   accounts: "campaigns",
+  events: "events",
   forecast: "targets",
   admin: "admin",
   "market-intel": "crm",
@@ -727,6 +747,7 @@ const PAGE_SCOPE_CONFIG = {
   "pipeline.html": { view: "pipeline", scope: "pipeline" },
   "requests.html": { view: "requests", scope: "requests" },
   "accounts.html": { view: "campaigns", scope: "accounts" },
+  "events.html": { view: "events", scope: "events" },
   "forecast.html": { view: "targets", scope: "forecast" },
   "admin.html": { view: "admin", scope: "admin" },
   "market-intel.html": { view: "crm", scope: "market-intel" },
@@ -778,6 +799,14 @@ const VIEW_CONTEXT_META = {
     actionLabel: "View Live Accounts",
     actionView: "campaigns",
     actionTargetSelector: "#campaign-board",
+  },
+  events: {
+    kicker: "Events",
+    title: "Networking meetings and agenda",
+    copy: "Plan event agenda, schedule operator meetings, align objectives, and sync follow-up actions with tasks.",
+    actionLabel: "Open Networking Agenda",
+    actionView: "events",
+    actionTargetSelector: "#event-table-body",
   },
   targets: {
     kicker: "Forecast",
@@ -882,6 +911,8 @@ const elements = {
   commandMarketBreakdown: document.getElementById("command-market-breakdown"),
   commandOperatorBreakdown: document.getElementById("command-operator-breakdown"),
   commandUpcomingGoLives: document.getElementById("command-upcoming-golives"),
+  commandExecGraphics: document.getElementById("command-exec-graphics"),
+  commandGrowthForecast: document.getElementById("command-growth-forecast"),
   forecastSummary: document.getElementById("forecast-summary"),
   executiveKpiReadout: document.getElementById("executive-kpi-readout"),
   forecastMarkets: document.getElementById("forecast-markets"),
@@ -969,6 +1000,10 @@ const elements = {
   campaignLiveCount: document.getElementById("campaign-live-count"),
   campaignBoard: document.getElementById("campaign-board"),
   campaignTableBody: document.getElementById("campaign-table-body"),
+  eventFormTitle: document.getElementById("event-form-title"),
+  eventSummaryChip: document.getElementById("event-summary-chip"),
+  eventSubmitButton: document.getElementById("event-submit-button"),
+  eventTableBody: document.getElementById("event-table-body"),
   workspaceFormTitle: document.getElementById("workspace-form-title"),
   workspaceSubmitButton: document.getElementById("workspace-submit-button"),
   adminLicenseSummary: document.getElementById("admin-license-summary"),
@@ -1002,6 +1037,7 @@ const ui = {
   editingTargetId: null,
   editingTaskId: null,
   editingCampaignId: null,
+  editingEventId: null,
   editingUserId: null,
   activeUserId: "",
   requestsFocus: "all",
@@ -1071,6 +1107,7 @@ let state = {
   kpis: KPI_CATALOGUE,
   tasks: [],
   campaigns: [],
+  events: [],
   users: [],
   workspace: {},
   history: [],
@@ -1265,11 +1302,16 @@ async function init() {
   resetTargetForm();
   resetTaskForm();
   resetCampaignForm();
+  resetEventForm();
   resetWorkspaceForm();
   resetUserForm();
   await hydrateFromExcel();
   const reassignedOwners = backfillMissingDealOwners("Erick Mendez");
+  const liveHandoverUpdates = enforceLiveAccountsHandoverPolicy();
   if (reassignedOwners > 0) {
+    await persistState();
+  }
+  if (liveHandoverUpdates > 0) {
     await persistState();
   }
   renderAll();
@@ -1278,6 +1320,45 @@ async function init() {
   restorePendingTaskDraft();
   startRemoteStateSync();
   setLoadingState(false);
+}
+
+function enforceLiveAccountsHandoverPolicy() {
+  const today = "2026-05-08";
+  const nextFollowUp = "2026-06-08";
+  let updatedDeals = 0;
+
+  const liveDealIds = new Set();
+  state.deals = state.deals.map((deal) => {
+    if (!isLiveAccountStage(deal.stage)) {
+      return deal;
+    }
+    liveDealIds.add(deal.id);
+    updatedDeals += 1;
+    return normalizeDeal({
+      ...deal,
+      stage: "Handover",
+      handover: "Ready",
+      followUpCadence: "Monthly",
+      lastFollowUp: today,
+      nextFollowUpDate: nextFollowUp,
+      actionItems: "No task assigned",
+    });
+  });
+
+  if (liveDealIds.size > 0) {
+    state.tasks = state.tasks.filter((task) => {
+      if (task.status === "Done") return true;
+      if (!task.dealId) return true;
+      return !liveDealIds.has(task.dealId);
+    });
+  }
+
+  if (updatedDeals > 0) {
+    ui.lastLocalMutationAt = Date.now();
+    setBanner(`${updatedDeals} live accounts moved to Handover with monthly follow-up policy.`, "success");
+  }
+
+  return updatedDeals;
 }
 
 function bindEvents() {
@@ -1667,10 +1748,15 @@ function bindEvents() {
   });
 
   campaignForm.addEventListener("submit", handleCampaignSubmit);
+  eventForm?.addEventListener("submit", handleEventSubmit);
   document.getElementById("campaign-cancel-button").addEventListener("click", () => {
     ui.editingCampaignId = null;
     resetCampaignForm();
     setBanner("Campaign form cleared.", "default");
+  });
+  document.getElementById("event-cancel-button")?.addEventListener("click", () => {
+    resetEventForm();
+    setBanner("Event meeting form cleared.", "default");
   });
 
   workspaceForm.addEventListener("submit", handleWorkspaceSubmit);
@@ -1929,6 +2015,7 @@ function bindEvents() {
   elements.taskTableBody.addEventListener("click", handleTaskAction);
   elements.campaignBoard.addEventListener("click", handleCampaignAction);
   elements.campaignTableBody.addEventListener("click", handleCampaignAction);
+  elements.eventTableBody?.addEventListener("click", handleEventAction);
   elements.userBoard.addEventListener("click", handleUserAction);
   elements.userTableBody.addEventListener("click", handleUserAction);
   elements.openNewDealModalButton?.addEventListener("click", () => {
@@ -1986,6 +2073,13 @@ function bindEvents() {
     const filename = buildExportFilename("operator-campaigns", "csv");
     downloadCsv(filename, rows, CAMPAIGN_CSV_COLUMNS);
     setBanner(`Campaign CSV exported (${rows.length} records).`, "success");
+  });
+
+  document.getElementById("export-events-csv")?.addEventListener("click", () => {
+    const rows = Array.isArray(state.events) ? state.events : [];
+    const filename = buildExportFilename("networking-show-agenda", "csv");
+    downloadCsv(filename, rows, EVENT_CSV_COLUMNS);
+    setBanner(`Events CSV exported (${rows.length} meetings).`, "success");
   });
 
   elements.runQaSmokeButton?.addEventListener("click", () => {
@@ -3316,6 +3410,7 @@ function normalizeDeal(input) {
     revenuePotentialEur,
     agreement,
   });
+  const stagePriority = getStageExecutionPriority(stage);
 
   return {
     ...base,
@@ -3352,7 +3447,7 @@ function normalizeDeal(input) {
     productsCurrent: cleanText(input.productsCurrent),
     productsPotential: cleanText(input.productsPotential),
     currentCompetitors: cleanText(input.currentCompetitors),
-    targetPriority: cleanText(input.targetPriority) || base.targetPriority,
+    targetPriority: stagePriority || cleanText(input.targetPriority) || base.targetPriority,
     strategicFit: cleanText(input.strategicFit),
     status: cleanText(input.status),
     integration: cleanText(input.integration),
@@ -3467,6 +3562,15 @@ function normalizeDeal(input) {
     integrationCompletedFlag,
     goLiveFlag,
   };
+}
+
+function getStageExecutionPriority(stage) {
+  const value = cleanText(stage);
+  if (value === "Legal") return "Priority 1";
+  if (value === "DD") return "Priority 2";
+  if (value === "Integration") return "Priority 3";
+  if (value === "Proposal") return "Priority 4";
+  return "";
 }
 
 function normalizeTarget(input) {
@@ -3986,9 +4090,150 @@ function renderAll() {
   renderTargets();
   renderTasks();
   renderCampaigns();
+  renderEvents();
   renderAdminView();
   renderKpiCatalogue();
   renderCompanyProfileDrawer();
+}
+
+function createEmptyEvent() {
+  return {
+    id: generateId("event"),
+    eventName: "",
+    eventDate: "",
+    operator: "",
+    market: "",
+    meetingTime: "",
+    owner: getActiveUser()?.fullName || "",
+    showDescription: "",
+    objective: "",
+    client: "",
+    linkedTaskId: "",
+    followUpNotes: "",
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+function normalizeEvent(input = {}) {
+  return {
+    ...createEmptyEvent(),
+    ...input,
+    id: String(input.id || generateId("event")),
+    eventName: cleanText(input.eventName),
+    eventDate: normalizeDateInput(input.eventDate),
+    operator: cleanText(input.operator),
+    market: cleanText(input.market),
+    meetingTime: cleanText(input.meetingTime),
+    owner: cleanText(input.owner),
+    showDescription: cleanText(input.showDescription),
+    objective: cleanText(input.objective),
+    client: cleanText(input.client),
+    linkedTaskId: cleanText(input.linkedTaskId),
+    followUpNotes: cleanText(input.followUpNotes),
+    createdAt: input.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function fillEventForm(eventItem) {
+  if (!eventForm) return;
+  ["eventName", "eventDate", "operator", "market", "meetingTime", "owner", "showDescription", "objective", "client", "linkedTaskId", "followUpNotes"].forEach((field) => {
+    if (eventForm.elements[field]) eventForm.elements[field].value = eventItem[field] || "";
+  });
+  ui.editingEventId = eventItem.id || null;
+  elements.eventFormTitle.textContent = ui.editingEventId ? `Edit Event Meeting: ${eventItem.eventName || "Draft"}` : "New Event Meeting";
+  elements.eventSubmitButton.textContent = ui.editingEventId ? "Update Meeting" : "Save Meeting";
+}
+
+function resetEventForm() {
+  ui.editingEventId = null;
+  fillEventForm(createEmptyEvent());
+}
+
+async function handleEventSubmit(event) {
+  event.preventDefault();
+  if (!eventForm) return;
+  const formData = new FormData(eventForm);
+  const draft = normalizeEvent({
+    id: ui.editingEventId || generateId("event"),
+    eventName: formData.get("eventName"),
+    eventDate: formData.get("eventDate"),
+    operator: formData.get("operator"),
+    market: formData.get("market"),
+    meetingTime: formData.get("meetingTime"),
+    owner: formData.get("owner"),
+    showDescription: formData.get("showDescription"),
+    objective: formData.get("objective"),
+    client: formData.get("client"),
+    linkedTaskId: formData.get("linkedTaskId"),
+    followUpNotes: formData.get("followUpNotes"),
+  });
+
+  const isEditing = Boolean(ui.editingEventId);
+  state.events = isEditing ? state.events.map((item) => (item.id === draft.id ? draft : item)) : [draft, ...(state.events || [])];
+  if (draft.linkedTaskId) {
+    state.tasks = state.tasks.map((task) =>
+      task.id === draft.linkedTaskId
+        ? normalizeTask({
+            ...task,
+            notes: [task.notes, `Event ${draft.eventName}: ${draft.objective}`].filter(Boolean).join(" · "),
+            nextStep: cleanText(task.nextStep) || cleanText(draft.followUpNotes) || cleanText(draft.objective),
+          })
+        : task
+    );
+  }
+  const saved = await persistState();
+  renderAll();
+  resetEventForm();
+  setBanner(buildExcelBanner(saved ? `Networking meeting ${isEditing ? "updated" : "saved"}.` : "Networking meeting saved in memory only."), saved ? "success" : "warn");
+}
+
+async function handleEventAction(event) {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  const id = button.dataset.id;
+  const item = (state.events || []).find((row) => row.id === id);
+  if (!item) return;
+  if (button.dataset.action === "edit-event") {
+    fillEventForm(item);
+    return;
+  }
+  if (button.dataset.action === "delete-event") {
+    state.events = (state.events || []).filter((row) => row.id !== id);
+    const saved = await persistState();
+    renderAll();
+    setBanner(buildExcelBanner(saved ? "Networking meeting deleted." : "Networking meeting deleted in memory only."), saved ? "warn" : "danger");
+  }
+}
+
+function renderEvents() {
+  const events = Array.isArray(state.events) ? state.events : [];
+  if (elements.eventSummaryChip) {
+    elements.eventSummaryChip.textContent = `${events.length} meetings`;
+  }
+  if (!elements.eventTableBody) return;
+  if (!events.length) {
+    elements.eventTableBody.innerHTML = `<tr><td colspan="8"><div class="empty-state">No networking meetings yet.</div></td></tr>`;
+    return;
+  }
+  elements.eventTableBody.innerHTML = [...events]
+    .sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || "")))
+    .map(
+      (item) => `
+      <tr>
+        <td>${formatDate(item.eventDate)} ${escapeHtml(item.meetingTime || "")}</td>
+        <td>${escapeHtml(item.eventName || "N/A")}</td>
+        <td>${escapeHtml(item.operator || item.client || "N/A")}</td>
+        <td>${escapeHtml(item.market || "N/A")}</td>
+        <td>${escapeHtml(item.objective || "N/A")}</td>
+        <td>${escapeHtml(item.linkedTaskId || "N/A")}</td>
+        <td>${escapeHtml(item.owner || "N/A")}</td>
+        <td><div class="row-actions"><button class="icon-button" data-action="edit-event" data-id="${escapeAttribute(item.id)}">Edit</button><button class="icon-button danger" data-action="delete-event" data-id="${escapeAttribute(item.id)}">Delete</button></div></td>
+      </tr>
+    `
+    )
+    .join("");
 }
 
 function queueDealFieldHighlights(options = {}) {
@@ -4525,6 +4770,7 @@ function renderAiAgentPanel() {
 
 function handleAiAgentPrompt(mode = "summary") {
   ui.aiAgentMode = cleanText(mode) || "summary";
+  applyAiScopeSync(elements.aiAgentQuery?.value || "");
   renderAiAgentPanel();
   elements.aiAgentOutput?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
@@ -4533,9 +4779,11 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   const queryText = cleanText(query);
   const baseDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
   const baseTasks = getScopedTasks();
-  const queriedDeals = filterAiDealsByQuery(baseDeals, queryText);
+  const aiScope = resolveAiScope(baseDeals, queryText);
+  const scopedBaseDeals = aiScope.deals.length ? aiScope.deals : baseDeals;
+  const queriedDeals = filterAiDealsByQuery(scopedBaseDeals, queryText);
   const queriedTasks = filterAiTasksByQuery(baseTasks, queryText);
-  const scopedDeals = queryText && queriedDeals.length ? queriedDeals : baseDeals;
+  const scopedDeals = queryText && queriedDeals.length ? queriedDeals : scopedBaseDeals;
   const scopedTasks = queryText && queriedTasks.length ? queriedTasks : baseTasks;
   const myTasks = getMyActionTasks(scopedTasks, getActiveUser());
   const buckets = getActionBuckets(myTasks);
@@ -4547,7 +4795,7 @@ function buildAiAgentResponse(mode = "summary", query = "") {
     <div class="ai-agent-output-head">
       <div>
         <strong>${escapeHtml(getAiAgentTitle(normalizedMode))}</strong>
-        <span>${escapeHtml(queryText || "Workspace-wide execution readout")}</span>
+        <span>${escapeHtml(aiScope.label || queryText || "Workspace-wide execution readout")}</span>
       </div>
       <small>${escapeHtml(formatStatusBarTimestamp(serverMeta.lastUpdatedAt || ui.lastPersistAt))}</small>
     </div>
@@ -4571,8 +4819,56 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "growth") {
     return `${header}${renderAiGrowthResponse(scopedDeals, scopedTasks, revenue)}`;
   }
+  if (normalizedMode === "market-tasks") {
+    return `${header}${renderAiMarketTasksResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "risk-by-client") {
+    return `${header}${renderAiRiskByClientResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "forecast-latam") {
+    return `${header}${renderAiLatamForecastResponse(scopedDeals)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
+}
+
+function resolveAiScope(deals, queryText) {
+  const query = cleanText(queryText).toLowerCase();
+  if (!query) {
+    return { deals, label: "Workspace-wide execution readout" };
+  }
+  const markets = uniqueValues(deals.map((deal) => deal.market).filter(Boolean));
+  const matchedMarket = markets.find((market) => query.includes(cleanText(market).toLowerCase()));
+  if (matchedMarket) {
+    return {
+      deals: deals.filter((deal) => cleanText(deal.market) === cleanText(matchedMarket)),
+      label: `Market summary · ${matchedMarket}`,
+    };
+  }
+  const operators = uniqueValues(deals.map((deal) => getPrimaryOperatorName(deal)).filter(Boolean));
+  const matchedOperator = operators.find((operator) => query.includes(cleanText(operator).toLowerCase()));
+  if (matchedOperator) {
+    return {
+      deals: deals.filter((deal) => cleanText(getPrimaryOperatorName(deal)) === cleanText(matchedOperator)),
+      label: `Operator summary · ${matchedOperator}`,
+    };
+  }
+  return { deals, label: "All markets summary" };
+}
+
+function applyAiScopeSync(queryText) {
+  const scopedDeals = getScopedDeals().filter((deal) => !isInactiveDeal(deal));
+  const scope = resolveAiScope(scopedDeals, queryText);
+  if (scope.label.startsWith("Market summary")) {
+    const market = scope.label.split("·")[1]?.trim();
+    if (market) {
+      ui.filters.market = market;
+      if (elements.filterMarket) {
+        elements.filterMarket.value = market;
+      }
+      renderAll();
+    }
+  }
 }
 
 function getAiAgentTitle(mode) {
@@ -4583,6 +4879,9 @@ function getAiAgentTitle(mode) {
     tracking: "Execution tracking",
     strategy: "Business strategy",
     growth: "Account growth plan",
+    "market-tasks": "Market tasks to hit target",
+    "risk-by-client": "Client process risks",
+    "forecast-latam": "LATAM forecast",
     summary: "Daily summary",
   };
   return titles[mode] || titles.summary;
@@ -4782,6 +5081,13 @@ function renderAiSummaryResponse(deals, buckets, alerts, revenue) {
       <strong>Recommended next move</strong>
       <p>${escapeHtml(topAlert ? `${topAlert.title}: ${topAlert.detail}` : "No critical blockers detected. Work the due-today queue and keep stage movement current.")}</p>
     </div>
+    <div class="ai-agent-view-grid">
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#commercial-funnel-shell"><strong>Commercial funnel</strong><span>Open and sync by current AI scope</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-board"><strong>Pipeline Kanban</strong><span>Move deals and clear blockers</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-stage-guide-shell"><strong>Stage Operating Guide</strong><span>Validate gate requirements</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="pipeline" data-ai-target-selector="#pipeline-table-shell"><strong>Pipeline</strong><span>Review full sheet and status</span></button>
+      <button type="button" class="ai-view-card" data-ai-open-view="tasks" data-ai-target-selector="#task-board"><strong>Tasks · Fix today</strong><span>Execute overdue and due-today actions</span></button>
+    </div>
   `;
 }
 
@@ -4852,6 +5158,63 @@ function renderAiTrackingResponse(deals, buckets, alerts) {
       ${renderAiMetricCard("Due today", `${buckets.today.length}`, "Actions to finish today", "tasks", "#task-board")}
     </div>
     ${renderAiList("Top execution signals", alerts.slice(0, 5).map((alert) => `${alert.title}: ${alert.detail}`))}
+  `;
+}
+
+function renderAiMarketTasksResponse(deals) {
+  const byMarket = getAiRevenueByMarket(deals).slice(0, 6);
+  const actions = byMarket.map((row) => {
+    const marketDeals = deals.filter((deal) => cleanText(deal.market) === cleanText(row.label));
+    const overdue = marketDeals.filter((deal) => {
+      const sla = getStageSlaState(deal);
+      return sla.tone === "stuck" || sla.tone === "at-risk";
+    }).length;
+    return `${row.label}: prioritize ${formatCompactCurrency(row.value)} weighted · clear ${overdue} SLA risks · push top 3 deals to next stage this week.`;
+  });
+  return `
+    ${renderAiList("Tasks per market to reach target", actions)}
+    <div class="ai-agent-actions-inline">
+      <button type="button" class="button button-primary button-small" data-ai-growth-tasks="true">Push growth tasks to My Actions</button>
+    </div>
+  `;
+}
+
+function renderAiRiskByClientResponse(deals) {
+  const items = deals
+    .map((deal) => {
+      const sla = getStageSlaState(deal);
+      const blocked = isBlockedDeal(deal);
+      const risk = sla.tone === "stuck" ? "High" : sla.tone === "at-risk" || blocked ? "Medium" : "Low";
+      return {
+        client: getPrimaryOperatorName(deal),
+        stage: getDealVisibleStage(deal),
+        risk,
+        note: getDealNextAction(deal),
+      };
+    })
+    .sort((a, b) => (a.risk === b.risk ? 0 : a.risk === "High" ? -1 : b.risk === "High" ? 1 : a.risk === "Medium" ? -1 : 1))
+    .slice(0, 12)
+    .map((item) => `${item.client} · ${item.stage} · Risk ${item.risk} · Next: ${item.note}`);
+  return renderAiList("Risk in process by client", items);
+}
+
+function renderAiLatamForecastResponse(deals) {
+  const marketRows = getAiRevenueByMarket(deals);
+  const operatorRows = buildForecastOperatorRows(deals).slice(0, 10);
+  const latamTotal = marketRows.reduce((sum, row) => sum + row.value, 0);
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("LATAM total weighted", formatCompactCurrency(latamTotal), "All LATAM markets in current scope", "targets", "#target-progress")}
+      ${renderAiMetricCard("Countries covered", String(marketRows.length), "Forecast by country available below", "targets", "#target-progress")}
+      ${renderAiMetricCard("Operators tracked", String(operatorRows.length), "Top weighted operators shown", "pipeline", "#pipeline-board")}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Forecast per country", marketRows.slice(0, 12).map((row) => `${row.label}: ${formatCompactCurrency(row.value)}`))}
+      ${renderAiList(
+        "Forecast per operator",
+        operatorRows.map((row) => `${row.operator || "No operator"} · ${row.market || "No market"}: ${formatCompactCurrency(row.forecastValue || row.weightedCount || 0)}`)
+      )}
+    </div>
   `;
 }
 
@@ -5419,6 +5782,88 @@ function renderCommandCenter(deals, tasks = [], stageStats = [], stageDurationMa
   renderTimePressurePanel(stageDurationMap);
   renderMarketOperatorBreakdown(activeDeals);
   renderUpcomingGoLives(upcoming);
+  renderExecutionGraphics(activeDeals, taskBuckets, revenue);
+  renderGrowthForecastDashboard(activeDeals);
+}
+
+function renderExecutionGraphics(deals, taskBuckets, revenue) {
+  if (!elements.commandExecGraphics) return;
+  const total = Math.max(deals.length, 1);
+  const liveDeals = deals.filter((deal) => isLiveAccountStage(deal.stage)).length;
+  const oppDeals = deals.filter((deal) => ["Lead", "Proposal", "Legal", "DD", "Integration", "Go Live"].includes(cleanText(deal.stage))).length;
+  const todoCount = taskBuckets.overdue.length + taskBuckets.today.length + taskBuckets.blocked.length;
+  const loadPct = Math.round((todoCount / Math.max(total, 1)) * 100);
+  const growthPct = Math.round((liveDeals / total) * 100);
+  const oppPct = Math.round((oppDeals / total) * 100);
+  const todoPct = Math.min(100, Math.round((todoCount / Math.max(todoCount + taskBuckets.upcoming.length, 1)) * 100));
+
+  const bars = [
+    { label: "Load", value: `${todoCount} actions`, pct: loadPct, tone: "warn", meta: `${taskBuckets.overdue.length} overdue` },
+    { label: "Growth", value: formatCompactCurrency(revenue.weighted), pct: growthPct, tone: "ok", meta: `${liveDeals} live accounts` },
+    { label: "Opportunities", value: `${oppDeals} deals`, pct: oppPct, tone: "info", meta: "active funnel potential" },
+    { label: "To Do", value: `${todoCount} now`, pct: todoPct, tone: "danger", meta: `${taskBuckets.today.length} due today` },
+  ];
+
+  elements.commandExecGraphics.innerHTML = bars
+    .map(
+      (bar) => `
+        <article class="exec-graphic-card ${bar.tone}">
+          <header>
+            <strong>${escapeHtml(bar.label)}</strong>
+            <span>${escapeHtml(bar.value)}</span>
+          </header>
+          <div class="exec-graphic-track"><i style="width:${Math.max(6, bar.pct)}%"></i></div>
+          <small>${escapeHtml(bar.meta)}</small>
+        </article>
+      `
+    )
+    .join("");
+}
+
+function renderGrowthForecastDashboard(deals) {
+  if (!elements.commandGrowthForecast) return;
+  const candidates = deals
+    .filter((deal) => !isLiveAccountStage(deal.stage))
+    .map((deal) => ({
+      name: getPrimaryOperatorName(deal),
+      market: deal.market || "No market",
+      owner: getDealOwner(deal) || "Unassigned",
+      stage: getDealVisibleStage(deal),
+      weighted: getForecastValue(deal),
+    }))
+    .sort((a, b) => b.weighted - a.weighted)
+    .slice(0, 8);
+
+  if (!candidates.length) {
+    elements.commandGrowthForecast.innerHTML = '<div class="empty-state">No growth opportunities in current scope.</div>';
+    return;
+  }
+
+  const totalWeighted = candidates.reduce((sum, item) => sum + item.weighted, 0);
+  const maxWeighted = Math.max(...candidates.map((item) => item.weighted), 1);
+
+  elements.commandGrowthForecast.innerHTML = `
+    <div class="growth-forecast-kpi">
+      <strong>${escapeHtml(formatCompactCurrency(totalWeighted))}</strong>
+      <span>Top weighted growth opportunity pool</span>
+    </div>
+    <div class="growth-forecast-list">
+      ${candidates
+        .map(
+          (item) => `
+            <article class="growth-forecast-item">
+              <header>
+                <strong>${escapeHtml(item.name)}</strong>
+                <span>${escapeHtml(formatCompactCurrency(item.weighted))}</span>
+              </header>
+              <small>${escapeHtml(`${item.market} · ${item.owner} · ${item.stage}`)}</small>
+              <div class="growth-forecast-track"><i style="width:${Math.max(8, (item.weighted / maxWeighted) * 100)}%"></i></div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
 }
 
 function getDealExecutionGaps(deal) {

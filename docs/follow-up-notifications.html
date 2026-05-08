@@ -183,6 +183,7 @@
               <button class="view-tab view-tab-primary" data-view-trigger="pipeline">Pipeline</button>
               <button class="view-tab view-tab-primary" data-view-trigger="requests">Requests</button>
               <button class="view-tab view-tab-primary" data-view-trigger="campaigns">Accounts</button>
+              <button class="view-tab view-tab-primary" data-view-trigger="events">Events</button>
               <button class="view-tab view-tab-primary" data-view-trigger="targets">Forecast</button>
               <button class="view-tab view-tab-primary" data-view-trigger="admin">Admin</button>
             </nav>
@@ -253,6 +254,9 @@
             <button type="button" class="button button-primary button-small" data-ai-agent-prompt="tracking">Execution tracking</button>
             <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="strategy">Strategy</button>
             <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="growth">Growth plan</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="market-tasks">Market tasks</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="risk-by-client">Risk by client</button>
+            <button type="button" class="button button-secondary button-small" data-ai-agent-prompt="forecast-latam">LATAM forecast</button>
           </div>
         </div>
         <div id="ai-agent-output" class="ai-agent-output" aria-live="polite"></div>
@@ -375,6 +379,20 @@
                     <span class="chip">Next 60 days</span>
                   </div>
                   <div id="command-upcoming-golives" class="command-go-live-list"></div>
+                </section>
+                <section class="command-block command-block-wide">
+                  <div class="subpanel-head">
+                    <h3>Execution Graphics</h3>
+                    <span class="chip">Load · Growth · Opportunities · To Do</span>
+                  </div>
+                  <div id="command-exec-graphics" class="command-exec-graphics"></div>
+                </section>
+                <section class="command-block command-block-wide">
+                  <div class="subpanel-head">
+                    <h3>Forecast Growth Opportunities</h3>
+                    <span class="chip">Weighted forecast · expansion candidates</span>
+                  </div>
+                  <div id="command-growth-forecast" class="command-growth-forecast"></div>
                 </section>
               </div>
             </section>
@@ -2378,6 +2396,60 @@
                     </tr>
                   </thead>
                   <tbody id="campaign-table-body"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" data-view="events">
+          <div class="workspace">
+            <section class="panel form-panel sticky-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Networking execution</p>
+                  <h2 id="event-form-title">New Event Meeting</h2>
+                </div>
+                <span id="event-summary-chip" class="chip">0 meetings</span>
+              </div>
+              <form id="event-form" class="entity-form">
+                <div class="form-grid form-grid-2">
+                  <label>Event / Show<input name="eventName" type="text" placeholder="SBC Summit LATAM" required /></label>
+                  <label>Date<input name="eventDate" type="date" required /></label>
+                  <label>Operator<input name="operator" type="text" placeholder="Operator / client name" /></label>
+                  <label>Market<input name="market" type="text" placeholder="Peru, Mexico..." /></label>
+                  <label>Meeting Time<input name="meetingTime" type="time" /></label>
+                  <label>Owner<input name="owner" type="text" placeholder="Meeting owner" /></label>
+                  <label class="full-span">Show Description<textarea name="showDescription" rows="2" placeholder="Main context, theme, audience, strategic context"></textarea></label>
+                  <label class="full-span">Meeting Objective<textarea name="objective" rows="2" placeholder="Commercial objective and expected outcome"></textarea></label>
+                  <label>Linked Client<input name="client" type="text" placeholder="Client account" /></label>
+                  <label>Linked Task ID<input name="linkedTaskId" type="text" placeholder="Task ID to sync follow-up" /></label>
+                  <label class="full-span">Follow-up Notes<textarea name="followUpNotes" rows="3" placeholder="Post-meeting commitments, blockers, next actions"></textarea></label>
+                </div>
+                <div class="form-actions">
+                  <button type="submit" id="event-submit-button" class="button button-primary">Save Meeting</button>
+                  <button type="button" id="event-cancel-button" class="button button-ghost">Clear</button>
+                </div>
+              </form>
+            </section>
+            <section class="panel content-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="panel-kicker">Agenda board</p>
+                  <h2>Networking Agenda</h2>
+                </div>
+                <div class="head-actions">
+                  <button id="export-events-csv" class="button button-ghost button-small">Export CSV</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th><th>Event</th><th>Operator</th><th>Market</th><th>Objective</th><th>Task</th><th>Owner</th><th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="event-table-body"></tbody>
                 </table>
               </div>
             </section>

@@ -5540,6 +5540,97 @@ button.stage-card {
   gap: 10px;
 }
 
+.command-exec-graphics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.exec-graphic-card {
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  display: grid;
+  gap: 8px;
+}
+
+.exec-graphic-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.exec-graphic-track {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.2);
+  overflow: hidden;
+}
+
+.exec-graphic-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #06b6d4);
+}
+
+.exec-graphic-card.ok .exec-graphic-track i { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.exec-graphic-card.warn .exec-graphic-track i { background: linear-gradient(90deg, #d97706, #f59e0b); }
+.exec-graphic-card.danger .exec-graphic-track i { background: linear-gradient(90deg, #dc2626, #ef4444); }
+
+.command-growth-forecast {
+  display: grid;
+  gap: 10px;
+}
+
+.growth-forecast-kpi {
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  background: rgba(239, 246, 255, 0.7);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.growth-forecast-kpi strong {
+  font-size: 1.3rem;
+}
+
+.growth-forecast-list {
+  display: grid;
+  gap: 8px;
+}
+
+.growth-forecast-item {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 10px;
+  padding: 9px;
+  background: #fff;
+  display: grid;
+  gap: 6px;
+}
+
+.growth-forecast-item header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.growth-forecast-track {
+  height: 7px;
+  background: rgba(148, 163, 184, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.growth-forecast-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+}
+
 .dashboard-signals-panel .signal-grid,
 .dashboard-risk-panel .risk-list {
   gap: 12px;
