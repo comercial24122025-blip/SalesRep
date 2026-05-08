@@ -674,12 +674,29 @@ const CAMPAIGN_CSV_COLUMNS = [
   ["Updated At", "updatedAt"],
 ];
 
+const EVENT_CSV_COLUMNS = [
+  ["Event Name", "eventName"],
+  ["Event Date", "eventDate"],
+  ["Meeting Time", "meetingTime"],
+  ["Operator", "operator"],
+  ["Client", "client"],
+  ["Market", "market"],
+  ["Owner", "owner"],
+  ["Show Description", "showDescription"],
+  ["Objective", "objective"],
+  ["Linked Task ID", "linkedTaskId"],
+  ["Follow-up Notes", "followUpNotes"],
+  ["Created At", "createdAt"],
+  ["Updated At", "updatedAt"],
+];
+
 const appBanner = document.getElementById("app-banner");
 const dealForm = document.getElementById("deal-form");
 const marketIntelForm = document.getElementById("market-intel-form");
 const targetForm = document.getElementById("target-form");
 const taskForm = document.getElementById("task-form");
 const campaignForm = document.getElementById("campaign-form");
+const eventForm = document.getElementById("event-form");
 const workspaceForm = document.getElementById("workspace-form");
 const userForm = document.getElementById("user-form");
 const DEAL_FORM_SECTION_FIELD_MAP = buildDealFormSectionFieldMap();
@@ -696,6 +713,7 @@ const VIEW_SCROLL_TARGETS = {
   requests: "#requests-board",
   targets: "#target-progress",
   campaigns: "#campaign-board",
+  events: "#event-table-body",
   catalogue: "#kpi-grid",
 };
 const VIEW_PAGE_MAP = {
@@ -704,6 +722,7 @@ const VIEW_PAGE_MAP = {
   pipeline: "pipeline.html",
   requests: "requests.html",
   campaigns: "accounts.html",
+  events: "events.html",
   targets: "forecast.html",
   admin: "admin.html",
   crm: "market-intel.html",
@@ -716,6 +735,7 @@ const LEGACY_ROUTE_VIEW_MAP = {
   pipeline: "pipeline",
   requests: "requests",
   accounts: "campaigns",
+  events: "events",
   forecast: "targets",
   admin: "admin",
   "market-intel": "crm",
@@ -727,6 +747,7 @@ const PAGE_SCOPE_CONFIG = {
   "pipeline.html": { view: "pipeline", scope: "pipeline" },
   "requests.html": { view: "requests", scope: "requests" },
   "accounts.html": { view: "campaigns", scope: "accounts" },
+  "events.html": { view: "events", scope: "events" },
   "forecast.html": { view: "targets", scope: "forecast" },
   "admin.html": { view: "admin", scope: "admin" },
   "market-intel.html": { view: "crm", scope: "market-intel" },
@@ -778,6 +799,14 @@ const VIEW_CONTEXT_META = {
     actionLabel: "View Live Accounts",
     actionView: "campaigns",
     actionTargetSelector: "#campaign-board",
+  },
+  events: {
+    kicker: "Events",
+    title: "Networking meetings and agenda",
+    copy: "Plan event agenda, schedule operator meetings, align objectives, and sync follow-up actions with tasks.",
+    actionLabel: "Open Networking Agenda",
+    actionView: "events",
+    actionTargetSelector: "#event-table-body",
   },
   targets: {
     kicker: "Forecast",
@@ -971,6 +1000,10 @@ const elements = {
   campaignLiveCount: document.getElementById("campaign-live-count"),
   campaignBoard: document.getElementById("campaign-board"),
   campaignTableBody: document.getElementById("campaign-table-body"),
+  eventFormTitle: document.getElementById("event-form-title"),
+  eventSummaryChip: document.getElementById("event-summary-chip"),
+  eventSubmitButton: document.getElementById("event-submit-button"),
+  eventTableBody: document.getElementById("event-table-body"),
   workspaceFormTitle: document.getElementById("workspace-form-title"),
   workspaceSubmitButton: document.getElementById("workspace-submit-button"),
   adminLicenseSummary: document.getElementById("admin-license-summary"),
@@ -1004,6 +1037,7 @@ const ui = {
   editingTargetId: null,
   editingTaskId: null,
   editingCampaignId: null,
+  editingEventId: null,
   editingUserId: null,
   activeUserId: "",
   requestsFocus: "all",
@@ -1073,6 +1107,7 @@ let state = {
   kpis: KPI_CATALOGUE,
   tasks: [],
   campaigns: [],
+  events: [],
   users: [],
   workspace: {},
   history: [],
@@ -1267,6 +1302,7 @@ async function init() {
   resetTargetForm();
   resetTaskForm();
   resetCampaignForm();
+  resetEventForm();
   resetWorkspaceForm();
   resetUserForm();
   await hydrateFromExcel();
@@ -1712,10 +1748,15 @@ function bindEvents() {
   });
 
   campaignForm.addEventListener("submit", handleCampaignSubmit);
+  eventForm?.addEventListener("submit", handleEventSubmit);
   document.getElementById("campaign-cancel-button").addEventListener("click", () => {
     ui.editingCampaignId = null;
     resetCampaignForm();
     setBanner("Campaign form cleared.", "default");
+  });
+  document.getElementById("event-cancel-button")?.addEventListener("click", () => {
+    resetEventForm();
+    setBanner("Event meeting form cleared.", "default");
   });
 
   workspaceForm.addEventListener("submit", handleWorkspaceSubmit);
@@ -1974,6 +2015,7 @@ function bindEvents() {
   elements.taskTableBody.addEventListener("click", handleTaskAction);
   elements.campaignBoard.addEventListener("click", handleCampaignAction);
   elements.campaignTableBody.addEventListener("click", handleCampaignAction);
+  elements.eventTableBody?.addEventListener("click", handleEventAction);
   elements.userBoard.addEventListener("click", handleUserAction);
   elements.userTableBody.addEventListener("click", handleUserAction);
   elements.openNewDealModalButton?.addEventListener("click", () => {
@@ -2031,6 +2073,13 @@ function bindEvents() {
     const filename = buildExportFilename("operator-campaigns", "csv");
     downloadCsv(filename, rows, CAMPAIGN_CSV_COLUMNS);
     setBanner(`Campaign CSV exported (${rows.length} records).`, "success");
+  });
+
+  document.getElementById("export-events-csv")?.addEventListener("click", () => {
+    const rows = Array.isArray(state.events) ? state.events : [];
+    const filename = buildExportFilename("networking-show-agenda", "csv");
+    downloadCsv(filename, rows, EVENT_CSV_COLUMNS);
+    setBanner(`Events CSV exported (${rows.length} meetings).`, "success");
   });
 
   elements.runQaSmokeButton?.addEventListener("click", () => {
@@ -4041,9 +4090,150 @@ function renderAll() {
   renderTargets();
   renderTasks();
   renderCampaigns();
+  renderEvents();
   renderAdminView();
   renderKpiCatalogue();
   renderCompanyProfileDrawer();
+}
+
+function createEmptyEvent() {
+  return {
+    id: generateId("event"),
+    eventName: "",
+    eventDate: "",
+    operator: "",
+    market: "",
+    meetingTime: "",
+    owner: getActiveUser()?.fullName || "",
+    showDescription: "",
+    objective: "",
+    client: "",
+    linkedTaskId: "",
+    followUpNotes: "",
+    createdAt: "",
+    updatedAt: "",
+  };
+}
+
+function normalizeEvent(input = {}) {
+  return {
+    ...createEmptyEvent(),
+    ...input,
+    id: String(input.id || generateId("event")),
+    eventName: cleanText(input.eventName),
+    eventDate: normalizeDateInput(input.eventDate),
+    operator: cleanText(input.operator),
+    market: cleanText(input.market),
+    meetingTime: cleanText(input.meetingTime),
+    owner: cleanText(input.owner),
+    showDescription: cleanText(input.showDescription),
+    objective: cleanText(input.objective),
+    client: cleanText(input.client),
+    linkedTaskId: cleanText(input.linkedTaskId),
+    followUpNotes: cleanText(input.followUpNotes),
+    createdAt: input.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function fillEventForm(eventItem) {
+  if (!eventForm) return;
+  ["eventName", "eventDate", "operator", "market", "meetingTime", "owner", "showDescription", "objective", "client", "linkedTaskId", "followUpNotes"].forEach((field) => {
+    if (eventForm.elements[field]) eventForm.elements[field].value = eventItem[field] || "";
+  });
+  ui.editingEventId = eventItem.id || null;
+  elements.eventFormTitle.textContent = ui.editingEventId ? `Edit Event Meeting: ${eventItem.eventName || "Draft"}` : "New Event Meeting";
+  elements.eventSubmitButton.textContent = ui.editingEventId ? "Update Meeting" : "Save Meeting";
+}
+
+function resetEventForm() {
+  ui.editingEventId = null;
+  fillEventForm(createEmptyEvent());
+}
+
+async function handleEventSubmit(event) {
+  event.preventDefault();
+  if (!eventForm) return;
+  const formData = new FormData(eventForm);
+  const draft = normalizeEvent({
+    id: ui.editingEventId || generateId("event"),
+    eventName: formData.get("eventName"),
+    eventDate: formData.get("eventDate"),
+    operator: formData.get("operator"),
+    market: formData.get("market"),
+    meetingTime: formData.get("meetingTime"),
+    owner: formData.get("owner"),
+    showDescription: formData.get("showDescription"),
+    objective: formData.get("objective"),
+    client: formData.get("client"),
+    linkedTaskId: formData.get("linkedTaskId"),
+    followUpNotes: formData.get("followUpNotes"),
+  });
+
+  const isEditing = Boolean(ui.editingEventId);
+  state.events = isEditing ? state.events.map((item) => (item.id === draft.id ? draft : item)) : [draft, ...(state.events || [])];
+  if (draft.linkedTaskId) {
+    state.tasks = state.tasks.map((task) =>
+      task.id === draft.linkedTaskId
+        ? normalizeTask({
+            ...task,
+            notes: [task.notes, `Event ${draft.eventName}: ${draft.objective}`].filter(Boolean).join(" · "),
+            nextStep: cleanText(task.nextStep) || cleanText(draft.followUpNotes) || cleanText(draft.objective),
+          })
+        : task
+    );
+  }
+  const saved = await persistState();
+  renderAll();
+  resetEventForm();
+  setBanner(buildExcelBanner(saved ? `Networking meeting ${isEditing ? "updated" : "saved"}.` : "Networking meeting saved in memory only."), saved ? "success" : "warn");
+}
+
+async function handleEventAction(event) {
+  const button = event.target.closest("[data-action]");
+  if (!button) return;
+  const id = button.dataset.id;
+  const item = (state.events || []).find((row) => row.id === id);
+  if (!item) return;
+  if (button.dataset.action === "edit-event") {
+    fillEventForm(item);
+    return;
+  }
+  if (button.dataset.action === "delete-event") {
+    state.events = (state.events || []).filter((row) => row.id !== id);
+    const saved = await persistState();
+    renderAll();
+    setBanner(buildExcelBanner(saved ? "Networking meeting deleted." : "Networking meeting deleted in memory only."), saved ? "warn" : "danger");
+  }
+}
+
+function renderEvents() {
+  const events = Array.isArray(state.events) ? state.events : [];
+  if (elements.eventSummaryChip) {
+    elements.eventSummaryChip.textContent = `${events.length} meetings`;
+  }
+  if (!elements.eventTableBody) return;
+  if (!events.length) {
+    elements.eventTableBody.innerHTML = `<tr><td colspan="8"><div class="empty-state">No networking meetings yet.</div></td></tr>`;
+    return;
+  }
+  elements.eventTableBody.innerHTML = [...events]
+    .sort((a, b) => String(a.eventDate || "").localeCompare(String(b.eventDate || "")))
+    .map(
+      (item) => `
+      <tr>
+        <td>${formatDate(item.eventDate)} ${escapeHtml(item.meetingTime || "")}</td>
+        <td>${escapeHtml(item.eventName || "N/A")}</td>
+        <td>${escapeHtml(item.operator || item.client || "N/A")}</td>
+        <td>${escapeHtml(item.market || "N/A")}</td>
+        <td>${escapeHtml(item.objective || "N/A")}</td>
+        <td>${escapeHtml(item.linkedTaskId || "N/A")}</td>
+        <td>${escapeHtml(item.owner || "N/A")}</td>
+        <td><div class="row-actions"><button class="icon-button" data-action="edit-event" data-id="${escapeAttribute(item.id)}">Edit</button><button class="icon-button danger" data-action="delete-event" data-id="${escapeAttribute(item.id)}">Delete</button></div></td>
+      </tr>
+    `
+    )
+    .join("");
 }
 
 function queueDealFieldHighlights(options = {}) {
