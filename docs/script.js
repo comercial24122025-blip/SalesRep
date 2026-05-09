@@ -1478,6 +1478,15 @@ function bindEvents() {
     const aiCreateEventAction = event.target.closest("[data-ai-create-event]");
     if (aiCreateEventAction) {
       createAiSuggestedEvent();
+      return;
+    }
+
+    const aiEditDealAction = event.target.closest("[data-ai-edit-deal-id]");
+    if (aiEditDealAction) {
+      const dealId = cleanText(aiEditDealAction.dataset.aiEditDealId);
+      if (dealId) {
+        openDealEditorById(dealId);
+      }
     }
   });
 
@@ -2014,6 +2023,7 @@ function bindEvents() {
   elements.stageOverview.addEventListener("click", handleStageFunnelAction);
   elements.commandPipelineBars?.addEventListener("click", handleStageFunnelAction);
   elements.commandTimePressure?.addEventListener("click", handleStageFunnelAction);
+  elements.commandTimePressure?.addEventListener("click", handleDashboardDrilldownAction);
   elements.fixNowAlerts?.addEventListener("click", handleDealAction);
   elements.fixNowAlerts?.addEventListener("click", handleTaskAction);
   elements.commandActionsToday?.addEventListener("click", handleTaskAction);
@@ -5025,8 +5035,11 @@ function renderAiSearchResponse(queryText, deals, tasks) {
             dealRows.length
               ? dealRows
                   .map(
-                    (deal) =>
-                      `<li><button type="button" class="button button-ghost button-small" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">${escapeHtml(getPrimaryOperatorName(deal))}</button><small>${escapeHtml(`${deal.market || "No market"} · ${getDealVisibleStage(deal)} · ${formatCompactCurrency(getForecastValue(deal))} weighted`)}</small></li>`
+                    (deal) => {
+                      const weighted = getForecastValue(deal);
+                      const calc = formatWeightedFormula(deal);
+                      return `<li><button type="button" class="button button-ghost button-small" data-ai-edit-deal-id="${escapeAttribute(deal.id)}">${escapeHtml(getPrimaryOperatorName(deal))}</button><small title="${escapeAttribute(calc)}">${escapeHtml(`${deal.market || "No market"} · ${getDealVisibleStage(deal)} · ${formatCompactCurrency(weighted)} weighted · ${calc}`)}</small></li>`;
+                    }
                   )
                   .join("")
               : "<li>No deals matched this search.</li>"
@@ -6974,7 +6987,7 @@ function renderTimePressurePanel(stageDurationMap = new Map()) {
       const helper = stageEntry ? `${stageEntry.count} deals measured` : "Waiting for dated deals";
 
       return `
-        <button type="button" class="command-time-row tone-${escapeAttribute(tone)}" data-action="open-stage-funnel" data-stage="${escapeAttribute(stage)}">
+        <button type="button" class="command-time-row tone-${escapeAttribute(tone)}" data-action="open-time-pressure" data-stage="${escapeAttribute(stage)}">
           <div class="command-time-copy">
             <strong>${escapeHtml(stage)} Avg</strong>
             <span>${escapeHtml(metricLabel)}</span>
@@ -9282,6 +9295,7 @@ function renderKanbanDealCard(deal) {
   const currentStage = getVisibleStage(operationalStage) || "Lead";
   const weight = getForecastProbability(deal);
   const weightedValue = getForecastValue(deal);
+  const weightedFormula = formatWeightedFormula(deal);
   const nextStage = getNextVisibleStage(operationalStage);
   const nextStageButton = nextStage
     ? `<button type="button" class="kanban-stage-button" data-action="advance-deal-stage" data-id="${escapeAttribute(deal.id)}" data-next-stage="${escapeAttribute(
@@ -9324,9 +9338,12 @@ function renderKanbanDealCard(deal) {
       <div class="kanban-card-footer">
         <span>Stage: ${escapeHtml(currentStage)}</span>
         <span>Weight ${escapeHtml(formatPercent(weight))}</span>
-        <span>Weighted ${escapeHtml(weightedValue > 0 ? formatCompactCurrency(weightedValue) : "N/A")}</span>
+        <span title="${escapeAttribute(weightedFormula)}">Weighted ${escapeHtml(weightedValue > 0 ? formatCompactCurrency(weightedValue) : "N/A")}</span>
         <span>DD: ${escapeHtml(deal.ddStatus || "N/A")}</span>
         <span>Int: ${escapeHtml(deal.integrationStatus || "N/A")}</span>
+      </div>
+      <div class="kanban-card-meta">
+        <span title="${escapeAttribute(weightedFormula)}">${escapeHtml(weightedFormula)}</span>
       </div>
 
       <div class="kanban-actions">
@@ -9758,11 +9775,11 @@ function matchesRequestHubLane(deal, key) {
   }
 
   if (key === "dd") {
-    return ["Legal", "DD"].includes(stage) || (ddStatus && ddStatus !== "Not Started") || hasAnyText(deal.ddContactName, deal.ddContactEmail, deal.ddTicket);
+    return ["Legal", "DD"].includes(stage) || (ddStatus && ddStatus !== "Not Started") || hasAnyText(deal.ddContactName, deal.ddContactEmail);
   }
 
   if (key === "integration") {
-    return ["DD", "Integration"].includes(stage) || (integrationStatus && integrationStatus !== "Not Started") || hasAnyText(deal.integrationRequest, deal.integrationEmail, deal.jira);
+    return ["DD", "Integration"].includes(stage) || (integrationStatus && integrationStatus !== "Not Started") || hasAnyText(deal.integrationRequest, deal.integrationEmail);
   }
 
   if (key === "signoff") {
@@ -10967,7 +10984,11 @@ function handleDashboardDrilldownAction(event) {
     return;
   }
 
-  const { action, market, operator } = button.dataset;
+  const { action, market, operator, stage } = button.dataset;
+  if (action === "open-time-pressure") {
+    openStageFunnelDrilldown(cleanText(stage));
+    return;
+  }
   if (action === "open-priority-market") {
     openMarketDrilldown(market, "Priority Market");
     return;
@@ -12224,7 +12245,7 @@ function refreshDealFieldHighlights() {
   const processRequiredFields = {
     legal: ["companyName", "companyRegistrationNumber", "companyRegisteredAddress", "companyLegalRepresentative", "companyLicense"],
     dd: ["ddContactName", "ddContactEmail", "companyLicense", "companyRegistrationNumber"],
-    integration: ["integrationRequest", "jira", "integrationEmail", "platform", "productsPotential"],
+    integration: ["integrationRequest", "integrationEmail", "platform", "productsPotential"],
     followUp: ["followUpCadence", "followUpOwner", "nextFollowUpDate", "actionItems"],
   };
   const processFieldSet = new Set(Object.values(processRequiredFields).flat());
@@ -15744,6 +15765,16 @@ function getForecastValue(deal) {
   return getDealValueAmount(deal) * getForecastProrationFactor(deal) * getForecastProbability(deal);
 }
 
+function formatWeightedFormula(deal) {
+  const value = getDealValueAmount(deal);
+  const proration = getForecastProrationFactor(deal);
+  const probability = getForecastProbability(deal);
+  const valueLabel = formatCompactCurrency(value);
+  const prorationLabel = formatPercent(proration);
+  const probabilityLabel = formatPercent(probability);
+  return `${valueLabel} × ${prorationLabel} × ${probabilityLabel}`;
+}
+
 function resolveDealValue(input) {
   const primaryValue = toNullableNumber(input.dealValue);
   if (primaryValue !== null) {
@@ -16081,12 +16112,12 @@ function buildStageOperationalChecklist(stage, deal) {
           hasAnyText(deal.legalRepresentativeId, deal.legalRepresentativeName, deal.companyLegalRepresentative),
           "Representative name or ID should be visible for DD."
         ),
-        buildOperationalRequirement("DD trace captured", hasAnyText(deal.ddTicket, deal.dd, deal.comments), "Use DD ticket or notes to track the request."),
+        buildOperationalRequirement("DD trace captured (optional)", hasAnyText(deal.ddTicket, deal.dd, deal.comments), "DD ticket is optional; notes/comments can be used as trace."),
       ];
     case "Integration":
       return [
         buildOperationalRequirement("Integration request defined", hasAnyText(deal.integrationRequest), "Technical scope should be written for delivery."),
-        buildOperationalRequirement("Jira ticket created", hasAnyText(deal.jira), "A Jira reference is expected when integration starts."),
+        buildOperationalRequirement("Jira ticket linked (optional)", hasAnyText(deal.jira), "Jira is optional; keep technical trace in integration notes if not used."),
         buildOperationalRequirement(
           "Technical contacts ready",
           hasAnyText(deal.integrationTeam, deal.integrationEmail, deal.skype),
