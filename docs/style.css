@@ -3809,10 +3809,11 @@ button.executive-readout-card {
 .deal-modal-shell {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: 1200;
   display: grid;
   place-items: center;
   padding: 24px;
+  isolation: isolate;
 }
 
 .deal-modal-backdrop {
@@ -3826,6 +3827,7 @@ button.executive-readout-card {
   position: relative;
   z-index: 1;
   width: min(1360px, calc(100vw - 18px));
+  height: min(96vh, 1240px);
   max-height: min(96vh, 1240px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -3851,6 +3853,7 @@ button.executive-readout-card {
   overflow: auto;
   padding-right: 2px;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .deal-modal-panel .form-actions {

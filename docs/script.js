@@ -1440,6 +1440,14 @@ function parseDateValue(value) {
 function bindEvents() {
   ui.lastScrollY = window.scrollY || 0;
 
+  ensureAiSearchActionButton();
+  elements.aiAgentQuery?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleAiAgentPrompt("search");
+    }
+  });
+
   viewTabs.forEach((button) => {
     button.addEventListener("click", () => {
       activateView(button.dataset.viewTrigger, { targetSelector: button.dataset.targetSelector || "" });
@@ -4979,8 +4987,57 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "event-planner") {
     return `${header}${renderAiEventPlannerResponse(scopedDeals)}`;
   }
+  if (normalizedMode === "search") {
+    return `${header}${renderAiSearchResponse(queryText, scopedDeals, scopedTasks)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
+}
+
+function renderAiSearchResponse(queryText, deals, tasks) {
+  const needle = cleanText(queryText);
+  if (!needle) {
+    return `
+      <div class="ai-agent-report">
+        <p><strong>Search tip:</strong> write market, operator, owner, stage, or risk term and press Enter.</p>
+      </div>
+      ${renderAiList("Examples", ["peru", "owner erick", "legal stuck", "integration delayed", "operator 1xbet"])}
+    `;
+  }
+
+  const dealRows = deals.slice(0, 8);
+  const taskRows = tasks.filter((task) => cleanText(task.status) !== "Done").slice(0, 8);
+
+  return `
+    <div class="ai-agent-cards">
+      ${renderAiMetricCard("Deals found", String(dealRows.length), "Matching active deals", "pipeline", "#pipeline-board")}
+      ${renderAiMetricCard("Tasks found", String(taskRows.length), "Matching open tasks", "tasks", "#task-board")}
+      ${renderAiMetricCard("Search scope", needle, "Live workspace scope", "dashboard", ".cockpit-command-center")}
+    </div>
+    <div class="ai-agent-columns">
+      <div class="ai-agent-list">
+        <h4>Matching deals</h4>
+        <ul>
+          ${
+            dealRows.length
+              ? dealRows
+                  .map(
+                    (deal) =>
+                      `<li><button type="button" class="button button-ghost button-small" data-action="edit-deal" data-id="${escapeAttribute(deal.id)}">${escapeHtml(getPrimaryOperatorName(deal))}</button><small>${escapeHtml(`${deal.market || "No market"} · ${getDealVisibleStage(deal)} · ${formatCompactCurrency(getForecastValue(deal))} weighted`)}</small></li>`
+                  )
+                  .join("")
+              : "<li>No deals matched this search.</li>"
+          }
+        </ul>
+      </div>
+      ${renderAiList(
+        "Matching tasks",
+        taskRows.length
+          ? taskRows.map((task) => `${task.title || "Untitled"} · ${task.owner || "Unassigned"} · due ${task.dueDate || "N/A"}`)
+          : ["No open tasks matched this search."]
+      )}
+    </div>
+  `;
 }
 
 function resolveAiScope(deals, queryText) {
@@ -5037,9 +5094,23 @@ function getAiAgentTitle(mode) {
     "operator-strategy": "Operator strategy",
     "market-strategy": "Market strategy",
     "event-planner": "Event planner",
+    search: "Workspace search",
     summary: "Daily summary",
   };
   return titles[mode] || titles.summary;
+}
+
+function ensureAiSearchActionButton() {
+  const actionsWrap = document.querySelector(".ai-agent-actions");
+  if (!actionsWrap || actionsWrap.querySelector("[data-ai-agent-prompt='search']")) {
+    return;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button button-secondary button-small";
+  button.dataset.aiAgentPrompt = "search";
+  button.textContent = "Search";
+  actionsWrap.appendChild(button);
 }
 
 function renderAiStrategyResponse(deals, tasks, alerts, revenue) {
@@ -11199,7 +11270,6 @@ function openDealEditorById(id) {
   fillDealForm(deal);
   openDealModal();
   renderViewState();
-  window.scrollTo({ top: 0, behavior: "smooth" });
   setBanner(`Editing account: ${deal.deal || deal.client || deal.operator || "Draft"}.`, "default");
 }
 
@@ -11242,6 +11312,10 @@ async function deleteDealById(id, options = {}) {
 function openDealModal() {
   ui.dealModalOpen = true;
   renderViewState();
+  const modalForm = elements.dealModalShell?.querySelector(".deal-modal-panel > form.entity-form");
+  if (modalForm) {
+    modalForm.scrollTop = 0;
+  }
 }
 
 function closeDealModal() {
@@ -17800,7 +17874,9 @@ async function uploadExcelWorkbookToGitHub(file, safeName) {
   const branch = window.prompt("GitHub branch:", GITHUB_DEFAULT_BRANCH) || GITHUB_DEFAULT_BRANCH;
   const path = window.prompt("Workbook path in repo:", GITHUB_DEFAULT_WORKBOOK_PATH) || GITHUB_DEFAULT_WORKBOOK_PATH;
 
-  const existingRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}?ref=${encodeURIComponent(branch)}`, {
+  const normalizedPath = encodeGitHubContentsPath(path);
+
+  const existingRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${normalizedPath}?ref=${encodeURIComponent(branch)}`, {
     headers: {
       Accept: "application/vnd.github+json",
       Authorization: `Bearer ${token}`,
@@ -17817,7 +17893,7 @@ async function uploadExcelWorkbookToGitHub(file, safeName) {
   for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
   const content = btoa(binary);
 
-  const putRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${encodeURIComponent(path)}`, {
+  const putRes = await fetch(`https://api.github.com/repos/${ownerRepo}/contents/${normalizedPath}`, {
     method: "PUT",
     headers: {
       Accept: "application/vnd.github+json",
@@ -17838,6 +17914,14 @@ async function uploadExcelWorkbookToGitHub(file, safeName) {
   serverMeta.storageMode = "static";
   serverMeta.ready = false;
   serverMeta.lastUpdatedAt = new Date().toISOString();
+}
+
+function encodeGitHubContentsPath(path) {
+  return String(path || "")
+    .split("/")
+    .filter(Boolean)
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
 }
 
 function isStrictIsoDate(text) {
