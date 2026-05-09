@@ -5007,11 +5007,14 @@ function renderAiSearchResponse(queryText, deals, tasks) {
 
   const dealRows = deals.slice(0, 8);
   const taskRows = tasks.filter((task) => cleanText(task.status) !== "Done").slice(0, 8);
+  const campaignRows = getRelatedCampaignRowsForAiSearch(deals, queryText).slice(0, 8);
+  const strategyRows = buildRelatedStrategyRowsForAiSearch(deals, queryText).slice(0, 8);
 
   return `
     <div class="ai-agent-cards">
       ${renderAiMetricCard("Deals found", String(dealRows.length), "Matching active deals", "pipeline", "#pipeline-board")}
       ${renderAiMetricCard("Tasks found", String(taskRows.length), "Matching open tasks", "tasks", "#task-board")}
+      ${renderAiMetricCard("Campaigns found", String(campaignRows.length), "Matching growth campaigns", "campaigns", "#campaign-board")}
       ${renderAiMetricCard("Search scope", needle, "Live workspace scope", "dashboard", ".cockpit-command-center")}
     </div>
     <div class="ai-agent-columns">
@@ -5035,6 +5038,18 @@ function renderAiSearchResponse(queryText, deals, tasks) {
         taskRows.length
           ? taskRows.map((task) => `${task.title || "Untitled"} · ${task.owner || "Unassigned"} · due ${task.dueDate || "N/A"}`)
           : ["No open tasks matched this search."]
+      )}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList(
+        "Related campaigns",
+        campaignRows.length
+          ? campaignRows.map((campaign) => `${campaign.title} · ${campaign.market || "No market"} · ${formatCompactCurrency(Number(campaign.forecastLiftEur || 0))} lift`)
+          : ["No related campaigns found for this search."]
+      )}
+      ${renderAiList(
+        "Related strategies",
+        strategyRows.length ? strategyRows : ["No strategy recommendation available for this search yet."]
       )}
     </div>
   `;
@@ -5117,6 +5132,9 @@ function renderAiStrategyResponse(deals, tasks, alerts, revenue) {
   const myActions = getActionBuckets(getMyActionTasks(tasks, getActiveUser()));
   const topMarkets = getAiRevenueByMarket(deals).slice(0, 3).map((item) => `${item.label} (${formatCompactCurrency(item.value)})`);
   const strategicFocus = alerts.slice(0, 3).map((alert) => alert.title);
+  const marketEvents = buildMarketSpecialDateStrategyRows(deals).slice(0, 12);
+  const localEventActions = marketEvents.map((item) => `${item.market}: ${item.localAction}`);
+  const internationalEventActions = marketEvents.map((item) => `${item.market}: ${item.internationalAction}`);
 
   return `
     <div class="ai-skill-strip">
@@ -5139,8 +5157,152 @@ function renderAiStrategyResponse(deals, tasks, alerts, revenue) {
         "CS Manager: monitor pending requests and response-time breaches daily.",
       ])}
     </div>
+    <div class="ai-agent-columns">
+      ${renderAiList(
+        "Country special dates and sport events",
+        marketEvents.length
+          ? marketEvents.map((item) => `${item.market} · ${item.eventDate}: ${item.eventName}`)
+          : ["No market-specific event calendar available in current scope."]
+      )}
+      ${renderAiList("Recommended local operator activities", localEventActions.length ? localEventActions : ["No local event playbook generated."])}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList(
+        "Recommended international operator activities",
+        internationalEventActions.length ? internationalEventActions : ["No international event playbook generated."]
+      )}
+      ${renderAiList(
+        "Market execution trigger",
+        marketEvents.length
+          ? marketEvents.map((item) => `${item.market}: launch +14d content briefing, +7d promo setup, D-1 final QA, D+2 conversion review.`)
+          : ["No market trigger cadence generated."]
+      )}
+    </div>
     ${renderAiList("Immediate strategic signals", strategicFocus.length ? strategicFocus : ["No critical strategic signal detected right now."])}
   `;
+}
+
+function getRelatedCampaignRowsForAiSearch(deals, queryText) {
+  const query = cleanText(queryText).toLowerCase();
+  const scoped = Array.isArray(state.campaigns) ? state.campaigns : [];
+  const operatorSet = new Set(deals.map((deal) => cleanText(getPrimaryOperatorName(deal)).toLowerCase()).filter(Boolean));
+  const marketSet = new Set(deals.map((deal) => cleanText(deal.market).toLowerCase()).filter(Boolean));
+
+  const related = scoped.filter((campaign) => {
+    const market = cleanText(campaign.market).toLowerCase();
+    const operator = cleanText(campaign.operator || campaign.client || campaign.deal).toLowerCase();
+    const title = cleanText(campaign.title).toLowerCase();
+    const matchesScope = operatorSet.has(operator) || marketSet.has(market);
+    const matchesQuery = !query || [market, operator, title].some((value) => value.includes(query));
+    return matchesScope && matchesQuery;
+  });
+
+  return related.sort((a, b) => Number(b.forecastLiftEur || 0) - Number(a.forecastLiftEur || 0));
+}
+
+function buildRelatedStrategyRowsForAiSearch(deals, queryText) {
+  const query = cleanText(queryText).toLowerCase();
+  const operatorRows = buildForecastOperatorRows(deals).slice(0, 6);
+  const marketRows = getAiRevenueByMarket(deals).slice(0, 6);
+  const rows = [
+    ...operatorRows.map((row) => `Operator ${row.operator} (${row.market}): prioritize ${row.topStage}, clear blockers, and protect ${formatCompactCurrency(row.forecastValue || 0)} weighted.`),
+    ...marketRows.map((row) => `Market ${row.label}: activate top accounts, run weekly conversion checkpoint, and target ${formatCompactCurrency(row.value)} weighted.`),
+  ];
+  if (!query) {
+    return rows;
+  }
+  return rows.filter((line) => line.toLowerCase().includes(query));
+}
+
+function buildMarketSpecialDateStrategyRows(deals) {
+  const now = new Date();
+  const year = now.getFullYear();
+  const scopedMarkets = uniqueValues(deals.map((deal) => normalizeDealMarket(deal.market)).filter(Boolean)).slice(0, 8);
+  const baseCalendar = getLatamCommercialSportsCalendar(year);
+  const output = [];
+
+  scopedMarkets.forEach((marketKey) => {
+    const events = (baseCalendar[marketKey] || baseCalendar.__global__ || []).filter((item) => {
+      const eventDate = new Date(item.date);
+      const deltaDays = Math.floor((eventDate.getTime() - now.getTime()) / 86400000);
+      return deltaDays >= -7 && deltaDays <= 180;
+    });
+    events.slice(0, 2).forEach((event) => {
+      output.push({
+        market: denormalizeDealMarket(marketKey),
+        eventName: event.name,
+        eventDate: event.date,
+        localAction: `promote localized offers around "${event.name}", align VIP campaign and follow-up tasks with local KAM owner.`,
+        internationalAction: `launch cross-border promo kit for "${event.name}", include multilingual creative and international acquisition push.`,
+      });
+    });
+  });
+
+  return output;
+}
+
+function denormalizeDealMarket(marketKey) {
+  const map = {
+    peru: "Peru",
+    mexico: "Mexico",
+    argentina: "Argentina",
+    chile: "Chile",
+    colombia: "Colombia",
+    brazil: "Brazil",
+    uruguay: "Uruguay",
+    dominicanrepublic: "Dominican Republic",
+    venezue: "Venezuela",
+    venezuela: "Venezuela",
+    panama: "Panama",
+    ecuador: "Ecuador",
+    paraguay: "Paraguay",
+    bolivia: "Bolivia",
+  };
+  return map[marketKey] || marketKey || "LATAM";
+}
+
+function getLatamCommercialSportsCalendar(year) {
+  const y = Number(year) || new Date().getFullYear();
+  return {
+    __global__: [
+      { name: "Copa Libertadores knockout rounds", date: `${y}-08-15` },
+      { name: "Formula 1 Mexico / LATAM fan cycle", date: `${y}-10-25` },
+      { name: "Black Friday / Cyber Week", date: `${y}-11-25` },
+      { name: "Holiday season peak", date: `${y}-12-10` },
+    ],
+    peru: [
+      { name: "Fiestas Patrias", date: `${y}-07-28` },
+      { name: "Peru Primera Division final phase", date: `${y}-11-15` },
+    ],
+    mexico: [
+      { name: "Liga MX Liguilla", date: `${y}-05-18` },
+      { name: "Independence celebrations", date: `${y}-09-16` },
+    ],
+    colombia: [
+      { name: "Liga BetPlay finals", date: `${y}-06-20` },
+      { name: "Festival season / Feria de Cali window", date: `${y}-12-26` },
+    ],
+    argentina: [
+      { name: "Liga Profesional decisive rounds", date: `${y}-11-20` },
+      { name: "Independence Day campaigns", date: `${y}-07-09` },
+    ],
+    chile: [
+      { name: "Fiestas Patrias", date: `${y}-09-18` },
+      { name: "Chilean league final phase", date: `${y}-11-18` },
+    ],
+    brazil: [
+      { name: "Brasileirao title race", date: `${y}-11-25` },
+      { name: "Carnival engagement cycle", date: `${y}-02-20` },
+    ],
+    dominicanrepublic: [
+      { name: "Dominican baseball playoffs", date: `${y}-01-20` },
+      { name: "Summer tourism high season", date: `${y}-07-15` },
+    ],
+    venezuela: [
+      { name: "Venezuelan football closing stage", date: `${y}-10-20` },
+      { name: "Year-end remittance season", date: `${y}-12-05` },
+    ],
+  };
 }
 
 function renderAiGrowthResponse(deals, tasks, revenue) {
