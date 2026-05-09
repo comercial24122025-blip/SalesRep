@@ -1487,6 +1487,15 @@ function bindEvents() {
       if (dealId) {
         openDealEditorById(dealId);
       }
+      return;
+    }
+
+    const aiOpenProfileAction = event.target.closest("[data-ai-open-profile-id]");
+    if (aiOpenProfileAction) {
+      const dealId = cleanText(aiOpenProfileAction.dataset.aiOpenProfileId);
+      if (dealId) {
+        openCompanyProfileById(dealId);
+      }
     }
   });
 
@@ -5038,7 +5047,15 @@ function renderAiSearchResponse(queryText, deals, tasks) {
                     (deal) => {
                       const weighted = getForecastValue(deal);
                       const calc = formatWeightedFormula(deal);
-                      return `<li><button type="button" class="button button-ghost button-small" data-ai-edit-deal-id="${escapeAttribute(deal.id)}">${escapeHtml(getPrimaryOperatorName(deal))}</button><small title="${escapeAttribute(calc)}">${escapeHtml(`${deal.market || "No market"} · ${getDealVisibleStage(deal)} · ${formatCompactCurrency(weighted)} weighted · ${calc}`)}</small></li>`;
+                      return `
+                        <li>
+                          <div class="ai-agent-actions-inline">
+                            <button type="button" class="button button-ghost button-small" data-ai-open-profile-id="${escapeAttribute(deal.id)}">Profile · ${escapeHtml(getPrimaryOperatorName(deal))}</button>
+                            <button type="button" class="button button-ghost button-small" data-ai-edit-deal-id="${escapeAttribute(deal.id)}">Workspace</button>
+                          </div>
+                          <small title="${escapeAttribute(calc)}">${escapeHtml(`${deal.market || "No market"} · ${getDealVisibleStage(deal)} · ${formatCompactCurrency(weighted)} weighted · ${calc}`)}</small>
+                        </li>
+                      `;
                     }
                   )
                   .join("")

@@ -5,11 +5,13 @@ import http from "node:http";
 import { fileURLToPath } from "node:url";
 import { ensureWorkbook, importStateFromWorkbook, loadReferenceSeedState, loadStateFromWorkbook, saveStateToWorkbook } from "./excelStore.mjs";
 import { buildDealBriefDocx } from "./docxStore.mjs";
+import { ensureDatabase, loadStateFromDatabase, saveStateToDatabase } from "./dbStore.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 8000);
 const WORKBOOK_PATH = path.join(__dirname, "data", "pipeline-command-center.xlsx");
+const DATABASE_PATH = path.join(__dirname, "data", "workspace-db.json");
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -20,6 +22,7 @@ const MIME_TYPES = {
 };
 
 await ensureWorkbook(WORKBOOK_PATH);
+await ensureDatabase(DATABASE_PATH, await loadStateFromWorkbook(WORKBOOK_PATH));
 
 const server = http.createServer(async (request, response) => {
   try {
@@ -34,33 +37,41 @@ const server = http.createServer(async (request, response) => {
     const { pathname } = url;
 
     if (pathname === "/api/state" && request.method === "GET") {
-      const state = await loadStateFromWorkbook(WORKBOOK_PATH);
-      const workbookStats = await fs.stat(WORKBOOK_PATH);
+      const db = await loadStateFromDatabase(DATABASE_PATH);
       return sendJson(response, 200, {
-        ...state,
+        ...db.state,
+        databasePath: DATABASE_PATH,
+        storageEngine: "json-db",
+        revision: db.revision,
         workbookPath: WORKBOOK_PATH,
         workbookUrl: "/api/download",
-        savedAt: workbookStats.mtime.toISOString(),
+        savedAt: db.savedAt,
       });
     }
 
     if (pathname === "/api/save" && request.method === "POST") {
       const payload = await readJsonBody(request);
       const state = normalizeIncomingState(payload);
-      const meta = await saveStateToWorkbook(WORKBOOK_PATH, state);
+      const meta = await saveStateToDatabase(DATABASE_PATH, state);
+      await saveStateToWorkbook(WORKBOOK_PATH, state);
       return sendJson(response, 200, {
         ok: true,
-        workbookPath: meta.workbookPath,
+        databasePath: DATABASE_PATH,
+        revision: meta.revision,
+        workbookPath: WORKBOOK_PATH,
         savedAt: meta.savedAt,
       });
     }
 
     if (pathname === "/api/reset-demo" && request.method === "POST") {
       const seedState = await loadReferenceSeedState();
-      const meta = await saveStateToWorkbook(WORKBOOK_PATH, seedState);
+      const meta = await saveStateToDatabase(DATABASE_PATH, seedState);
+      await saveStateToWorkbook(WORKBOOK_PATH, seedState);
       return sendJson(response, 200, {
         ok: true,
-        workbookPath: meta.workbookPath,
+        databasePath: DATABASE_PATH,
+        revision: meta.revision,
+        workbookPath: WORKBOOK_PATH,
         savedAt: meta.savedAt,
       });
     }
@@ -93,13 +104,17 @@ const server = http.createServer(async (request, response) => {
 
         await fs.writeFile(uploadPath, content);
         const imported = await importStateFromWorkbook(uploadPath);
-        const currentState = await loadStateFromWorkbook(WORKBOOK_PATH);
+        const db = await loadStateFromDatabase(DATABASE_PATH);
+        const currentState = db.state;
         const nextState = mergeImportedState(currentState, imported);
-        const meta = await saveStateToWorkbook(WORKBOOK_PATH, nextState);
+        const meta = await saveStateToDatabase(DATABASE_PATH, nextState);
+        await saveStateToWorkbook(WORKBOOK_PATH, nextState);
 
         return sendJson(response, 200, {
           ok: true,
-          workbookPath: meta.workbookPath,
+          databasePath: DATABASE_PATH,
+          revision: meta.revision,
+          workbookPath: WORKBOOK_PATH,
           savedAt: meta.savedAt,
           importMeta: {
             ...(imported.meta || {}),
@@ -151,6 +166,7 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, () => {
   console.log(`Pipeline Command Center running at http://localhost:${PORT}`);
   console.log(`Excel storage workbook: ${WORKBOOK_PATH}`);
+  console.log(`Workspace database: ${DATABASE_PATH}`);
 });
 
 function safeJoin(rootDir, pathname) {
