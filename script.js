@@ -5281,7 +5281,6 @@ function denormalizeDealMarket(marketKey) {
     brazil: "Brazil",
     uruguay: "Uruguay",
     dominicanrepublic: "Dominican Republic",
-    venezue: "Venezuela",
     venezuela: "Venezuela",
     panama: "Panama",
     ecuador: "Ecuador",
