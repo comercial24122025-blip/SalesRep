@@ -52,10 +52,10 @@ const server = http.createServer(async (request, response) => {
     if (pathname === "/api/save" && request.method === "POST") {
       const payload = await readJsonBody(request);
       const state = normalizeIncomingState(payload);
-      const meta = await saveStateToDatabase(DATABASE_PATH, state);
-      await saveStateToWorkbook(WORKBOOK_PATH, state);
+      const meta = await saveStateToPrimaryStores(state);
       return sendJson(response, 200, {
         ok: true,
+        storageSynced: true,
         databasePath: DATABASE_PATH,
         revision: meta.revision,
         workbookPath: WORKBOOK_PATH,
@@ -65,10 +65,10 @@ const server = http.createServer(async (request, response) => {
 
     if (pathname === "/api/reset-demo" && request.method === "POST") {
       const seedState = await loadReferenceSeedState();
-      const meta = await saveStateToDatabase(DATABASE_PATH, seedState);
-      await saveStateToWorkbook(WORKBOOK_PATH, seedState);
+      const meta = await saveStateToPrimaryStores(seedState);
       return sendJson(response, 200, {
         ok: true,
+        storageSynced: true,
         databasePath: DATABASE_PATH,
         revision: meta.revision,
         workbookPath: WORKBOOK_PATH,
@@ -107,11 +107,11 @@ const server = http.createServer(async (request, response) => {
         const db = await loadStateFromDatabase(DATABASE_PATH);
         const currentState = db.state;
         const nextState = mergeImportedState(currentState, imported);
-        const meta = await saveStateToDatabase(DATABASE_PATH, nextState);
-        await saveStateToWorkbook(WORKBOOK_PATH, nextState);
+        const meta = await saveStateToPrimaryStores(nextState);
 
         return sendJson(response, 200, {
           ok: true,
+          storageSynced: true,
           databasePath: DATABASE_PATH,
           revision: meta.revision,
           workbookPath: WORKBOOK_PATH,
@@ -175,6 +175,11 @@ function safeJoin(rootDir, pathname) {
     return null;
   }
   return normalized;
+}
+
+async function saveStateToPrimaryStores(state) {
+  await saveStateToWorkbook(WORKBOOK_PATH, state);
+  return saveStateToDatabase(DATABASE_PATH, state);
 }
 
 function setCorsHeaders(response) {

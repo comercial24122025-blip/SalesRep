@@ -1103,6 +1103,7 @@ const ui = {
   },
   qaSmokeResults: [],
   inlineGridRangeAnchor: null,
+  githubSyncConfig: null,
 };
 
 let state = {
@@ -2305,6 +2306,9 @@ async function persistState() {
     }
 
     const payload = await response.json();
+    if (!payload?.ok || payload?.storageSynced === false) {
+      throw new Error("Save endpoint responded without durable sync confirmation.");
+    }
     updateServerMetaFromPayload(
       {
         ...payload,
@@ -2320,6 +2324,26 @@ async function persistState() {
     return true;
   } catch (error) {
     const errorMessage = cleanText(error?.message) || "Excel backend unavailable.";
+    const githubSaved = await persistPublishedStateToGitHub();
+    if (githubSaved) {
+      const savedAt = new Date().toISOString();
+      updateServerMetaFromPayload(
+        {
+          workbookPath: "GitHub published workspace baseline",
+          workbookUrl: STATIC_WORKBOOK_URL,
+          savedAt,
+        },
+        "static"
+      );
+      ui.lastPersistStatus = "synced";
+      ui.lastPersistAt = savedAt;
+      ui.lastLocalMutationAt = Date.now();
+      recordWorkspaceHistory("Workspace sync", "Changes saved to GitHub published-state baseline.", { storageMode: "static" });
+      broadcastWorkspaceMutation("github-save");
+      setBanner(buildExcelBanner("Excel backend unavailable. Changes were saved to GitHub online baseline."), "success");
+      return true;
+    }
+
     updateServerMetaFromPayload(
       {
         workbookPath: "GitHub published workspace baseline",
@@ -2331,11 +2355,94 @@ async function persistState() {
     ui.lastPersistStatus = "failed";
     ui.lastPersistAt = new Date().toISOString();
     ui.lastLocalMutationAt = Date.now();
-    recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until a workbook backend is connected.", {
+    recordWorkspaceHistory("Workspace sync", "Changes are visible in the current online session only until backend is connected.", {
       storageMode: "session",
     });
-    setBanner(`${errorMessage} Workspace visible online, but save is session-only until backend is connected.`, "warn");
+    setBanner(`${errorMessage} Workspace visible online, but save is session-only until backend/GitHub sync is connected.`, "warn");
     return false;
+  }
+}
+
+async function persistPublishedStateToGitHub() {
+  try {
+    const config = await ensureGitHubSyncConfig();
+    if (!config) {
+      return false;
+    }
+
+    const payload = {
+      deals: state.deals,
+      marketIntel: state.marketIntel,
+      targets: state.targets,
+      kpis: state.kpis,
+      tasks: state.tasks,
+      campaigns: state.campaigns,
+      events: state.events,
+      users: state.users,
+      workspace: state.workspace,
+      history: state.history,
+      latamReference: state.latamReference,
+      savedAt: new Date().toISOString(),
+    };
+
+    await putGitHubFileJson(config, "data/published-state.json", payload, "Update published state from online workspace save");
+    return true;
+  } catch (error) {
+    console.warn("GitHub state sync failed:", error);
+    return false;
+  }
+}
+
+async function ensureGitHubSyncConfig() {
+  if (ui.githubSyncConfig?.token && ui.githubSyncConfig?.repo && ui.githubSyncConfig?.branch) {
+    return ui.githubSyncConfig;
+  }
+  const token = window.prompt("GitHub token (repo contents write) for online save:");
+  if (!token) {
+    return null;
+  }
+  const repo = window.prompt("GitHub repo (owner/repo):", GITHUB_DEFAULT_REPO) || GITHUB_DEFAULT_REPO;
+  const branch = window.prompt("GitHub branch:", GITHUB_DEFAULT_BRANCH) || GITHUB_DEFAULT_BRANCH;
+  ui.githubSyncConfig = {
+    token: cleanText(token),
+    repo: cleanText(repo) || GITHUB_DEFAULT_REPO,
+    branch: cleanText(branch) || GITHUB_DEFAULT_BRANCH,
+  };
+  return ui.githubSyncConfig;
+}
+
+async function putGitHubFileJson(config, filePath, jsonPayload, commitMessage) {
+  const normalizedPath = encodeGitHubContentsPath(filePath);
+  const baseUrl = `https://api.github.com/repos/${config.repo}/contents/${normalizedPath}`;
+  const getRes = await fetch(`${baseUrl}?ref=${encodeURIComponent(config.branch)}`, {
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${config.token}`,
+    },
+  });
+  let sha = "";
+  if (getRes.ok) {
+    const existing = await getRes.json();
+    sha = cleanText(existing?.sha);
+  }
+  const content = btoa(unescape(encodeURIComponent(JSON.stringify(jsonPayload, null, 2))));
+  const putRes = await fetch(baseUrl, {
+    method: "PUT",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${config.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      message: commitMessage,
+      content,
+      branch: config.branch,
+      sha: sha || undefined,
+    }),
+  });
+  if (!putRes.ok) {
+    const payload = await safeReadJson(putRes);
+    throw new Error(payload?.message || `GitHub state update failed (${putRes.status}).`);
   }
 }
 
