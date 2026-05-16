@@ -4935,7 +4935,7 @@ function renderAiAgentPanel() {
 }
 
 function handleAiAgentPrompt(mode = "summary") {
-  ui.aiAgentMode = cleanText(mode) || "summary";
+  ui.aiAgentMode = normalizeAiMode(mode, elements.aiAgentQuery?.value || "");
   applyAiScopeSync(elements.aiAgentQuery?.value || "");
   renderAiAgentPanel();
   elements.aiAgentOutput?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -4955,7 +4955,7 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   const buckets = getActionBuckets(myTasks);
   const alerts = getFixNowAlerts(scopedDeals, scopedTasks);
   const revenue = getCockpitRevenue(scopedDeals);
-  const normalizedMode = cleanText(mode) || "summary";
+  const normalizedMode = normalizeAiMode(mode, queryText);
 
   const header = `
     <div class="ai-agent-output-head">
@@ -5009,8 +5009,71 @@ function buildAiAgentResponse(mode = "summary", query = "") {
   if (normalizedMode === "search") {
     return `${header}${renderAiSearchResponse(queryText, scopedDeals, scopedTasks)}`;
   }
+  if (normalizedMode === "meeting-prep") {
+    return `${header}${renderAiMeetingPrepResponse(scopedDeals, scopedTasks, alerts)}`;
+  }
+  if (normalizedMode === "deal-strategy") {
+    return `${header}${renderAiDealStrategyResponse(scopedDeals, scopedTasks, alerts, revenue)}`;
+  }
+  if (normalizedMode === "post-call") {
+    return `${header}${renderAiPostCallResponse(scopedDeals, scopedTasks)}`;
+  }
+  if (normalizedMode === "pipeline-review") {
+    return `${header}${renderAiPipelineReviewResponse(scopedDeals, scopedTasks, alerts, revenue)}`;
+  }
+  if (normalizedMode === "forecast-review") {
+    return `${header}${renderAiForecastReviewResponse(scopedDeals, alerts, revenue)}`;
+  }
+  if (normalizedMode === "outreach") {
+    return `${header}${renderAiOutreachResponse(scopedDeals, scopedTasks, alerts)}`;
+  }
+  if (normalizedMode === "competitive") {
+    return `${header}${renderAiCompetitiveResponse(scopedDeals)}`;
+  }
+  if (normalizedMode === "value-engineering") {
+    return `${header}${renderAiValueEngineeringResponse(scopedDeals, revenue)}`;
+  }
 
   return `${header}${renderAiSummaryResponse(scopedDeals, buckets, alerts, revenue)}`;
+}
+
+function normalizeAiMode(mode, queryText = "") {
+  const raw = cleanText(mode).toLowerCase();
+  const aliases = {
+    "execution tracking": "tracking",
+    execution: "tracking",
+    "meeting prep": "meeting-prep",
+    "account prep": "meeting-prep",
+    "deal strategy": "deal-strategy",
+    "post call": "post-call",
+    "follow up": "post-call",
+    "pipeline review": "pipeline-review",
+    "forecast review": "forecast-review",
+    outreach: "outreach",
+    competitive: "competitive",
+    "value engineering": "value-engineering",
+  };
+  if (aliases[raw]) {
+    return aliases[raw];
+  }
+  if (!raw || raw === "summary") {
+    return inferAiWorkflowFromQuery(queryText);
+  }
+  return raw;
+}
+
+function inferAiWorkflowFromQuery(queryText) {
+  const query = cleanText(queryText).toLowerCase();
+  if (!query) return "summary";
+  if (query.includes("meeting") || query.includes("agenda") || query.includes("prep")) return "meeting-prep";
+  if (query.includes("forecast")) return "forecast-review";
+  if (query.includes("pipeline") || query.includes("stale") || query.includes("hygiene")) return "pipeline-review";
+  if (query.includes("follow-up") || query.includes("follow up") || query.includes("post-call") || query.includes("recap")) return "post-call";
+  if (query.includes("objection") || query.includes("competitor") || query.includes("battlecard")) return "competitive";
+  if (query.includes("roi") || query.includes("business case") || query.includes("value")) return "value-engineering";
+  if (query.includes("email") || query.includes("outreach") || query.includes("draft")) return "outreach";
+  if (query.includes("deal") || query.includes("stakeholder") || query.includes("blocker")) return "deal-strategy";
+  return "summary";
 }
 
 function renderAiSearchResponse(queryText, deals, tasks) {
@@ -5139,6 +5202,14 @@ function getAiAgentTitle(mode) {
     "operator-strategy": "Operator strategy",
     "market-strategy": "Market strategy",
     "event-planner": "Event planner",
+    "meeting-prep": "Meeting and account prep",
+    "deal-strategy": "Deal strategy and next moves",
+    "post-call": "Post-call follow-through",
+    "pipeline-review": "Pipeline review",
+    "forecast-review": "Forecast risk review",
+    outreach: "Outreach draft",
+    competitive: "Competitive intelligence",
+    "value-engineering": "Value engineering",
     search: "Workspace search",
     summary: "Daily summary",
   };
@@ -5147,15 +5218,28 @@ function getAiAgentTitle(mode) {
 
 function ensureAiSearchActionButton() {
   const actionsWrap = document.querySelector(".ai-agent-actions");
-  if (!actionsWrap || actionsWrap.querySelector("[data-ai-agent-prompt='search']")) {
+  if (!actionsWrap) {
     return;
   }
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "button button-secondary button-small";
-  button.dataset.aiAgentPrompt = "search";
-  button.textContent = "Search";
-  actionsWrap.appendChild(button);
+  const actionDefs = [
+    ["search", "Search"],
+    ["meeting-prep", "Meeting prep"],
+    ["deal-strategy", "Deal strategy"],
+    ["pipeline-review", "Pipeline review"],
+    ["forecast-review", "Forecast review"],
+    ["post-call", "Post-call"],
+  ];
+  actionDefs.forEach(([mode, label]) => {
+    if (actionsWrap.querySelector(`[data-ai-agent-prompt='${mode}']`)) {
+      return;
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "button button-secondary button-small";
+    button.dataset.aiAgentPrompt = mode;
+    button.textContent = label;
+    actionsWrap.appendChild(button);
+  });
 }
 
 function renderAiStrategyResponse(deals, tasks, alerts, revenue) {
@@ -5572,6 +5656,204 @@ function renderAiReportResponse(deals, tasks, alerts, revenue) {
     </div>
     ${renderAiList("Campaign growth projection", campaignProjection)}
   `;
+}
+
+function renderAiExecutionPackage({ situation = "", evidence = [], risks = [], actions = [], draft = "" }) {
+  return `
+    <div class="ai-agent-columns">
+      ${renderAiList("Situation summary", [situation || "No clear summary available for current scope."])}
+      ${renderAiList("Key evidence or signals", evidence.length ? evidence : ["Evidence is partial. Validate account notes and activity history."])}
+    </div>
+    <div class="ai-agent-columns">
+      ${renderAiList("Risks or gaps", risks.length ? risks : ["No critical risks detected right now."])}
+      ${renderAiList("Recommended next actions", actions.length ? actions : ["Keep stage movement and follow-up cadence up to date."])}
+    </div>
+    ${
+      draft
+        ? `
+          <div class="ai-agent-report">
+            <p><strong>Optional draft</strong></p>
+            <p>${escapeHtml(draft)}</p>
+          </div>
+        `
+        : ""
+    }
+  `;
+}
+
+function renderAiMeetingPrepResponse(deals, tasks, alerts) {
+  const top = deals[0];
+  const operator = top ? getPrimaryOperatorName(top) : "Top account";
+  const owner = top ? getDealOwner(top) || "Unassigned" : "Unassigned";
+  const nextAction = top ? getDealNextAction(top) : "";
+  const openTasks = getMyActionTasks(tasks, getActiveUser()).filter((task) => cleanText(task.status) !== "Done").slice(0, 3);
+
+  return renderAiExecutionPackage({
+    situation: `${operator} is currently in ${top ? getDealVisibleStage(top) : "active pipeline"} with owner ${owner}.`,
+    evidence: [
+      ...(top ? [`Stage: ${getDealVisibleStage(top)} · Market: ${top.market || "No market"} · Weighted: ${formatCompactCurrency(getForecastValue(top))}`] : []),
+      ...(alerts.slice(0, 2).map((alert) => `${alert.title}: ${alert.detail}`)),
+      ...(openTasks.map((task) => `Open task: ${task.title || "Untitled"} · due ${task.dueDate || "N/A"}`)),
+    ],
+    risks: [
+      ...(top && !cleanText(top.owner) ? ["Owner is missing and could delay follow-through."] : []),
+      ...(top && !cleanText(nextAction) ? ["Next action is missing; meeting outcome may not convert into movement."] : []),
+      ...(top && getStageSlaState(top).tone === "stuck" ? ["Stage SLA exceeded; likely execution bottleneck."] : []),
+    ],
+    actions: [
+      `Prepare 3 meeting outcomes for ${operator}: decision, owner, date.`,
+      "Confirm buying committee coverage: sponsor, economic buyer, technical validator.",
+      "Close call with one committed next step and due date in system.",
+      "Create or update follow-up task immediately after the meeting.",
+    ],
+    draft: `Hi team, for this meeting we will align on current blockers, confirm decision path, and lock one dated next step so we can move the account forward this week.`,
+  });
+}
+
+function renderAiDealStrategyResponse(deals, tasks, alerts, revenue) {
+  const topDeals = deals
+    .map((deal) => ({
+      name: getPrimaryOperatorName(deal),
+      stage: getDealVisibleStage(deal),
+      weighted: getForecastValue(deal),
+      blocked: isBlockedDeal(deal),
+      sla: getStageSlaState(deal),
+    }))
+    .sort((a, b) => b.weighted - a.weighted)
+    .slice(0, 4);
+
+  return renderAiExecutionPackage({
+    situation: `Current scope carries ${formatCompactCurrency(revenue.weighted)} weighted across ${deals.length} active deals.`,
+    evidence: topDeals.map((item) => `${item.name} · ${item.stage} · ${formatCompactCurrency(item.weighted)} weighted`),
+    risks: [
+      `${alerts.filter((alert) => alert.type === "critical" || alert.tone === "danger").length} critical execution alerts detected.`,
+      `${topDeals.filter((item) => item.blocked || item.sla.tone === "stuck").length} of top weighted deals are blocked or over SLA.`,
+      `${getMyActionTasks(tasks, getActiveUser()).filter((task) => cleanText(task.status) === "Blocked").length} blocked tasks in current owner queue.`,
+    ],
+    actions: [
+      "Move highest weighted blocked deal first; remove one blocker today.",
+      "Enforce mandatory next action + due date on every top 10 weighted deal.",
+      "Escalate deals over SLA with clear owner and 48h recovery task.",
+      "Re-prioritize low-evidence pipeline out of commit view.",
+    ],
+  });
+}
+
+function renderAiPostCallResponse(deals, tasks) {
+  const top = deals[0];
+  const name = top ? getPrimaryOperatorName(top) : "client";
+  const stage = top ? getDealVisibleStage(top) : "pipeline";
+  return renderAiExecutionPackage({
+    situation: `Post-call package for ${name} in ${stage}.`,
+    evidence: [
+      top ? `Account: ${name} · Market: ${top.market || "No market"} · Owner: ${getDealOwner(top) || "Unassigned"}` : "No scoped account selected.",
+      `Open actions for current user: ${getMyActionTasks(tasks, getActiveUser()).filter((task) => cleanText(task.status) !== "Done").length}`,
+    ],
+    risks: [
+      "No transcript attached; recap depends on user notes.",
+      !top || !cleanText(getDealNextAction(top)) ? "Next step missing in deal record." : "",
+    ].filter(Boolean),
+    actions: [
+      "Capture recap in 5 bullets: objective, decision, blockers, owner, due date.",
+      "Create one internal handoff task and one customer follow-up task.",
+      "Update stage only if gate criteria are completed.",
+    ],
+    draft: `Thanks for the call today. Recap: we aligned on scope and next milestones. Next step: [owner] will share [deliverable] by [date], and we will reconvene on [date] to confirm progression.`,
+  });
+}
+
+function renderAiPipelineReviewResponse(deals, tasks, alerts, revenue) {
+  const stale = deals.filter((deal) => daysSince(deal.updatedAt || deal.lastFollowUp || deal.nextFollowUpDate) > 14).length;
+  const noNext = deals.filter((deal) => !cleanText(getDealNextAction(deal))).length;
+  return renderAiExecutionPackage({
+    situation: `Pipeline review shows ${deals.length} active deals with ${formatCompactCurrency(revenue.weighted)} weighted forecast.`,
+    evidence: [
+      `${stale} stale deals with no recent movement signal.`,
+      `${noNext} deals missing next action.`,
+      `${alerts.length} fix-now alerts in current scope.`,
+      `${tasks.filter((task) => cleanText(task.status) !== "Done").length} open tasks in execution queue.`,
+    ],
+    risks: [
+      "Stale deals can inflate forecast confidence.",
+      "Missing next actions reduce execution discipline and conversion speed.",
+      "SLA overrun deals will continue to drag cycle time unless reassigned.",
+    ],
+    actions: [
+      "Close or re-stage stale deals with no evidence in last 14 days.",
+      "Add next action and due date to every active deal before end of day.",
+      "Reassign blocked tasks to a named owner with escalation date.",
+    ],
+  });
+}
+
+function renderAiForecastReviewResponse(deals, alerts, revenue) {
+  const markets = getAiRevenueByMarket(deals).slice(0, 3);
+  return renderAiExecutionPackage({
+    situation: `Forecast posture: ${formatCompactCurrency(revenue.weighted)} weighted, ${formatCompactCurrency(revenue.commit)} commit, ${formatCompactCurrency(revenue.atRisk)} at risk.`,
+    evidence: markets.map((market) => `${market.label}: ${formatCompactCurrency(market.value)} weighted`),
+    risks: [
+      `${alerts.filter((alert) => alert.type === "critical" || alert.tone === "danger").length} critical alerts are affecting forecast confidence.`,
+      "Forecast concentration in a few markets can increase volatility.",
+    ],
+    actions: [
+      "Protect at-risk weighted value before adding new low-confidence volume.",
+      "Increase commit through DD/Integration progression on top weighted deals.",
+      "Set market-level weekly targets with owner accountability.",
+    ],
+  });
+}
+
+function renderAiOutreachResponse(deals, tasks, alerts) {
+  const top = deals[0];
+  const name = top ? getPrimaryOperatorName(top) : "team";
+  const market = top ? top.market || "LATAM" : "LATAM";
+  const next = top ? getDealNextAction(top) : "confirm next step";
+  return renderAiExecutionPackage({
+    situation: `Outreach draft support for ${name} (${market}).`,
+    evidence: [
+      top ? `Current stage: ${getDealVisibleStage(top)} · Owner: ${getDealOwner(top) || "Unassigned"}` : "No specific account in scope.",
+      `${alerts.length} live execution signals available.`,
+      `${tasks.filter((task) => cleanText(task.status) !== "Done").length} open tasks can be referenced for urgency.`,
+    ],
+    risks: ["Generic follow-up can reduce response quality if no specific ask is included."],
+    actions: [
+      "Anchor message on one specific ask, one date, and one owner.",
+      "Reference commercial value or implementation milestone to increase urgency.",
+      "Create task immediately after sending outreach.",
+    ],
+    draft: `Hi ${name} team, quick follow-up to keep momentum on ${next || "the current milestone"}. Can we confirm owner and target date today so we can progress the account this week?`,
+  });
+}
+
+function renderAiCompetitiveResponse(deals) {
+  const scoped = deals.slice(0, 5);
+  return renderAiExecutionPackage({
+    situation: "Competitive response prep generated from current pipeline scope.",
+    evidence: scoped.map((deal) => `${getPrimaryOperatorName(deal)} · ${deal.market || "No market"} · ${getDealVisibleStage(deal)}`),
+    risks: ["No external competitor feed connected in this view; recommendations use internal execution context."],
+    actions: [
+      "Prepare objection handling by stage: pricing, legal speed, integration timeline, go-live confidence.",
+      "Create a comparison matrix per top market: speed-to-live, product depth, support model.",
+      "Use win themes tied to local market outcomes, not generic claims.",
+    ],
+  });
+}
+
+function renderAiValueEngineeringResponse(deals, revenue) {
+  const top = deals
+    .map((deal) => ({ name: getPrimaryOperatorName(deal), value: getForecastValue(deal), market: deal.market || "No market" }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 4);
+  return renderAiExecutionPackage({
+    situation: `Value engineering focus for ${formatCompactCurrency(revenue.weighted)} weighted pipeline.`,
+    evidence: top.map((item) => `${item.name} · ${item.market} · ${formatCompactCurrency(item.value)} weighted potential`),
+    risks: ["Business case quality is weak if baseline KPIs and timeline are missing."],
+    actions: [
+      "Define baseline KPI, target KPI, and expected activation date per key account.",
+      "Quantify expected uplift by market and campaign lane before commit calls.",
+      "Align ROI story with stage gate: commercial, legal, DD, integration, go-live.",
+    ],
+  });
 }
 
 function buildTaskDistribution(tasks, groupBy) {

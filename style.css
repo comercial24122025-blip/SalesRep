@@ -7067,3 +7067,78 @@ button.stage-card {
   background: #fff;
   margin-bottom: 8px;
 }
+
+/* Global visual stability pass */
+.panel {
+  border-radius: 12px;
+}
+
+.button {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.button-small {
+  min-height: 32px;
+}
+
+.entity-form {
+  row-gap: 12px;
+}
+
+.entity-form input,
+.entity-form select,
+.entity-form textarea {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+.entity-form textarea {
+  min-height: 96px;
+}
+
+.command-kpi-card {
+  min-height: 128px;
+  border-radius: 12px;
+}
+
+.salesforce-bar-row,
+.command-time-row {
+  min-height: 84px;
+  border-radius: 10px;
+}
+
+.deal-modal-panel {
+  border-radius: 12px;
+}
+
+.ai-agent-output {
+  min-height: 240px;
+  border-radius: 12px;
+}
+
+.ai-agent-list {
+  min-height: 120px;
+}
+
+.finder-suggestions {
+  max-height: 280px;
+  overflow-y: auto;
+  border-radius: 10px;
+}
+
+.workspace-actions .button,
+.toolbar-actions .button {
+  min-width: 108px;
+}
+
+#fix-now-alerts,
+#command-actions-today,
+#command-pipeline-bars,
+#command-time-pressure,
+#command-market-breakdown,
+#command-operator-breakdown,
+#command-upcoming-golives,
+#ai-agent-output {
+  contain: layout paint;
+}
