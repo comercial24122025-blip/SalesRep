@@ -8427,21 +8427,27 @@ function renderLeadTrackerCard(deal) {
   `;
 }
 
-function renderLatamReference() {
-  const markets = state.latamReference.markets.slice(0, 6);
-  const stageTotals = state.latamReference.stageTotals;
+function renderLatamReference(deals = getScopedDeals()) {
+  const activeDeals = Array.isArray(deals) ? deals.filter((deal) => !isInactiveDeal(deal)) : [];
+  const fallbackMarkets = buildLatamPlanRowsFromDeals(activeDeals);
+  const markets = (state.latamReference.markets && state.latamReference.markets.length ? state.latamReference.markets : fallbackMarkets).slice(0, 6);
+  const stageTotals = state.latamReference.stageTotals && state.latamReference.stageTotals.length
+    ? state.latamReference.stageTotals
+    : buildLatamStageTotalsFromDeals(activeDeals);
 
   if (markets.length === 0) {
     elements.latamFocusGrid.innerHTML = '<div class="empty-state">No LATAM reference data is currently loaded.</div>';
   } else {
     elements.latamFocusGrid.innerHTML = markets
       .map((item) => {
+        const strategy = getLatamMarketGrowthStrategy(item);
         return `
           <article class="signal-card">
             <span>${escapeHtml(item.market)}</span>
-            <strong>${formatCurrency(item.totalValue)}</strong>
-            <small>${item.dealCount} deals • ${escapeHtml(item.stageFocus || "No stage focus defined")}</small>
-            <small>Priority: ${escapeHtml(item.priority || "N/A")} • Growth: ${formatPercent(item.growthForecast)} • Operators: ${item.operatorCount}</small>
+            <strong>${formatCurrency(Number(item.totalValue || item.weightedValue || 0))}</strong>
+            <small>${Number(item.dealCount || 0)} deals • ${escapeHtml(item.stageFocus || "No stage focus defined")} • ${escapeHtml(formatStagePriorityLabel(item.priority || "P9"))}</small>
+            <small>Risk alerts: ${Number(item.riskCount || 0)} • Missing inputs: ${Number(item.missingInputs || 0)} • Operators: ${Number(item.operatorCount || 0)}</small>
+            <small><strong>Plan 2026:</strong> ${escapeHtml(strategy)}</small>
           </article>
         `;
       })
@@ -8457,18 +8463,132 @@ function renderLatamReference() {
   elements.latamStageRadar.innerHTML = stageTotals
     .map((item) => {
       const percentage = Math.max(10, Math.round((item.dealCount / maxValue) * 100));
+      const priorityLevel = formatStagePriorityLabel(getStagePriorityLevelLabel(item.stage));
       return `
         <article class="market-bar">
           <header>
             <strong>${escapeHtml(item.stage)}</strong>
-            <span>${item.dealCount} deals</span>
+            <span>${item.dealCount} deals · ${escapeHtml(priorityLevel)}</span>
           </header>
           <div class="market-fill"><span style="width:${percentage}%"></span></div>
-          <small>Stage distribution based on the LATAM reference file</small>
+          <small>Workflow + priority alignment for LATAM Sales & BD Plan 2026</small>
         </article>
       `;
     })
     .join("");
+}
+
+function buildLatamPlanRowsFromDeals(deals) {
+  const byMarket = new Map();
+  deals.forEach((deal) => {
+    const market = cleanText(deal.market) || "Unassigned";
+    const entry = byMarket.get(market) || {
+      market,
+      totalValue: 0,
+      weightedValue: 0,
+      dealCount: 0,
+      riskCount: 0,
+      missingInputs: 0,
+      operatorSet: new Set(),
+      stageCounter: new Map(),
+      priorityCounter: { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, P6: 0, P7: 0, P8: 0, P9: 0 },
+    };
+    const visibleStage = getDealVisibleStage(deal);
+    const priorityLevel = getStagePriorityLevelLabel(visibleStage);
+    entry.totalValue += getDealValueAmount(deal);
+    entry.weightedValue += getForecastValue(deal);
+    entry.dealCount += 1;
+    if (isDealRevenueAtRisk(deal)) {
+      entry.riskCount += 1;
+    }
+    if (!cleanText(getDealOwner(deal)) || !cleanText(getDealNextAction(deal)) || !cleanText(deal.market)) {
+      entry.missingInputs += 1;
+    }
+    entry.operatorSet.add(getPrimaryOperatorName(deal));
+    entry.stageCounter.set(visibleStage, (entry.stageCounter.get(visibleStage) || 0) + 1);
+    entry.priorityCounter[priorityLevel] = (entry.priorityCounter[priorityLevel] || 0) + 1;
+    byMarket.set(market, entry);
+  });
+
+  return Array.from(byMarket.values())
+    .map((entry) => {
+      const stageFocus = Array.from(entry.stageCounter.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || "No stage focus defined";
+      const priority = Object.entries(entry.priorityCounter)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])[0]?.[0] || "P9";
+      return {
+        market: entry.market,
+        totalValue: entry.totalValue || entry.weightedValue,
+        weightedValue: entry.weightedValue,
+        dealCount: entry.dealCount,
+        stageFocus,
+        priority,
+        growthForecast: entry.weightedValue > 0 ? Math.min(1.5, entry.weightedValue / Math.max(entry.totalValue || entry.weightedValue, 1)) : 0,
+        operatorCount: entry.operatorSet.size,
+        riskCount: entry.riskCount,
+        missingInputs: entry.missingInputs,
+      };
+    })
+    .sort((a, b) => Number(b.totalValue || 0) - Number(a.totalValue || 0));
+}
+
+function buildLatamStageTotalsFromDeals(deals) {
+  const map = new Map();
+  deals.forEach((deal) => {
+    const stage = getDealVisibleStage(deal);
+    map.set(stage, (map.get(stage) || 0) + 1);
+  });
+  return VIEW_STAGE_ORDER
+    .map((stage) => ({ stage, dealCount: map.get(stage) || 0 }))
+    .filter((item) => item.dealCount > 0);
+}
+
+function getStagePriorityLevelLabel(stage) {
+  const value = cleanText(stage);
+  if (value === "Lead" || value === "Qualified" || value === "Mapping") return "P1";
+  if (value === "Proposal") return "P2";
+  if (value === "Legal") return "P3";
+  if (value === "DD") return "P4";
+  if (value === "Integration") return "P5";
+  if (value === "Go Live") return "P6";
+  if (value === "Live") return "P7";
+  if (value === "Growth") return "P8";
+  if (value === "Handover" || value === "Hand Over") return "P9";
+  return "P9";
+}
+
+function formatStagePriorityLabel(priorityCode) {
+  const code = cleanText(priorityCode).toUpperCase();
+  const map = {
+    P1: "P1 Mapping",
+    P2: "P2 Proposal",
+    P3: "P3 Legal",
+    P4: "P4 DD",
+    P5: "P5 Integration",
+    P6: "P6 Go Live",
+    P7: "P7 Live",
+    P8: "P8 Growth",
+    P9: "P9 Hand Over",
+  };
+  return map[code] || "P9 Hand Over";
+}
+
+function getLatamMarketGrowthStrategy(item) {
+  const market = cleanText(item.market) || "market";
+  const stageFocus = cleanText(item.stageFocus);
+  if (Number(item.riskCount || 0) > 0) {
+    return `Protect weighted pipeline in ${market}: clear blockers and overdue actions before adding new volume.`;
+  }
+  if (stageFocus === "Proposal") {
+    return `Run proposal-to-legal acceleration in ${market} with weekly commercial review and dated owner commitments.`;
+  }
+  if (stageFocus === "Legal" || stageFocus === "DD" || stageFocus === "Integration") {
+    return `Execution sprint for ${market}: enforce SLA discipline, request readiness, and go-live path controls.`;
+  }
+  if (stageFocus === "Live" || stageFocus === "Handover") {
+    return `Growth motion in ${market}: monthly cadence, upsell/cross-sell campaigns, and revenue follow-up tasks.`;
+  }
+  return `Build qualified pipeline in ${market} with priority operator mapping and next-action governance.`;
 }
 
 function renderRiskList(deals) {
@@ -8498,6 +8618,7 @@ function renderRiskList(deals) {
           <div class="meta-row">
             <span><strong>Client:</strong> ${escapeHtml(item.deal.client || "N/A")}</span>
             <span><strong>Market:</strong> ${escapeHtml(item.deal.market || "N/A")}</span>
+            <span><strong>Priority:</strong> ${escapeHtml(formatStagePriorityLabel(getStagePriorityLevelLabel(getDealVisibleStage(item.deal))))}</span>
             <span><strong>Last Follow Up:</strong> ${formatDate(item.deal.lastFollowUp)}</span>
           </div>
           <div class="row-actions">
